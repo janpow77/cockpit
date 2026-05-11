@@ -1,0 +1,22 @@
+# Beispiel-Config fuer Cockpit. Wird nur fuer Bootstrap-Hosts gelesen,
+# alles weitere kommt aus der SQLite-DB.
+hosts:
+  - name: ccx23
+    tailscale_ip: 100.99.159.80
+    description: "Hetzner CCX23 — public Caddy + LLM-Router + Workshop"
+    is_self: true
+  - name: nuc
+    tailscale_ip: 100.102.132.11
+    ssh_user: janpow
+    ssh_key_path: /root/.ssh/cockpit_id_ed25519
+    description: "Workshop-Backend + audit_designer + Backfill"
+  - name: evo
+    tailscale_ip: 100.81.4.99
+    ssh_user: janpow
+    ssh_key_path: /root/.ssh/cockpit_id_ed25519
+    description: "Desktop Multi-GPU"
+  - name: macbook-air
+    tailscale_ip: 100.70.245.26
+    ssh_user: janpow
+    ssh_key_path: /root/.ssh/cockpit_id_ed25519
+    description: "Laptop"

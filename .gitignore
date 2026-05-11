@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.ruff_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+src/cockpit/static/
+.vite/
+
+# Data
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store

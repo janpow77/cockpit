@@ -1,0 +1,38 @@
+# Standalone-Deploy fuer CCX23.
+# Wird via `docker compose -f compose.yaml up -d` auf CCX23 gestartet.
+services:
+  cockpit:
+    image: cockpit:v0.1
+    container_name: cockpit
+    restart: unless-stopped
+    ports:
+      # Tailscale-only Bind: nur via 100.99.159.80 erreichbar (nicht public).
+      - "100.99.159.80:7843:7843"
+    networks:
+      - cockpit
+    env_file:
+      - /etc/cockpit/env
+    volumes:
+      - /var/lib/cockpit/data:/data
+      - /etc/cockpit/config.yaml:/etc/cockpit/config.yaml:ro
+      # SSH-Key zum Erreichen von NUC/evo via Tailscale
+      - /root/.ssh/cockpit_id_ed25519:/root/.ssh/cockpit_id_ed25519:ro
+      - /root/.ssh/known_hosts:/root/.ssh/known_hosts
+      # Docker-Socket fuer Self-Host-Inspect (CCX23 selbst)
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7843/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 8s
+    mem_limit: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  cockpit:
+    external: true

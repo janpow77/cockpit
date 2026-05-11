@@ -1,0 +1,21 @@
+# Lokale Dev-Compose (NUC/Workstation).
+# Bind-Mounts auf src/ und frontend/ damit Hot-Reload nicht noetig — nutze
+# `uvicorn --reload` lokal ausserhalb des Containers fuer schnelles Iterieren.
+services:
+  cockpit-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cockpit:dev
+    container_name: cockpit-dev
+    ports:
+      - "7843:7843"
+    environment:
+      ADMIN_DB_PATH: /data/cockpit.db
+      COCKPIT_ADMIN_PASSWORD: cockpit-admin
+    volumes:
+      - cockpit-dev-data:/data
+    restart: unless-stopped
+
+volumes:
+  cockpit-dev-data:
