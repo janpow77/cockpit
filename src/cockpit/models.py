@@ -137,6 +137,62 @@ class SessionRow(Base):
     ip = Column(String, nullable=True)
 
 
+class TrafficSampleRow(Base):
+    __tablename__ = "cockpit_traffic_samples"
+
+    id = Column(String, primary_key=True)
+    bucket_ts = Column(String, nullable=False)
+    bucket_size = Column(String, nullable=False, default="1m")
+    app_id = Column(String, ForeignKey("cockpit_apps.id", ondelete="SET NULL"), nullable=True)
+    host_id = Column(String, ForeignKey("cockpit_hosts.id", ondelete="CASCADE"), nullable=False)
+    server_name = Column(String, nullable=True)
+    requests = Column(Integer, nullable=False, default=0)
+    status_2xx = Column(Integer, nullable=False, default=0)
+    status_3xx = Column(Integer, nullable=False, default=0)
+    status_4xx = Column(Integer, nullable=False, default=0)
+    status_5xx = Column(Integer, nullable=False, default=0)
+    bytes_out = Column(Integer, nullable=False, default=0)
+    latency_p50_ms = Column(Integer, nullable=True)
+    latency_p95_ms = Column(Integer, nullable=True)
+    latency_max_ms = Column(Integer, nullable=True)
+    created_at = Column(String, nullable=False)
+
+
+class TrafficSourceRow(Base):
+    __tablename__ = "cockpit_traffic_sources"
+
+    id = Column(String, primary_key=True)
+    host_id = Column(String, ForeignKey("cockpit_hosts.id", ondelete="CASCADE"), nullable=False)
+    log_path = Column(String, nullable=False)
+    log_format = Column(String, nullable=False, default="caddy_json")
+    server_app_map = Column(Text, nullable=False, default="[]")
+    last_offset = Column(Integer, nullable=False, default=0)
+    last_inode = Column(String, nullable=True)
+    last_collect_at = Column(String, nullable=True)
+    last_status = Column(String, nullable=False, default="never")
+    last_error = Column(String, nullable=True)
+    enabled = Column(Integer, nullable=False, default=1)
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+
+
+class DeploymentRow(Base):
+    __tablename__ = "cockpit_deployments"
+
+    id = Column(String, primary_key=True)
+    app_id = Column(String, ForeignKey("cockpit_apps.id", ondelete="CASCADE"), nullable=False)
+    ts = Column(String, nullable=False)
+    image = Column(String, nullable=False)
+    image_digest = Column(String, nullable=True)
+    git_sha = Column(String, nullable=True)
+    source = Column(String, nullable=False, default="unknown")
+    actor = Column(String, nullable=False, default="system")
+    status = Column(String, nullable=False, default="ok")
+    notes = Column(Text, nullable=True)
+    duration_s = Column(Integer, nullable=True)
+    created_at = Column(String, nullable=False)
+
+
 # ----------------------------- Pydantic ------------------------------------
 
 
@@ -432,6 +488,103 @@ class SettingsUpdate(BaseModel):
     health_interval_s: int | None = Field(default=None, ge=10, le=3600)
 
 
+# --------- Traffic ---------
+TrafficBucketSize = Literal["1m", "5m", "1h", "1d"]
+
+
+class TrafficSourceCreate(BaseModel):
+    host_id: str = Field(min_length=1)
+    log_path: str = Field(min_length=1)
+    log_format: str = "caddy_json"
+    server_app_map: list[dict] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class TrafficSourceUpdate(BaseModel):
+    log_path: str | None = None
+    log_format: str | None = None
+    server_app_map: list[dict] | None = None
+    enabled: bool | None = None
+
+
+class TrafficSourceOut(BaseModel):
+    id: str
+    host_id: str
+    host_name: str
+    log_path: str
+    log_format: str
+    server_app_map: list[dict] = Field(default_factory=list)
+    last_collect_at: datetime | None = None
+    last_status: str
+    last_error: str | None = None
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TrafficPoint(BaseModel):
+    bucket_ts: datetime
+    requests: int = 0
+    status_2xx: int = 0
+    status_3xx: int = 0
+    status_4xx: int = 0
+    status_5xx: int = 0
+    bytes_out: int = 0
+    latency_p50_ms: int | None = None
+    latency_p95_ms: int | None = None
+    latency_max_ms: int | None = None
+
+
+class TrafficSeriesResponse(BaseModel):
+    bucket_size: TrafficBucketSize
+    app_id: str | None = None
+    host_id: str | None = None
+    from_ts: datetime
+    to_ts: datetime
+    total_requests: int = 0
+    error_rate: float = 0.0
+    points: list[TrafficPoint] = Field(default_factory=list)
+
+
+# --------- Deployments ---------
+DeploymentSource = Literal["lifecycle", "gh-action", "manual", "unknown"]
+DeploymentStatus = Literal["ok", "failed", "started", "rolled_back"]
+
+
+class DeploymentCreate(BaseModel):
+    image: str = Field(min_length=1, max_length=500)
+    image_digest: str | None = None
+    git_sha: str | None = None
+    source: DeploymentSource = "manual"
+    actor: str = "admin"
+    status: DeploymentStatus = "ok"
+    notes: str | None = None
+    duration_s: int | None = Field(default=None, ge=0)
+    # Optional: ts kann vom Caller gesetzt werden (lifecycle/start.sh schickt
+    # ggf. den Zeitpunkt des compose-up, nicht den HTTP-Request).
+    ts: datetime | None = None
+
+
+class DeploymentOut(BaseModel):
+    id: str
+    app_id: str
+    app_name: str
+    ts: datetime
+    image: str
+    image_digest: str | None = None
+    git_sha: str | None = None
+    source: str
+    actor: str
+    status: str
+    notes: str | None = None
+    duration_s: int | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ----------------------------- Konvertierung ------------------------------
 
 
@@ -554,6 +707,41 @@ def secret_row_to_out(row: SecretRow) -> SecretOut:
         reveal_count=row.reveal_count or 0,
         created_at=_parse_dt_required(row.created_at),
         updated_at=_parse_dt_required(row.updated_at),
+    )
+
+
+def traffic_source_row_to_out(row: TrafficSourceRow, *, host_name: str) -> TrafficSourceOut:
+    return TrafficSourceOut(
+        id=row.id,
+        host_id=row.host_id,
+        host_name=host_name,
+        log_path=row.log_path,
+        log_format=row.log_format,
+        server_app_map=_decode_json_list(row.server_app_map, []),
+        last_collect_at=_parse_dt(row.last_collect_at),
+        last_status=row.last_status,
+        last_error=row.last_error,
+        enabled=bool(row.enabled),
+        created_at=_parse_dt_required(row.created_at),
+        updated_at=_parse_dt_required(row.updated_at),
+    )
+
+
+def deployment_row_to_out(row: DeploymentRow, *, app_name: str) -> DeploymentOut:
+    return DeploymentOut(
+        id=row.id,
+        app_id=row.app_id,
+        app_name=app_name,
+        ts=_parse_dt_required(row.ts),
+        image=row.image,
+        image_digest=row.image_digest,
+        git_sha=row.git_sha,
+        source=row.source,
+        actor=row.actor,
+        status=row.status,
+        notes=row.notes,
+        duration_s=row.duration_s,
+        created_at=_parse_dt_required(row.created_at),
     )
 
 

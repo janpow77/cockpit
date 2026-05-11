@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -27,11 +28,13 @@ from .routes.audit import router as audit_router
 from .routes.auth import router as auth_router
 from .routes.backups import router as backups_router
 from .routes.dashboard import router as dashboard_router
+from .routes.deployments import router as deployments_router
 from .routes.github import router as github_router
 from .routes.hosts import router as hosts_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
-from .services import bootstrap, health_check
+from .routes.traffic import router as traffic_router
+from .services import bootstrap, health_check, traffic_collector
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,16 +85,29 @@ async def lifespan(app: FastAPI):
     )
     _APP_STATE["health_task"] = health_task
 
+    # Traffic-Collector: 60-Sekunden-Pull. Default an, deaktivierbar
+    # ueber COCKPIT_TRAFFIC_COLLECT=off (z.B. fuer Tests).
+    traffic_interval = int(os.environ.get("COCKPIT_TRAFFIC_INTERVAL_S", "60"))
+    traffic_task: asyncio.Task | None = None
+    if os.environ.get("COCKPIT_TRAFFIC_COLLECT", "on").lower() not in ("off", "false", "0"):
+        traffic_task = asyncio.create_task(
+            traffic_collector.traffic_loop(_APP_STATE["stop_event"], interval_s=traffic_interval),
+        )
+        _APP_STATE["traffic_task"] = traffic_task
+
     try:
         yield
     finally:
         _APP_STATE["stop_event"].set()
-        try:
-            await asyncio.wait_for(health_task, timeout=5.0)
-        except (TimeoutError, asyncio.CancelledError):
-            health_task.cancel()
-        except Exception as exc:
-            log.warning("Health-Task Shutdown: %s", exc)
+        for name, task in [("health_task", health_task), ("traffic_task", traffic_task)]:
+            if task is None:
+                continue
+            try:
+                await asyncio.wait_for(task, timeout=5.0)
+            except (TimeoutError, asyncio.CancelledError):
+                task.cancel()
+            except Exception as exc:
+                log.warning("%s Shutdown: %s", name, exc)
         log.info("Cockpit stoppt.")
 
 
@@ -146,6 +162,8 @@ app.include_router(backups_router)
 app.include_router(secrets_router)
 app.include_router(audit_router)
 app.include_router(settings_router)
+app.include_router(traffic_router)
+app.include_router(deployments_router)
 
 
 # ---------------------------- SPA ----------------------------------------

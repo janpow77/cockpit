@@ -2,12 +2,15 @@
 import { RouterLink } from 'vue-router'
 import {
   LayoutDashboard, Server, AppWindow, Github, Database, KeyRound, History, Settings, Plane,
+  Activity, Rocket,
 } from 'lucide-vue-next'
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/hosts', label: 'Hosts', icon: Server },
   { to: '/apps', label: 'Apps', icon: AppWindow },
+  { to: '/traffic', label: 'Traffic', icon: Activity },
+  { to: '/deployments', label: 'Deployments', icon: Rocket },
   { to: '/github', label: 'GitHub', icon: Github },
   { to: '/backups', label: 'Backups', icon: Database },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },

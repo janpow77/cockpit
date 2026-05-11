@@ -151,3 +151,72 @@ export interface HealthInfo {
   started_at: string
   uptime_s: number
 }
+
+// ---------- Traffic ----------
+
+export type TrafficBucketSize = '1m' | '5m' | '1h' | '1d'
+
+export interface ServerAppMapEntry {
+  server_name: string
+  app_name: string
+}
+
+export interface TrafficSource {
+  id: string
+  host_id: string
+  host_name: string
+  log_path: string
+  log_format: string
+  server_app_map: ServerAppMapEntry[]
+  last_collect_at: string | null
+  last_status: string
+  last_error: string | null
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface TrafficPoint {
+  bucket_ts: string
+  requests: number
+  status_2xx: number
+  status_3xx: number
+  status_4xx: number
+  status_5xx: number
+  bytes_out: number
+  latency_p50_ms: number | null
+  latency_p95_ms: number | null
+  latency_max_ms: number | null
+}
+
+export interface TrafficSeries {
+  bucket_size: TrafficBucketSize
+  app_id: string | null
+  host_id: string | null
+  from_ts: string
+  to_ts: string
+  total_requests: number
+  error_rate: number
+  points: TrafficPoint[]
+}
+
+// ---------- Deployments ----------
+
+export type DeploymentSource = 'lifecycle' | 'gh-action' | 'manual' | 'unknown'
+export type DeploymentStatus = 'ok' | 'failed' | 'started' | 'rolled_back'
+
+export interface Deployment {
+  id: string
+  app_id: string
+  app_name: string
+  ts: string
+  image: string
+  image_digest: string | null
+  git_sha: string | null
+  source: DeploymentSource | string
+  actor: string
+  status: DeploymentStatus | string
+  notes: string | null
+  duration_s: number | null
+  created_at: string
+}
