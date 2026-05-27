@@ -57,7 +57,7 @@ DEFAULT_APPS: list[dict] = [
      "healthcheck_url": "http://127.0.0.1:3004/",
      "tags": ["workshop", "public"]},
     {"host": "ccx23", "name": "llm-router", "container_filter": "name=llm-router",
-     "compose_path": "/opt/llm-router/compose.yaml",
+     "compose_path": "/opt/ai-router/compose.yaml",
      "healthcheck_url": "http://100.99.159.80:7842/health",
      "tags": ["service", "llm"]},
     {"host": "ccx23", "name": "checklist", "container_filter": "name=checklist",
