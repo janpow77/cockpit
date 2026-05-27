@@ -131,6 +131,45 @@ def restart_app(host: HostRow, *, compose_path: str | None, container_filter: st
     }
 
 
+def deploy_app(
+    host: HostRow,
+    *,
+    compose_path: str | None,
+    force_recreate: bool = False,
+    pull: bool = True,
+) -> dict:
+    """Image-Update: ``docker compose pull`` + ``up -d`` (optional ``--force-recreate``).
+
+    Im Gegensatz zu ``restart_app`` aktualisiert dies die Images (pull) und
+    erzeugt Container neu — der kanonische Deploy-Schritt (siehe
+    cockpit/docs/system-landschaft.md). Erfordert ``compose_path``: ohne Compose
+    ist ein deterministisches pull/up nicht moeglich. Liefert ``{ok, log, error}``.
+    """
+    if not compose_path:
+        return {"ok": False, "log": "", "error": "deploy erfordert compose_path"}
+
+    work_dir = compose_path.rsplit("/", 1)[0]
+    base = f"docker compose -f {shlex.quote(compose_path)}"
+    parts = [f"cd {shlex.quote(work_dir)}"]
+    if pull:
+        parts.append(f"{base} pull")
+    up = f"{base} up -d"
+    if force_recreate:
+        up += " --force-recreate"
+    parts.append(up)
+    cmd = " && ".join(parts)
+
+    # pull + up koennen laenger dauern (Images ziehen) -> grosszuegiger Timeout
+    result = run_on_host(host, cmd, timeout=600)
+
+    invalidate_cache(host.id)
+    return {
+        "ok": result.ok,
+        "log": (result.stdout + result.stderr)[-4000:],
+        "error": None if result.ok else (result.stderr or f"rc={result.exit_code}")[:300],
+    }
+
+
 def fetch_logs(
     host: HostRow,
     *,

@@ -138,6 +138,55 @@ async def app_restart(
     return result
 
 
+@router.post("/{app_id}/deploy")
+async def app_deploy(
+    app_id: str,
+    request: Request,
+    force_recreate: bool = Query(False, description="docker compose up -d --force-recreate (z. B. nach env-Aenderung)"),
+    pull: bool = Query(True, description="Vorab docker compose pull (Images aktualisieren)"),
+    _=Depends(require_auth),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Kanonischer Deploy: pull + up -d (optional --force-recreate) via Compose.
+
+    Im Gegensatz zu /restart aktualisiert dies die Images. Erfordert eine App
+    mit compose_path. Siehe cockpit/docs/system-landschaft.md (Deploy-Flow).
+    """
+    row = crud_apps.get_app(session, app_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="App not found")
+    host = crud_hosts.get_host(session, row.host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    if not row.compose_path:
+        raise HTTPException(
+            status_code=400,
+            detail="App hat keinen compose_path — Deploy (pull/recreate) nicht moeglich",
+        )
+    from ..crud import audit
+    result = docker_inspect.deploy_app(
+        host,
+        compose_path=row.compose_path,
+        force_recreate=force_recreate,
+        pull=pull,
+    )
+    audit.write(
+        session,
+        action="app.deploy",
+        target=app_id,
+        after={
+            "name": row.name,
+            "host": host.name,
+            "ok": result["ok"],
+            "force_recreate": force_recreate,
+            "pull": pull,
+        },
+        ip=client_ip(request),
+        notes=result.get("error") or "",
+    )
+    return result
+
+
 @router.get("/{app_id}/logs")
 async def app_logs(
     app_id: str,
