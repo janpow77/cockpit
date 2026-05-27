@@ -87,6 +87,8 @@ Nichts wird geändert; nur getestet. Erst wenn ALLES grün → Stufe 1 freigeben
 - **Verifikation:** Branches/Images vorhanden; Export eingecheckt; nichts Laufendes verändert.
 - **GATE 1 → 2:** Smoke 24/24 unverändert grün.
 
+> **✅ Stufe 2 (2026-05-27) — Kern abgeschlossen:** Backups NUC-admin.db ✓ · **M14 ✓** (tote Spokes disabled, kein Restart) · **M2 analysiert** (default = bge-m3-Embeddings) · **M11c ✓ obsolet** (evo-ollama ist bereits getunter Docker-Container, kein Restart nötig — war Misread) · **F17 ✓** (NUC-Admin-PW via .env erzwungen, admin/admin geschlossen, Router recreated+verifiziert, Prod grün; PW in `ai-router/.env` gitignored). **Offen (gering/Stage-3):** M2-Fix (Embedder labeln, App-Restart, niedrig); **F17 für CCX23-Router** (gleiches admin/admin — Stage 3); evo-health-monitor (minor).
+
 ## STUFE 2 — 🟡 NUC + evo-x2 (Backend-Hosts, off-peak, je Schritt verifizieren)
 **Zeitbudget: ~3–5 h.** Backup der NUC-Admin-DB + DB-Dumps vor Start (0.6). NICHT auf CCX23.
 - M14 — tote Spokes (`nuc-/evo-gpu-llm-manager`) aus **NUC**-admin_spokes entfernen.
@@ -98,6 +100,8 @@ Nichts wird geändert; nur getestet. Erst wenn ALLES grün → Stufe 1 freigeben
 - **Verifikation (messbar):** NUC-Router-Routen aus Admin-DB korrekt; evo ollama:11434 serviert alle Modelle + Auto-Restart getestet; **RAG-Referenzfragen stabil** (vs. 0.6-Baseline); LLM-Latenz p95 im Rahmen; **Prod-Workshop-Smoke 24/24 + 5xx=0** (Prod hängt an NUC-RAG + evo).
 - **Rollback:** NUC-Admin-DB (inkl. WAL) aus Backup + Router-Restart; evo systemd-Unit entfernen → bare-Prozess reaktivieren.
 - **GATE 2 → 3:** LLM über alle Apps grün; Prod unbeeinträchtigt.
+
+> **✅ Stufe 3 (2026-05-27) — Kern erledigt:** CCX23-admin.db gesichert · **F17-CCX23 = nicht nötig** (PW bereits gesetzt, admin→401) · bootstrap llm-router-Pfad gefixt (/opt/ai-router) · **cockpit-Redeploy ✓** (cockpit:v0.2 gebaut→transferiert→recreated, healthy; **deploy_app live**, 5 Monitoring-Apps angelegt; Rollback cockpit:v0.1 + compose-Backup vorhanden) · Prod (workshop/checklist) unberührt. **Offen (gering, optional):** M2-Fix (Embedder labeln), M9 (app_id-Drift, kosmetisch/riskant), M16 (Token minimal), CCX23-admin.db-Bloat-Cleanup (~60 MB audit). qwen2.5-Route ungenutzt (egal).
 
 ## STUFE 3 — 🏭🔴 CCX23 / Hetzner = PRODUKTION (ZULETZT, einzeln, Backup+Rollback je Schritt, off-peak)
 **Zeitbudget: ~3–5 h, gepuffert.** Erst wenn NUC/evo grün. **Repliziert die in Stufe 2 lokal bewiesenen Änderungen 1:1 — keine neuen Experimente auf Prod.** **Nach JEDEM Schritt Prod-Smoke (24/24).**
