@@ -38,7 +38,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N"]
-ignore = ["E501"]
+ignore = ["E501", "B008"]  # B008: FastAPI Depends() im Default-Arg ist idiomatisch korrekt
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
