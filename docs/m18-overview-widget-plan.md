@@ -222,3 +222,45 @@ Jeder Status = **Punkt/Icon + Wort**, nie Farbe allein (Rot-Grün-Schwäche, S/W
 - Beim Auto-Refresh kein sichtbares Springen/Flackern.
 - Lesbar auf 1280er-Laptop **und** in der Tray-/Mobil-Breite (responsive, kein horizontales Scrollen).
 - Hell + Dunkel gleich gut lesbar (Kontrast AA).
+
+---
+
+## 12. Verifizierte ai-router-Admin-API (live gegen NUC :7849 geprüft)
+
+> Ersetzt die Annahmen in §3/§4/§6. Identische Code-Basis auf CCX23 :7842 — Verträge dort gelten analog, vor Implementierung dort einmal smoke-prüfen.
+
+### 12.1 Authentifizierung
+**Single-Admin-Passwort** (`LLM_ROUTER_ADMIN_PASSWORD` env) → opakes Session-Token.
+
+```
+POST /admin/api/auth/login
+Content-Type: application/json
+Body: {"password": "..."}
+↓ 200
+{"token": "<43-char>", "expires_at": "<ISO-UTC>"}
+```
+Token-Gültigkeit: ~24 h. Nutzung als `Authorization: Bearer <token>` auf allen `/admin/api/*`. Bei 401 → Re-Login. Weitere Auth-Endpoints: `POST /admin/api/auth/logout` (204), `GET /admin/api/auth/me` (Session-Info). Vorhandenes Login-Konzept ist **token-basiert, nicht Cookie** — `httpx`-Client braucht keinen Cookie-Jar.
+
+### 12.2 Endpoints (read-only, die wir brauchen)
+| Endpoint | liefert | für cockpit-Overview |
+|---|---|---|
+| `GET /admin/api/health` | Gesamt-Health der Router-Instanz | Ampel pro Router |
+| **`GET /admin/api/dashboard`** | **schon ein eigenes Aggregat** (Health + Counters + …) | Direkt mappen — spart Roundtrips |
+| `GET /admin/api/dashboard/timeseries` | Zeitreihen (Sparkline-fähig) | optional, Sparkline |
+| `GET /admin/api/spokes` | Liste `[{id, name, base_url, type, capabilities, tags, priority, status, last_check_at, gpu_info}]` | Spoke-Sektion (evo-x2/nuc-*) |
+| `GET /admin/api/routes` | Liste `[{id, model_glob, spoke_id, spoke_name, priority, enabled}]` | Routen-Sektion |
+| `GET /admin/api/apps` | App-Registry (für default-Traffic-Sicht) | Quota-/Consumer-Sektion |
+| `GET /admin/api/quotas/{app_id}` | per-App-Quota-Detail | Quota-Bars |
+| `GET /admin/api/audit`, `/logs` | Audit-Log, Logs | Alerts/Drilldown (optional, Phase 2) |
+
+**Konsequenz für §4.1:** `AiRouterClient` wird kleiner als ursprünglich gedacht — `dashboard()` + `spokes()` + `routes()` reichen für Phase 1. `apps()` + `quotas(id)` für Phase 2 (Quota-Bars).
+
+### 12.3 Konsequenz für §6 (Secrets)
+- Vault-Eintrag heißt jeweils `ai-router-admin-pw-nuc` und `ai-router-admin-pw-ccx23` (Klartext-Passwort, der Client tauscht es selbst gegen ein Bearer-Token).
+- **Token-Caching im Client:** in-memory mit Ablaufzeit aus `expires_at`, automatischer Re-Login bei 401 oder T-2min. Kein persistenter Token-Store nötig → cockpit-Vault hält nur die zwei PWs.
+- Read-only-Token-Variante existiert nicht (Single-Admin-PW-Modell) → Phase 1 läuft mit Admin-PW; eine spätere read-only-Härtung wäre eine Änderung am ai-router (eigener Sanierungspunkt, nicht blockierend).
+
+### 12.4 Fail-soft-Verhalten (verifiziert anwendbar)
+- Login schlägt fehl (Router down/PW falsch) → Client setzt `reachable=False`, kein Throw nach außen.
+- 401 nach erfolgreichem Login → einmal Re-Login, dann `reachable=False`.
+- Timeout > 4 s → `reachable=False`. Pro Router-Instanz isoliert (Overview kippt nicht, wenn eine Instanz aus ist).
