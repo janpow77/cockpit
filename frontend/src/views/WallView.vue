@@ -248,7 +248,7 @@ const demoLink = ref<string | null>(null)
 const demoSekunden = ref(0)
 let demoTimer: number | undefined
 
-async function demo() {
+async function demo(neu = false) {
   if (!hero.value || demoBusy.value) return
   const ziel = `${hero.value.url.replace(/\/$/, '')}${hero.value.demo_path}`
   if (!hero.value.demo_ready) {
@@ -259,12 +259,14 @@ async function demo() {
   demoLink.value = null
   demoSekunden.value = 0
   demoTimer = window.setInterval(() => { demoSekunden.value += 1 }, 1000)
-  demoMeldung.value = 'Demo-Fälle werden aufgebaut – danach öffnet sich das Portal in diesem Fenster'
+  demoMeldung.value = neu ? 'Demo wird zurückgesetzt und neu aufgebaut – danach öffnet sich das Portal in diesem Fenster' : 'Demo wird geprüft – fehlt sie, wird sie aufgebaut (1–2 Minuten)'
   try {
-    const res = await startDemo()
+    const res = await startDemo(neu)
     const url = res.url || ziel
     demoLink.value = url
-    demoMeldung.value = res.ok ? `${res.faelle.length} Demo-Fälle stehen (${demoSekunden.value} s) – Portal wird geöffnet …` : 'Aufbau mit Fehlern – Portal wird geöffnet …'
+    demoMeldung.value = res.uebersprungen
+      ? `${res.faelle.length} Demo-Fälle stehen bereits – Portal wird geöffnet …`
+      : (res.ok ? `${res.faelle.length} Demo-Fälle aufgebaut (${demoSekunden.value} s) – Portal wird geöffnet …` : 'Aufbau mit Fehlern – Portal wird geöffnet …')
     // Kein neues Fenster: das Portal ersetzt die Wand in diesem Tab (Zurück-Taste führt zur Wand)
     window.setTimeout(() => window.location.assign(url), 800)
   } catch (err) {
@@ -367,7 +369,8 @@ async function demo() {
           </template>
           <text v-if="!heroKpis.length" class="sub" x="466" y="790">{{ hero.probe_note ? `Kennzahlen: ${hero.probe_note}` : 'Kennzahlen folgen mit der Sonde' }}</text>
           <a :href="hero.url" target="_blank" rel="noopener"><rect x="1010" y="690" width="126" height="36" rx="6" class="knopf-svg ghost" /><text x="1073" y="714" text-anchor="middle" class="knopf-text ghost">Öffnen ↗</text></a>
-          <g class="klickbar" @click="demo"><rect x="1010" y="736" width="126" height="36" rx="6" :class="['knopf-svg', { busy: demoBusy }]" /><text x="1073" y="760" text-anchor="middle" class="knopf-text">{{ demoBusy ? `baut auf · ${demoSekunden} s` : 'Demo starten' }}</text></g>
+          <g class="klickbar" @click="demo(false)"><rect x="1010" y="736" width="126" height="36" rx="6" :class="['knopf-svg', { busy: demoBusy }]" /><text x="1073" y="760" text-anchor="middle" class="knopf-text">{{ demoBusy ? `läuft · ${demoSekunden} s` : 'Demo starten' }}</text></g>
+          <text v-if="!demoBusy && !demoLink" class="sub klickbar" x="1073" y="792" text-anchor="middle" style="text-decoration: underline" @click="demo(true)">Demo zurücksetzen (neu aufbauen)</text>
           <a v-if="demoLink && !demoBusy" :href="demoLink"><rect x="1010" y="782" width="126" height="32" rx="6" class="knopf-svg ghost" /><text x="1073" y="803" text-anchor="middle" class="knopf-text ghost">Portal öffnen</text></a>
           <text v-if="demoMeldung" class="sub" x="466" y="832">{{ demoMeldung }}{{ demoBusy ? ' (etwa 1–2 Minuten)' : '' }}</text>
         </g>

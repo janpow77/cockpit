@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..auth import require_auth
@@ -461,9 +462,17 @@ async def patch_config(
     return cfg.as_dict()
 
 
+class DemoStart(BaseModel):
+    # neu=True erzwingt den Neuaufbau (bestehende Demo-Vorgaenge werden ersetzt - offene
+    # Akten im Browser zeigen danach 404). Vorgabe: nur aufbauen, wenn die Demo unvollstaendig ist.
+    neu: bool = False
+
+
 @router.post("/demo")
-async def demo_starten(_=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
-    """Startet die HPP-Demo: Anmeldung mit Vault-Zugang, dann Demo-Aufbau."""
+async def demo_starten(
+    payload: DemoStart | None = None, _=Depends(require_auth), session: Session = Depends(get_session)
+) -> dict:
+    """Stellt die HPP-Demo sicher: Anmeldung mit Vault-Zugang, Aufbau nur bei Bedarf (oder neu=True)."""
     cfg = wc.load(session)
     demo = cfg.demo
     user = _secret_value(session, demo.get("user_secret"))
@@ -484,6 +493,20 @@ async def demo_starten(_=Depends(require_auth), session: Session = Depends(get_s
                 raise HTTPException(status_code=502, detail=f"HPP-Anmeldung fehlgeschlagen (HTTP {login.status_code})")
             token = login.json().get("access_token")
             kopf = {"Authorization": f"Bearer {token}"}
+            neu = bool(payload and payload.neu)
+            if not neu:
+                # Demo schon vollstaendig? Dann nichts anfassen - sonst verlieren offene Akten ihre IDs.
+                st = await c.get(stand_url, headers=kopf)
+                if st.status_code < 400:
+                    stand = st.json() or {}
+                    faelle_soll = stand.get("faelle") or []
+                    lauf = stand.get("aufbau") or {}
+                    if faelle_soll and all(f.get("vorhanden") for f in faelle_soll) and not lauf.get("laeuft"):
+                        faelle = [{"aktenzeichen": f.get("aktenzeichen"), "schritte": 0, "fehler": None} for f in faelle_soll]
+                        return {
+                            "ok": True, "uebersprungen": True, "faelle": faelle,
+                            "url": f"{cfg.hero.get('url', '').rstrip('/')}{cfg.hero.get('demo_path', '')}",
+                        }
             resp = await c.post(demo["aufbau_url"], json={}, headers=kopf)
             if resp.status_code == 409:
                 # Aufbau laeuft bereits (z. B. zweiter Klick) - einfach mitwarten
@@ -514,9 +537,10 @@ async def demo_starten(_=Depends(require_auth), session: Session = Depends(get_s
         {"aktenzeichen": f.get("aktenzeichen"), "schritte": len(f.get("schritte") or []), "fehler": f.get("fehler")}
         for f in ergebnis.get("faelle", [])
     ]
-    crud_audit.write(session, action="wall.demo_start", target=demo.get("aufbau_url"), after={"faelle": faelle})
+    crud_audit.write(session, action="wall.demo_start", target=demo.get("aufbau_url"), after={"faelle": faelle, "neu": bool(payload and payload.neu)})
     return {
         "ok": all(not f["fehler"] for f in faelle),
+        "uebersprungen": False,
         "faelle": faelle,
         "url": f"{cfg.hero.get('url', '').rstrip('/')}{cfg.hero.get('demo_path', '')}",
     }

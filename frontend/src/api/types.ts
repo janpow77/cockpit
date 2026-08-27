@@ -343,7 +343,7 @@ export interface WallConfig {
   prod_hosts?: string[]
 }
 
-export interface DemoStartResult { ok: boolean; faelle: { aktenzeichen: string; schritte: number; fehler: string | null }[]; url: string }
+export interface DemoStartResult { ok: boolean; uebersprungen?: boolean; faelle: { aktenzeichen: string; schritte: number; fehler: string | null }[]; url: string }
 
 export interface ChatModel { tag: string; label: string; parameter_size: string; size_bytes: number }
 export interface ChatModelsResponse { router: string; router_ok: boolean; models: ChatModel[]; system: string }
