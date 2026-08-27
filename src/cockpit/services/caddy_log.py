@@ -104,7 +104,6 @@ def percentiles(latencies: list[int]) -> tuple[int | None, int | None, int | Non
         v = latencies[0]
         return (v, v, v)
     sorted_l = sorted(latencies)
-    p50_idx = (len(sorted_l) - 1) // 2
     p95_idx = max(0, int(round((len(sorted_l) - 1) * 0.95)))
     return (
         int(statistics.median(sorted_l)),
