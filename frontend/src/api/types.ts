@@ -344,8 +344,24 @@ export interface DemoStartResult { ok: boolean; faelle: { aktenzeichen: string; 
 
 export interface ChatModel { tag: string; label: string; parameter_size: string; size_bytes: number }
 export interface ChatModelsResponse { router: string; router_ok: boolean; models: ChatModel[]; system: string }
+export interface ChatSource {
+  quelle: 'memory' | 'knowledge'
+  titel: string
+  text: string
+  category: string | null
+  project: string | null
+  created_at: string | null
+  score: number | null
+  id: string | null
+  /** Zitierkennung (Wissensbasis) oder Fundstelle */
+  ref: string | null
+}
 export interface ChatStreamChunk {
   delta?: string; done?: boolean; error?: string
+  /** Vor dem ersten Token: die herangezogenen Quellen aus Kira-RAG / Wissensbasis */
+  sources?: ChatSource[]
+  /** Hinweis, wenn die Suche nicht möglich war (Antwort kommt trotzdem, ohne Quellen) */
+  rag_note?: string
   eval_count?: number | null; prompt_eval_count?: number | null; eval_duration_ms?: number; total_duration_ms?: number
 }
 

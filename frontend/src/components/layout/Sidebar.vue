@@ -54,7 +54,7 @@ const items = [
     </nav>
 
     <div class="px-5 py-3 border-t border-slate-200/70 dark:border-slate-800/70 text-xs text-slate-500 dark:text-slate-500">
-      <p>v0.1.0 · Phase 1</p>
+      <p>v0.3.5 · Wand, KI-Konsole, MCP</p>
     </div>
   </aside>
 </template>

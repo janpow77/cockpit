@@ -333,7 +333,7 @@ async function demo() {
           <circle :cx="kn.x" :cy="kn.y" :r="kn.r" :class="['knoten', { hero: kn.host.is_self, aus: statusKlasse(kn.host.status) !== 'ok' }]" />
           <circle :cx="kn.x" :cy="kn.y" :r="kn.r + 10" :class="['ring', statusKlasse(kn.host.status)]" />
           <text class="label" :x="kn.x" :y="kn.y - kn.r * 0.42" text-anchor="middle" :style="{ fontSize: kn.host.is_self ? '28px' : '19px' }">{{ kn.host.name }}</text>
-          <text class="sub" :x="kn.x" :y="kn.y - kn.r * 0.42 + 20" text-anchor="middle">
+          <text class="sub" :x="kn.x" :y="kn.y - kn.r * 0.42 + 20" text-anchor="middle" :style="{ fontSize: kn.host.is_self ? '11.5px' : '10px' }">
             {{ kn.host.stats.cpus ? `${kn.host.stats.cpus} vCPU · ` : '' }}{{ kn.host.stats.mem_total_mb ? `${gb(kn.host.stats.mem_total_mb)} · ` : '' }}{{ kn.host.stats.containers != null ? `${kn.host.stats.containers} Ctr.` : (kn.host.description || statusText(kn.host.status)).slice(0, 34) }}
           </text>
           <template v-for="(p, j) in (projekteJeHost[kn.host.name] || []).slice(0, kn.host.is_self ? 4 : 2)" :key="p.name">

@@ -21,6 +21,9 @@ export interface ChatSendOptions {
   messages: { role: 'user' | 'assistant'; content: string }[]
   system?: string
   temperature?: number
+  /** Kira-RAG vor der Antwort befragen: 'memory' (Projektgedächtnis), 'knowledge' (Wissensbasis), 'both' oder 'off' */
+  rag?: 'off' | 'memory' | 'knowledge' | 'both'
+  ragProject?: string
   signal?: AbortSignal
   onChunk: (chunk: ChatStreamChunk) => void
 }
@@ -29,6 +32,9 @@ export interface ChatSendOptions {
 export async function streamChat(opts: ChatSendOptions): Promise<void> {
   if (USE_MOCKS) {
     const text = 'Das ist eine Beispielantwort der KI-Konsole im Mock-Modus. '
+    if (opts.rag && opts.rag !== 'off') {
+      opts.onChunk({ sources: [{ quelle: 'memory', titel: 'Demo-Modus per ASGITransport', text: 'Der Demo-Modus fährt die eigene API in-process …', category: 'architecture', project: 'regulierung', created_at: new Date().toISOString(), score: 0.82, id: '1', ref: null }] })
+    }
     for (const wort of text.split(' ')) {
       await new Promise((r) => setTimeout(r, 60))
       opts.onChunk({ delta: wort + ' ' })
@@ -40,7 +46,7 @@ export async function streamChat(opts: ChatSendOptions): Promise<void> {
   const resp = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ model: opts.model, messages: opts.messages, system: opts.system, temperature: opts.temperature }),
+    body: JSON.stringify({ model: opts.model, messages: opts.messages, system: opts.system, temperature: opts.temperature, rag: opts.rag ?? 'off', rag_project: opts.ragProject || null }),
     signal: opts.signal,
   })
   if (!resp.ok || !resp.body) {

@@ -4,10 +4,11 @@ import { RouterLink } from 'vue-router'
 import { ArrowLeft, ChevronDown, Copy, RotateCcw, Send, Square } from 'lucide-vue-next'
 import { listChatModels, streamChat } from '../api/chat'
 import { extractError } from '../api/client'
-import type { ChatModel, ChatStreamChunk } from '../api/types'
+import type { ChatModel, ChatSource, ChatStreamChunk } from '../api/types'
 import { useToastStore } from '../stores/toast'
 
 const STORAGE_KEY = 'cockpit.chat.v1'
+type RagMode = 'off' | 'memory' | 'knowledge' | 'both'
 
 interface ChatStats {
   evalCount: number | null
@@ -24,6 +25,8 @@ interface ChatMessage {
   stats?: ChatStats
   status?: 'streaming' | 'done' | 'aborted' | 'error'
   error?: string
+  sources?: ChatSource[]
+  ragNote?: string
 }
 
 interface PersistedChat {
@@ -31,13 +34,22 @@ interface PersistedChat {
   model: string
   temperature: number
   systemPrompt: string
+  rag: RagMode
+  ragProject: string
 }
 
 const examples = [
-  'Fasse die 12-Uhr-Regel des KPAnG in drei Sätzen zusammen',
-  'Erkläre den Unterschied zwischen TER und RER',
-  'Schreibe einen kurzen Vermerk-Absatz zur Stichprobenauswahl',
-  'Welche BSI-Maßnahmen gelten für ein Behördenportal?',
+  'Was habe ich beim Demo-Modus von HPP entschieden?',
+  'Welche Probleme gab es beim Tankerkönig-Import und wie wurden sie gelöst?',
+  'Was sagt Art. 74 der Dachverordnung zur Verwaltungskontrolle?',
+  'Welche BSI-Bausteine deckt HPP ab?',
+]
+
+const ragModes: { value: RagMode; label: string }[] = [
+  { value: 'off', label: 'Aus' },
+  { value: 'memory', label: 'Gedächtnis' },
+  { value: 'knowledge', label: 'Wissen' },
+  { value: 'both', label: 'Beides' },
 ]
 
 const toast = useToastStore()
@@ -46,6 +58,8 @@ const models = ref<ChatModel[]>([])
 const selectedModel = ref('')
 const temperature = ref(0.7)
 const systemPrompt = ref('')
+const rag = ref<RagMode>('both')
+const ragProject = ref('')
 const routerAddress = ref('–')
 const routerOk = ref(false)
 const modelsLoading = ref(true)
@@ -56,6 +70,9 @@ const streaming = ref(false)
 const inputElement = ref<HTMLTextAreaElement | null>(null)
 const historyElement = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
+const kiraPendingMessageId = ref<string | null>(null)
+const openSourceMessages = ref<string[]>([])
+const openSourceRows = ref<string[]>([])
 let abortController: AbortController | null = null
 let hasStoredSystem = false
 let hasStoredModel = false
@@ -70,12 +87,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isChatSource(value: unknown): value is ChatSource {
+  if (!isRecord(value)) return false
+  return (value.quelle === 'memory' || value.quelle === 'knowledge')
+    && typeof value.titel === 'string'
+    && typeof value.text === 'string'
+    && (value.category === null || typeof value.category === 'string')
+    && (value.project === null || typeof value.project === 'string')
+    && (value.created_at === null || typeof value.created_at === 'string')
+    && (value.score === null || typeof value.score === 'number')
+    && (value.id === null || typeof value.id === 'string')
+    && (value.ref === null || typeof value.ref === 'string')
+}
+
 function isChatMessage(value: unknown): value is ChatMessage {
   if (!isRecord(value)) return false
   return typeof value.id === 'string'
     && (value.role === 'user' || value.role === 'assistant')
     && typeof value.content === 'string'
     && typeof value.createdAt === 'string'
+    && (value.sources === undefined || (Array.isArray(value.sources) && value.sources.every(isChatSource)))
+    && (value.ragNote === undefined || typeof value.ragNote === 'string')
+}
+
+function isRagMode(value: unknown): value is RagMode {
+  return value === 'off' || value === 'memory' || value === 'knowledge' || value === 'both'
 }
 
 function restoreChat(): void {
@@ -100,6 +136,11 @@ function restoreChat(): void {
       systemPrompt.value = stored.systemPrompt
       hasStoredSystem = true
     }
+    if (isRagMode(stored.rag)) rag.value = stored.rag
+    if (typeof stored.ragProject === 'string') ragProject.value = stored.ragProject
+
+    const latestWithSources = [...messages.value].reverse().find((message) => message.role === 'assistant' && Boolean(message.sources?.length))
+    openSourceMessages.value = latestWithSources ? [latestWithSources.id] : []
   } catch {
     // Beschädigte lokale Daten verhindern den Start nicht.
   }
@@ -112,6 +153,8 @@ function persistChat(): void {
       model: selectedModel.value,
       temperature: temperature.value,
       systemPrompt: systemPrompt.value,
+      rag: rag.value,
+      ragProject: ragProject.value,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
   } catch {
@@ -156,6 +199,39 @@ function formatTemperature(value: number): string {
 
 function formatDuration(ms: number | null | undefined): string {
   return ms == null ? '–' : `${(ms / 1000).toFixed(1).replace('.', ',')} s`
+}
+
+function formatSourceDate(value: string | null): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+}
+
+function sourceMeta(source: ChatSource): string {
+  const locator = source.quelle === 'knowledge' && source.ref ? source.ref : formatSourceDate(source.created_at)
+  return [source.category, source.project, locator].filter((part): part is string => Boolean(part)).join(' · ')
+}
+
+function formatScore(score: number | null): string {
+  return score == null ? '–' : score.toFixed(2).replace('.', ',')
+}
+
+function sourceRowKey(messageId: string, index: number): string {
+  return `${messageId}:${index}`
+}
+
+function toggleSourceMessage(messageId: string): void {
+  openSourceMessages.value = openSourceMessages.value.includes(messageId)
+    ? openSourceMessages.value.filter((id) => id !== messageId)
+    : [...openSourceMessages.value, messageId]
+}
+
+function toggleSourceRow(messageId: string, index: number): void {
+  const key = sourceRowKey(messageId, index)
+  openSourceRows.value = openSourceRows.value.includes(key)
+    ? openSourceRows.value.filter((id) => id !== key)
+    : [...openSourceRows.value, key]
 }
 
 function tokensPerSecond(stats: ChatStats | undefined): string {
@@ -283,6 +359,11 @@ async function scrollToEnd(force = false): Promise<void> {
 }
 
 function handleChunk(chunk: ChatStreamChunk, assistant: ChatMessage): void {
+  if (chunk.sources !== undefined) {
+    assistant.sources = chunk.sources
+    if (chunk.sources.length) openSourceMessages.value = [assistant.id]
+  }
+  if (chunk.rag_note !== undefined) assistant.ragNote = chunk.rag_note
   if (chunk.delta) assistant.content += chunk.delta
   if (chunk.eval_count !== undefined || chunk.eval_duration_ms !== undefined || chunk.prompt_eval_count !== undefined) {
     assistant.stats = {
@@ -304,16 +385,24 @@ async function sendMessage(): Promise<void> {
   if (!content || streaming.value || !selectedModel.value) return
 
   const model = selectedModel.value
+  const requestRag = rag.value
+  const requestRagProject = (requestRag === 'memory' || requestRag === 'both')
+    ? ragProject.value.trim() || undefined
+    : undefined
   const requestMessages = messages.value
     .filter((message) => message.content && message.status !== 'error')
     .map((message) => ({ role: message.role, content: message.content }))
   const user: ChatMessage = { id: makeId(), role: 'user', content, createdAt: new Date().toISOString() }
-  const assistant: ChatMessage = {
+  const assistantDraft: ChatMessage = {
     id: makeId(), role: 'assistant', content: '', createdAt: new Date().toISOString(), model, status: 'streaming',
   }
-  messages.value.push(user, assistant)
+  messages.value.push(user, assistantDraft)
+  // Ab hier ausschließlich den Proxy aus dem reaktiven Array verändern, damit
+  // Streaming-Deltas, Metadaten und Status auch DOM und Persistenz erreichen.
+  const assistant = messages.value[messages.value.length - 1]!
   input.value = ''
   streaming.value = true
+  kiraPendingMessageId.value = requestRag === 'off' ? null : assistant.id
   autoScroll.value = true
   abortController = new AbortController()
   await nextTick()
@@ -327,9 +416,14 @@ async function sendMessage(): Promise<void> {
       messages: [...requestMessages, { role: 'user', content }],
       system: systemPrompt.value || undefined,
       temperature: temperature.value,
+      rag: requestRag,
+      ragProject: requestRagProject,
       signal: controller.signal,
       onChunk: (chunk) => {
-        if (!controller.signal.aborted) handleChunk(chunk, assistant)
+        if (!controller.signal.aborted) {
+          if (kiraPendingMessageId.value === assistant.id) kiraPendingMessageId.value = null
+          handleChunk(chunk, assistant)
+        }
       },
     })
     if (controller.signal.aborted) assistant.status = 'aborted'
@@ -344,6 +438,7 @@ async function sendMessage(): Promise<void> {
       toast.error(message)
     }
   } finally {
+    if (kiraPendingMessageId.value === assistant.id) kiraPendingMessageId.value = null
     streaming.value = false
     abortController = null
     await scrollToEnd()
@@ -357,6 +452,9 @@ function stopStreaming(): void {
 function newConversation(): void {
   abortController?.abort()
   messages.value = []
+  kiraPendingMessageId.value = null
+  openSourceMessages.value = []
+  openSourceRows.value = []
   autoScroll.value = true
   toast.info('Neues Gespräch begonnen.')
   nextTick(() => inputElement.value?.focus())
@@ -368,7 +466,7 @@ function onInputKeydown(event: KeyboardEvent): void {
   if (!streaming.value) void sendMessage()
 }
 
-watch([messages, selectedModel, temperature, systemPrompt], persistChat, { deep: true })
+watch([messages, selectedModel, temperature, systemPrompt, rag, ragProject], persistChat, { deep: true })
 watch(messages, () => { void scrollToEnd() }, { deep: true })
 watch(input, () => { void nextTick(resizeInput) })
 
@@ -410,6 +508,28 @@ onBeforeUnmount(() => abortController?.abort())
               {{ model.label }} · {{ model.parameter_size }}
             </option>
           </select>
+        </label>
+
+        <div class="field kira-field">
+          <span>Kira</span>
+          <div class="kira-segments" role="group" aria-label="Kira-Modus">
+            <button
+              v-for="mode in ragModes"
+              :key="mode.value"
+              type="button"
+              :class="{ active: rag === mode.value }"
+              :aria-pressed="rag === mode.value"
+              :disabled="streaming"
+              @click="rag = mode.value"
+            >
+              {{ mode.label }}
+            </button>
+          </div>
+        </div>
+
+        <label v-if="rag === 'memory' || rag === 'both'" class="field project-field">
+          <span>Projekt <b>optional</b></span>
+          <input v-model="ragProject" type="text" placeholder="z. B. regulierung" :disabled="streaming">
         </label>
 
         <label class="field temperature-field">
@@ -454,10 +574,49 @@ onBeforeUnmount(() => abortController?.abort())
               <span>{{ message.role === 'user' ? 'Sie' : 'Assistent' }}</span>
               <time class="mono" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
             </div>
-            <div v-if="message.role === 'assistant'" class="markdown" @click="handleMarkdownClick($event, message)" v-html="markdownLight(message.content)"></div>
-            <p v-else class="user-text">{{ message.content }}</p>
-            <span v-if="message.status === 'streaming'" class="stream-cursor" aria-label="Antwort wird erstellt"></span>
+            <div v-if="message.role === 'assistant' && kiraPendingMessageId === message.id" class="kira-pending">
+              <span aria-hidden="true"></span>
+              Kira wird befragt …
+            </div>
+            <div v-if="message.role === 'assistant' && message.content" class="markdown" @click="handleMarkdownClick($event, message)" v-html="markdownLight(message.content)"></div>
+            <p v-else-if="message.role === 'user'" class="user-text">{{ message.content }}</p>
+            <span v-if="message.status === 'streaming' && kiraPendingMessageId !== message.id" class="stream-cursor" aria-label="Antwort wird erstellt"></span>
             <div v-if="message.error" class="console-error" role="alert">Fehler: {{ message.error }}</div>
+            <div v-if="message.role === 'assistant' && (message.ragNote || message.sources?.length)" class="rag-results">
+              <p v-if="message.ragNote" class="rag-note">{{ message.ragNote }}</p>
+              <div v-if="message.sources?.length" class="sources">
+                <button
+                  class="sources-toggle"
+                  type="button"
+                  :aria-expanded="openSourceMessages.includes(message.id)"
+                  @click="toggleSourceMessage(message.id)"
+                >
+                  <span>Quellen · {{ message.sources.length }}</span>
+                  <ChevronDown :size="15" :class="{ rotated: openSourceMessages.includes(message.id) }" aria-hidden="true" />
+                </button>
+                <div v-if="openSourceMessages.includes(message.id)" class="source-list">
+                  <button
+                    v-for="(source, index) in message.sources"
+                    :key="source.id ?? `${source.quelle}-${index}`"
+                    class="source-row"
+                    type="button"
+                    :aria-expanded="openSourceRows.includes(sourceRowKey(message.id, index))"
+                    @click="toggleSourceRow(message.id, index)"
+                  >
+                    <span class="source-number mono">[{{ index + 1 }}]</span>
+                    <span class="source-body">
+                      <span class="source-heading">
+                        <span class="source-chip" :class="source.quelle">{{ source.quelle === 'memory' ? 'Gedächtnis' : 'Wissensbasis' }}</span>
+                        <span class="source-title">{{ source.titel }}</span>
+                        <span class="source-score mono">{{ formatScore(source.score) }}</span>
+                      </span>
+                      <span v-if="sourceMeta(source)" class="source-meta mono">{{ sourceMeta(source) }}</span>
+                      <span class="source-excerpt" :class="{ expanded: openSourceRows.includes(sourceRowKey(message.id, index)) }">{{ source.text }}</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
             <div v-if="message.role === 'assistant' && message.status !== 'streaming'" class="assistant-footer">
               <div class="stats mono">
                 <span>{{ message.stats?.evalCount ?? '–' }} Tokens</span>
@@ -569,6 +728,7 @@ onBeforeUnmount(() => abortController?.abort())
 .temperature-field { width: 145px; }
 
 select,
+.project-field input,
 .system-panel textarea {
   color: var(--text);
   background: var(--flaeche);
@@ -578,7 +738,16 @@ select,
 }
 
 select { height: 34px; padding: 0 30px 0 9px; text-overflow: ellipsis; }
+.project-field { width: 155px; }
+.project-field input { width: 100%; height: 34px; padding: 0 9px; }
+.project-field input::placeholder { color: var(--text-3); }
 input[type='range'] { height: 17px; accent-color: var(--akzent); cursor: pointer; }
+
+.kira-segments { height: 34px; display: inline-flex; overflow: hidden; border: 1px solid var(--linie); border-radius: 5px; background: var(--flaeche); }
+.kira-segments button { padding: 0 8px; border: 0; border-left: 1px solid var(--linie); background: transparent; color: var(--text-3); font: 600 11px var(--display); letter-spacing: .025em; cursor: pointer; }
+.kira-segments button:first-child { border-left: 0; }
+.kira-segments button:hover { color: var(--text); background: var(--flaeche-2); }
+.kira-segments button.active { background: rgba(242, 184, 75, .14); color: var(--akzent); box-shadow: inset 0 -2px var(--akzent); }
 
 .button {
   height: 34px;
@@ -630,8 +799,34 @@ input[type='range'] { height: 17px; accent-color: var(--akzent); cursor: pointer
 .markdown :deep(pre) { margin: 0; padding: 13px 15px; overflow-x: auto; }
 .markdown :deep(pre code) { padding: 0; border: 0; background: transparent; color: #dbe5ff; font-size: 12px; line-height: 1.55; white-space: pre; }
 
+.kira-pending { display: flex; align-items: center; gap: 8px; padding: 3px 0 5px; color: var(--text-2); font-size: 12px; }
+.kira-pending > span { width: 7px; height: 7px; border-radius: 50%; background: var(--akzent); box-shadow: 0 0 0 0 rgba(242, 184, 75, .4); animation: kira-pulse 1.4s ease-out infinite; }
+@keyframes kira-pulse { 55%, 100% { box-shadow: 0 0 0 7px rgba(242, 184, 75, 0); opacity: .72; } }
+
 .stream-cursor { display: inline-block; width: 7px; height: 17px; margin-left: 3px; vertical-align: -3px; background: var(--akzent); animation: blink .9s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+
+.rag-results { margin-top: 11px; }
+.rag-note { margin: 0 0 7px; padding: 7px 9px; border-left: 2px solid rgba(242, 184, 75, .65); background: rgba(242, 184, 75, .07); color: #d6c38f; font: 11px/1.45 var(--body); }
+.sources { overflow: hidden; border: 1px solid #2c365a; border-radius: 6px; background: #0f1629; }
+.sources-toggle { width: 100%; min-height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border: 0; background: #111a30; color: var(--text-2); font: 600 11px var(--display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.sources-toggle:hover { color: var(--akzent); background: #151f38; }
+.sources-toggle svg { transition: transform .2s ease; }
+.sources-toggle svg.rotated { transform: rotate(180deg); }
+.source-list { border-top: 1px solid #2c365a; }
+.source-row { width: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 7px; padding: 10px; border: 0; border-top: 1px solid #242e4e; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.source-row:first-child { border-top: 0; }
+.source-row:hover { background: rgba(111, 168, 255, .045); }
+.source-number { padding-top: 2px; color: var(--akzent); font-size: 10px; }
+.source-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.source-heading { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.source-chip { flex: 0 0 auto; padding: 2px 5px; border: 1px solid #405079; border-radius: 999px; color: #b9c9ef; font: 600 9px var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.source-chip.memory { border-color: #5b4c2d; color: #ddbd73; }
+.source-title { min-width: 0; overflow: hidden; color: var(--text); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.source-score { flex: 0 0 auto; margin-left: auto; color: var(--text-3); font-size: 9px; font-weight: 400; }
+.source-meta { overflow: hidden; color: var(--text-3); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.source-excerpt { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.source-excerpt.expanded { display: block; overflow: visible; }
 
 .assistant-footer { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--linie); }
 .stats { display: flex; gap: 6px 12px; flex-wrap: wrap; color: var(--text-3); font-size: 9px; }
@@ -680,6 +875,10 @@ input[type='range'] { height: 17px; accent-color: var(--akzent); cursor: pointer
   .state-text { width: 100%; padding-left: 15px; }
   .controls { display: grid; grid-template-columns: 1fr 1fr; align-items: end; }
   .model-field { width: auto; grid-column: 1 / -1; }
+  .kira-field { grid-column: 1 / -1; }
+  .kira-segments { width: 100%; }
+  .kira-segments button { flex: 1; padding-inline: 5px; }
+  .project-field { width: auto; grid-column: 1 / -1; }
   .temperature-field { width: auto; grid-column: 1 / -1; }
   .button { padding: 0 8px; font-size: 12px; }
   .message-list { width: calc(100% - 20px); padding-top: 18px; }
@@ -687,6 +886,8 @@ input[type='range'] { height: 17px; accent-color: var(--akzent); cursor: pointer
   .composer { padding-inline: 10px; }
   .input-hint { display: none; }
   .send-button { width: 39px; padding: 0; justify-content: center; font-size: 0; }
+  .source-heading { flex-wrap: wrap; }
+  .source-title { order: 3; width: 100%; white-space: normal; }
 }
 
 @media (prefers-reduced-motion: reduce) {

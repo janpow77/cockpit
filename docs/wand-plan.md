@@ -174,3 +174,25 @@ Ausblendliste, damit die Wand keinen Dauer-Alarm zeigt.
   `MCP_SERVICE_TOKEN_SHA256S` der `audit_designer/.env` auf dem NUC eingetragen (und
   zusätzlich in `/etc/checklist/env` auf dem Hetzner); der Token selbst liegt im Vault
   (`mcp_flowaudit_token`).
+
+## 12. Kira-RAG in der KI-Konsole (v0.3.5)
+
+Die Konsole kann vor jeder Antwort Kira befragen. Umschalter „Kira“ im Kopf: **Aus ·
+Gedächtnis · Wissen · Beides** (Vorgabe Beides), dazu ein optionales Projektfilter-Feld.
+Ablauf je Anfrage (`routes/chat.py` + `services/rag.py`):
+
+1. Die letzte Nutzerfrage (max. 500 Zeichen) wird gesucht – **Gedächtnis** über das
+   MCP-Werkzeug `memory_search` (mcp.flowaudit.de, Service-Token aus dem Vault), Rückfall
+   `POST /api/memory/search` per SSH-`curl` auf dem NUC; **Wissensbasis** über
+   `knowledge_search` (nur MCP). Beide Suchen laufen parallel.
+2. Treffer werden normalisiert (Protokoll-Kategorien und private Projekte bleiben weg),
+   gekürzt (Gedächtnis 1 200, Wissen 1 000 Zeichen) und als nummerierter Kontextblock an
+   den Systemprompt gehängt; das Modell soll mit [1], [2] … zitieren und sagen, wenn der
+   Kontext nichts hergibt.
+3. Als erster SSE-Chunk gehen `sources` (für die Anzeige) und ggf. `rag_note` (welcher Weg
+   nicht ging) an die Konsole, dann streamen die Tokens wie bisher.
+
+Parameter der Konsole: Modell (Whitelist), Temperatur 0–1,5, Systemprompt (Vorgabe in
+den Einstellungen), Kira-Modus + Projekt, Kontextfenster `chat_num_ctx` (Vorgabe 12 288
+Tokens, nur bei aktivem RAG gesetzt). Kein Verlauf auf dem Server; der Browser hält das
+Gespräch in `localStorage`.

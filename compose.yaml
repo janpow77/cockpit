@@ -2,7 +2,7 @@
 # Wird via `docker compose -f compose.yaml up -d` auf CCX23 gestartet.
 services:
   cockpit:
-    image: cockpit:v0.3.4
+    image: cockpit:v0.3.5
     container_name: cockpit
     restart: unless-stopped
     ports:

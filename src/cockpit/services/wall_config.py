@@ -126,9 +126,6 @@ DEFAULT_MCP_SERVERS: list[dict[str, Any]] = [
         "transport": "stdio",
         "command": "python backend/app/modules/memory/mcp_server.py (audit_designer, lokal in Claude Code)",
         "health_url": "https://mcp.flowaudit.de/health",
-        "secret_key": "memory_api_key",
-        "header": "X-Memory-API-Key",
-        "header_prefix": "",
         "health_with_secret": False,
         "snippet": "claude mcp add memory -- python backend/app/modules/memory/mcp_server.py",
         "description": "RAG-Gedächtnis (Architektur, Lösungen, Referenzen) für Claude Code und Kira; Container checklist-mcp-memory auf ccx23.",
@@ -143,9 +140,14 @@ DEFAULT_CHAT_MODELS: list[dict[str, str]] = [
 ]
 
 DEFAULT_CHAT_SYSTEM = (
-    "Du bist die KI-Konsole des flowaudit-Cockpits. Antworte knapp, sachlich und auf Deutsch "
-    "mit echten Umlauten. Wenn du etwas nicht weißt, sag es."
+    "Du bist die KI-Konsole des flowaudit-Cockpits von Jan Riener (Prüfbehörde EFRE Hessen, "
+    "Entwickler von HPP, Checklisten-Designer, flowinvoice u. a.). Antworte knapp, sachlich und auf Deutsch "
+    "mit echten Umlauten; Fachbegriffe wie Verwaltungskontrolle (VerwK), Feststellungen, TER/RER korrekt verwenden. "
+    "Wenn du etwas nicht weißt oder der Kontext es nicht hergibt, sag es."
 )
+
+# Kontextfenster des Modells, wenn RAG-Kontext mitgegeben wird (Ollama num_ctx)
+DEFAULT_CHAT_NUM_CTX = 12288
 
 
 @dataclass
@@ -160,6 +162,7 @@ class WallConfig:
     backup_dir: str = "/backups"
     chat_models: list[dict[str, str]] = field(default_factory=lambda: list(DEFAULT_CHAT_MODELS))
     chat_system: str = DEFAULT_CHAT_SYSTEM
+    chat_num_ctx: int = DEFAULT_CHAT_NUM_CTX
     mcp_servers: list[dict[str, Any]] = field(default_factory=lambda: list(DEFAULT_MCP_SERVERS))
     work_dirs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_WORK_DIRS))
     kira: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KIRA))
@@ -170,6 +173,7 @@ class WallConfig:
             "hero": self.hero, "probes": self.probes, "demo": self.demo,
             "backup_dir": self.backup_dir, "chat_models": self.chat_models,
             "chat_system": self.chat_system,
+            "chat_num_ctx": self.chat_num_ctx,
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira,
         }
@@ -211,6 +215,8 @@ def load(session: Session) -> WallConfig:
         cfg.backup_dir = raw["backup_dir"]
     if isinstance(raw.get("chat_system"), str) and raw["chat_system"].strip():
         cfg.chat_system = raw["chat_system"]
+    if isinstance(raw.get("chat_num_ctx"), int) and 2048 <= raw["chat_num_ctx"] <= 131072:
+        cfg.chat_num_ctx = raw["chat_num_ctx"]
     return cfg
 
 
@@ -226,6 +232,8 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("backup_dir", "chat_system"):
         if isinstance(patch.get(name), str):
             raw[name] = patch[name]
+    if isinstance(patch.get("chat_num_ctx"), int):
+        raw["chat_num_ctx"] = patch["chat_num_ctx"]
     write_setting(session, _KEY, raw)
     return load(session)
 
