@@ -241,3 +241,24 @@ Aufbau dauert 1–3 Minuten, der Cloudflare-Tunnel kappt Antworten nach 100 s (H
 und zwei parallele Aufbauten liefen in einen DB-Deadlock. Die Wand startet, zeigt die
 Sekunden auf der Hero-Karte, fragt alle 5 s nach und öffnet danach das reguläre Portal
 (`/kraftstoff/vollzug`) **im selben Fenster** – kein Pop-up, keine eigene Demo-Seite.
+
+## 14. Prüfstand 27.08.2026 (Smoketests, Codex-Review)
+
+- **HPP-Abnahmetest** `scripts/hpp_acceptance_smoke.sh` (regulierung): 11/11 bestanden
+  (pytest, Frontend-Build, Container, API, SPA-Routen, UI-Guards).
+- **Cockpit** `scripts/cockpit_smoke.sh <url> <pw-datei>` (von Codex geschrieben, nur lesend):
+  Login, Health, Overview-Pflichtfelder, Dienste, Modelle, MCP-Werkzeuge, SSE-Chat, Demo-Start
+  (`neu=false` → übersprungen), Konfiguration. Gegen NUC- und Hetzner-Instanz grün.
+- **Browser** (Playwright): Login-Formular, Wand (Hero-Kennzahlen, Knöpfe, Alarme, Laufband),
+  Konsole (Modelle, Kira-Umschalter), MCP-Seite; HPP-Prod als `claude-smoke`: Demo-Seite
+  (fünf Fälle), Vorgänge mit DEMO-Kennzeichen, Akte.
+- **Codex-Review** (Dateien overview/chat/rag/wall_extras/ai_router_client/auth) – umgesetzt:
+  `env_key` nur als Variablenname (Shell-Injection über Konfiguration), Sonden und
+  Host-Abfragen kapseln (kein 500 mehr), Demo-Antworten validiert (kein `ok` bei leerer
+  Fallliste), Router-Antworten robust, Modellliste außerhalb des Eventloops, Logout widerruft
+  die tatsächliche Sitzung, TLS-Cache je Host+Port, Ausblendliste auf den ganzen Text,
+  Quellen im Prompt als Daten gekennzeichnet, Tunnel nur bei laufendem Container,
+  Kennzahlen-Ausfall des Self-Hosts meldet sich.
+- **Offen (bewusst, Admin-Konfiguration ist Tailscale-only):** Allowlist für konfigurierbare
+  URLs (Sonden, Demo, MCP) gegen SSRF/Secret-Abfluss nach Admin-Übernahme; Rate-Limit am
+  Login; Cache-Schlüssel mit Konfigurationshash; IPv6-Adressen in internen Links.
