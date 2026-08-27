@@ -2,7 +2,7 @@
 # Wird via `docker compose -f compose.yaml up -d` auf CCX23 gestartet.
 services:
   cockpit:
-    image: cockpit:v0.3
+    image: cockpit:v0.3.1
     container_name: cockpit
     restart: unless-stopped
     ports:
@@ -24,6 +24,8 @@ services:
       - /home/deploy/backups:/backups:ro
       # Werkstatt: git-Stand der Projekte auf dem Self-Host (nur lesend)
       - /home/deploy/Projekte:/work/ccx23:ro
+      # Caddy-Zugriffsprotokolle fuer die Verkehrs-Quellen (nur lesend)
+      - /var/log/caddy:/var/log/caddy:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:7843/health"]
       interval: 30s

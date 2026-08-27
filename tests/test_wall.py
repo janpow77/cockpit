@@ -57,6 +57,7 @@ def test_host_stats_parse():
 
 
 def test_newest_backups(tmp_path):
+    (tmp_path / "hpp_backup.log").write_text("log")  # Protokolle sind keine Sicherungen
     (tmp_path / "hpp-20260826-031000.dump.age").write_bytes(b"x" * 10)
     (tmp_path / "hpp-20260827-031000.dump.age").write_bytes(b"x" * 20)
     (tmp_path / "checklist-20260827-032000.dump.age").write_bytes(b"y")

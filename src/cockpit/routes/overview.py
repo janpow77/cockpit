@@ -133,7 +133,7 @@ def _newest_backups(backup_dir: str) -> list[dict]:
     try:
         with os.scandir(backup_dir) as it:
             for entry in it:
-                if not entry.is_file():
+                if not entry.is_file() or entry.name.endswith((".log", ".txt", ".md")):
                     continue
                 st = entry.stat()
                 prefix = entry.name.split("-", 1)[0] or entry.name

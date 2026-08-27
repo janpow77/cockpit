@@ -384,11 +384,13 @@ def handlungsbedarf(
             if st["load1"] > st["cpus"] * 1.5:
                 add("warn", f"Last auf {h['name']} hoch ({str(st['load1']).replace('.', ',')} bei {st['cpus']} CPUs)", host=h["name"])
 
-    # Gestoppte Entwicklungs-Stacks sind Alltag. Es zaehlen registrierte Apps, Instanzen mit
-    # eigenem Tunnel und - auf dem Produktionshost (Self-Host) - alles mit oeffentlicher Adresse.
+    # Gestoppte Entwicklungs-Stacks sind Alltag. Es zaehlen Instanzen, die Verkehr bedienen
+    # (eigener Tunnel), und auf dem Produktionshost (Self-Host) alles, was registriert ist
+    # oder eine oeffentliche Adresse hat. Dev-Hosts bleiben still - ihr Zustand steht im Projektraster.
     prod_hosts = {h.get("name") for h in hosts if h.get("is_self")}
     for p in projects:
-        if not (p.get("registered") or p.get("tunnel") or (p.get("url") and p.get("host") in prod_hosts)):
+        auf_prod = p.get("host") in prod_hosts and (p.get("registered") or p.get("url") or p.get("tunnel"))
+        if not (auf_prod or p.get("tunnel")):
             continue
         if p.get("status") == "down":
             add("krit", f"{p.get('title') or p['name']} auf {p['host']}: alle Container aus", host=p["host"], url=p.get("url"))

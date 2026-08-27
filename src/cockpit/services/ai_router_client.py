@@ -24,8 +24,26 @@ _cache: dict[str, tuple[float, object]] = {}
 _lock = threading.Lock()
 
 
+# Ohne AI_ROUTER_URL werden diese Adressen der Reihe nach probiert: im Container auf
+# ccx23 haengt der Router im selben Docker-Netz (ai-router), sonst Tailscale.
+FALLBACK_URLS = ("http://ai-router:7842", DEFAULT_URL)
+_resolved: dict[str, str] = {}
+
+
 def base_url() -> str:
-    return (os.environ.get("AI_ROUTER_URL") or DEFAULT_URL).rstrip("/")
+    env = os.environ.get("AI_ROUTER_URL")
+    if env:
+        return env.rstrip("/")
+    return _resolved.get("url") or DEFAULT_URL
+
+
+def _candidates() -> tuple[str, ...]:
+    env = os.environ.get("AI_ROUTER_URL")
+    if env:
+        return (env.rstrip("/"),)
+    gemerkt = _resolved.get("url")
+    rest = tuple(u for u in FALLBACK_URLS if u != gemerkt)
+    return ((gemerkt,) + rest) if gemerkt else rest
 
 
 def _cached(key: str):
@@ -48,20 +66,28 @@ def list_models(*, refresh: bool = False) -> list[dict]:
         if hit is not None:
             return hit  # type: ignore[return-value]
     models: list[dict] = []
-    try:
-        with httpx.Client(timeout=6.0) as c:
-            resp = c.get(f"{base_url()}/api/tags")
-            resp.raise_for_status()
-            for m in resp.json().get("models", []):
-                details = m.get("details") or {}
-                models.append({
-                    "name": m.get("name", ""),
-                    "parameter_size": details.get("parameter_size", ""),
-                    "family": details.get("family", ""),
-                    "size_bytes": int(m.get("size") or 0),
-                })
-    except (httpx.HTTPError, ValueError) as exc:
-        log.warning("ai-router /api/tags nicht erreichbar: %s", exc)
+    letzter_fehler: Exception | None = None
+    for url in _candidates():
+        try:
+            with httpx.Client(timeout=6.0) as c:
+                resp = c.get(f"{url}/api/tags")
+                resp.raise_for_status()
+                for m in resp.json().get("models", []):
+                    details = m.get("details") or {}
+                    models.append({
+                        "name": m.get("name", ""),
+                        "parameter_size": details.get("parameter_size", ""),
+                        "family": details.get("family", ""),
+                        "size_bytes": int(m.get("size") or 0),
+                    })
+        except (httpx.HTTPError, ValueError) as exc:
+            letzter_fehler = exc
+            models = []
+            continue
+        _resolved["url"] = url
+        break
+    if letzter_fehler is not None and not models:
+        log.warning("ai-router /api/tags nicht erreichbar (%s): %s", ", ".join(_candidates()), letzter_fehler)
         return models
     _store("models", models)
     return models

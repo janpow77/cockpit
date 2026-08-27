@@ -90,6 +90,17 @@ def test_handlungsbedarf_sortiert_nach_schwere():
     assert out[-1]["hint"] == "Deploy"
 
 
+def test_handlungsbedarf_registrierte_dev_stacks_bleiben_still():
+    hosts = [{"name": "ccx23", "is_self": True, "status": "online", "stats": {"ok": True}},
+             {"name": "nuc", "is_self": False, "status": "online", "stats": {"ok": True}}]
+    projects = [
+        {"host": "nuc", "name": "krypto", "title": "krypto", "status": "down", "running": 0, "containers": 3, "registered": True, "url": None, "tunnel": False},
+        {"host": "nuc", "name": "hpp", "title": "HPP", "status": "degraded", "running": 4, "containers": 5, "registered": True, "url": "https://hpp.example", "tunnel": True},
+    ]
+    out = wx.handlungsbedarf(hosts, projects, [], [], {"ok": True}, None, [])
+    assert [a["text"] for a in out] == ["HPP auf nuc: 4/5 Container laufen"]
+
+
 def test_handlungsbedarf_oeffentliche_instanz_auf_prod_host_zaehlt():
     hosts = [{"name": "ccx23", "is_self": True, "status": "online", "stats": {"ok": True}}]
     projects = [{"host": "ccx23", "name": "zvg", "title": "ZVG", "status": "down", "running": 0, "containers": 2, "registered": False, "url": "https://zvg.example", "tunnel": False}]
