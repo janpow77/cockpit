@@ -252,31 +252,23 @@ async function demo() {
   if (!hero.value || demoBusy.value) return
   const ziel = `${hero.value.url.replace(/\/$/, '')}${hero.value.demo_path}`
   if (!hero.value.demo_ready) {
-    window.open(ziel, '_blank', 'noopener')
-    toast.info('Demo-Seite geöffnet – Aufbau per Klick dort (Vault-Zugang für den Direktstart fehlt).')
+    window.location.assign(ziel)
     return
-  }
-  // Tab noch in der Klick-Geste öffnen, sonst blockiert der Browser das Öffnen nach dem Aufbau
-  const fenster = window.open('', '_blank')
-  if (fenster) {
-    fenster.document.write('<!doctype html><title>HPP-Demo wird aufgebaut …</title><body style="margin:0;display:grid;place-items:center;height:100vh;background:#0B1020;color:#E7ECF7;font:16px/1.5 system-ui"><div style="text-align:center"><p style="font-size:22px;margin:0 0 8px">HPP-Demo wird aufgebaut …</p><p style="color:#AAB3CF">Fünf Demo-Vorgänge werden über die reguläre Verfahrenslogik angelegt – das dauert etwa ein bis zwei Minuten. Diese Seite wechselt danach automatisch zur Demo.</p></div></body>')
   }
   demoBusy.value = true
   demoLink.value = null
   demoSekunden.value = 0
   demoTimer = window.setInterval(() => { demoSekunden.value += 1 }, 1000)
-  demoMeldung.value = 'Demo-Fälle werden aufgebaut …'
+  demoMeldung.value = 'Demo-Fälle werden aufgebaut – danach öffnet sich das Portal in diesem Fenster'
   try {
     const res = await startDemo()
     const url = res.url || ziel
     demoLink.value = url
-    demoMeldung.value = res.ok ? `${res.faelle.length} Demo-Fälle stehen (${demoSekunden.value} s)` : 'Aufbau mit Fehlern – siehe Demo-Seite'
-    if (fenster && !fenster.closed) fenster.location.href = url
-    else window.open(url, '_blank', 'noopener')
-    toast.success(res.ok ? 'HPP-Demo steht – Demo-Seite geöffnet' : 'Demo aufgebaut, aber mit Fehlern (siehe Demo-Seite)')
+    demoMeldung.value = res.ok ? `${res.faelle.length} Demo-Fälle stehen (${demoSekunden.value} s) – Portal wird geöffnet …` : 'Aufbau mit Fehlern – Portal wird geöffnet …'
+    // Kein neues Fenster: das Portal ersetzt die Wand in diesem Tab (Zurück-Taste führt zur Wand)
+    window.setTimeout(() => window.location.assign(url), 800)
   } catch (err) {
     demoMeldung.value = `Fehler: ${extractError(err)}`
-    if (fenster && !fenster.closed) fenster.close()
     toast.error(extractError(err))
   } finally {
     demoBusy.value = false
@@ -376,7 +368,7 @@ async function demo() {
           <text v-if="!heroKpis.length" class="sub" x="466" y="790">{{ hero.probe_note ? `Kennzahlen: ${hero.probe_note}` : 'Kennzahlen folgen mit der Sonde' }}</text>
           <a :href="hero.url" target="_blank" rel="noopener"><rect x="1010" y="690" width="126" height="36" rx="6" class="knopf-svg ghost" /><text x="1073" y="714" text-anchor="middle" class="knopf-text ghost">Öffnen ↗</text></a>
           <g class="klickbar" @click="demo"><rect x="1010" y="736" width="126" height="36" rx="6" :class="['knopf-svg', { busy: demoBusy }]" /><text x="1073" y="760" text-anchor="middle" class="knopf-text">{{ demoBusy ? `baut auf · ${demoSekunden} s` : 'Demo starten' }}</text></g>
-          <a v-if="demoLink && !demoBusy" :href="demoLink" target="_blank" rel="noopener"><rect x="1010" y="782" width="126" height="32" rx="6" class="knopf-svg ghost" /><text x="1073" y="803" text-anchor="middle" class="knopf-text ghost">Demo öffnen ↗</text></a>
+          <a v-if="demoLink && !demoBusy" :href="demoLink"><rect x="1010" y="782" width="126" height="32" rx="6" class="knopf-svg ghost" /><text x="1073" y="803" text-anchor="middle" class="knopf-text ghost">Portal öffnen</text></a>
           <text v-if="demoMeldung" class="sub" x="466" y="832">{{ demoMeldung }}{{ demoBusy ? ' (etwa 1–2 Minuten)' : '' }}</text>
         </g>
       </svg>

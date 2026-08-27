@@ -103,6 +103,6 @@ export async function patchWallConfig(patch: Partial<WallConfig>): Promise<WallC
 
 export async function startDemo(): Promise<DemoStartResult> {
   if (USE_MOCKS) return { ok: true, faelle: [{ aktenzeichen: 'DEMO-2026/005', schritte: 1, fehler: null }], url: 'https://hpp.flowaudit.de/kraftstoff/vollzug/demo' }
-  const { data } = await client.post<DemoStartResult>('/overview/demo', {}, { timeout: 330_000 })
+  const { data } = await client.post<DemoStartResult>('/overview/demo', {}, { timeout: 660_000 })
   return data
 }

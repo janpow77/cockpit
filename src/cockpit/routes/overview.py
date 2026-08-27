@@ -476,20 +476,40 @@ async def demo_starten(_=Depends(require_auth), session: Session = Depends(get_s
                 f"„{demo.get('password_secret')}“ anlegen (HPP-Benutzer mit Admin-Rolle)."
             ),
         )
+    stand_url = demo.get("stand_url") or demo["aufbau_url"].rsplit("/aufbauen", 1)[0]
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(320.0, connect=10.0)) as c:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as c:
             login = await c.post(demo["login_url"], data={"username": user, "password": password})
             if login.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"HPP-Anmeldung fehlgeschlagen (HTTP {login.status_code})")
             token = login.json().get("access_token")
-            resp = await c.post(
-                demo["aufbau_url"], json={}, headers={"Authorization": f"Bearer {token}"}
-            )
+            kopf = {"Authorization": f"Bearer {token}"}
+            resp = await c.post(demo["aufbau_url"], json={}, headers=kopf)
+            if resp.status_code == 409:
+                # Aufbau laeuft bereits (z. B. zweiter Klick) - einfach mitwarten
+                pass
+            elif resp.status_code >= 400:
+                raise HTTPException(status_code=502, detail=f"Demo-Aufbau fehlgeschlagen (HTTP {resp.status_code}): {resp.text[:200]}")
+            ergebnis = resp.json() if resp.status_code < 400 else {}
+            if resp.status_code == 202 or resp.status_code == 409 or "gestartet" in ergebnis:
+                # Hintergrund-Aufbau: Fortschritt abfragen, bis er beendet ist (Tunnel-Limit 100 s umgangen)
+                start = time.monotonic()
+                ergebnis = {}
+                while time.monotonic() - start < 600:
+                    await asyncio.sleep(5)
+                    st = await c.get(stand_url, headers=kopf)
+                    if st.status_code >= 400:
+                        continue
+                    lauf = (st.json() or {}).get("aufbau") or {}
+                    if lauf and not lauf.get("laeuft"):
+                        if lauf.get("fehler"):
+                            raise HTTPException(status_code=502, detail=f"Demo-Aufbau fehlgeschlagen: {lauf['fehler'][:200]}")
+                        ergebnis = lauf.get("ergebnis") or {}
+                        break
+                else:
+                    raise HTTPException(status_code=504, detail="Demo-Aufbau nach 10 Minuten nicht beendet")
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"HPP nicht erreichbar: {exc}") from exc
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"Demo-Aufbau fehlgeschlagen (HTTP {resp.status_code}): {resp.text[:200]}")
-    ergebnis = resp.json()
     faelle = [
         {"aktenzeichen": f.get("aktenzeichen"), "schritte": len(f.get("schritte") or []), "fehler": f.get("fehler")}
         for f in ergebnis.get("faelle", [])
