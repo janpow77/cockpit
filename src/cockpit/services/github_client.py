@@ -141,3 +141,48 @@ def dispatch_workflow(owner: str, name: str, workflow_id: str | int, ref: str = 
     with httpx.Client(base_url=API_BASE, timeout=10.0) as c:
         resp = c.post(f"/repos/{owner}/{name}/actions/workflows/{workflow_id}/dispatches", json=body, headers=headers)
         return resp.status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# Wand: alle Repos des Kontos + juengste Commits (nur lesend, gecacht)
+# ---------------------------------------------------------------------------
+
+
+def list_user_repos(limit: int = 60) -> list[dict]:
+    """Alle Repos des Token-Kontos (eigene, nach letztem Push sortiert)."""
+    data = _get("/user/repos", {"per_page": min(limit, 100), "sort": "pushed", "affiliation": "owner"})
+    repos: list[dict] = []
+    for r in data or []:
+        repos.append({
+            "full_name": r.get("full_name", ""),
+            "name": r.get("name", ""),
+            "owner": (r.get("owner") or {}).get("login", ""),
+            "description": r.get("description") or "",
+            "private": bool(r.get("private")),
+            "language": r.get("language") or "",
+            "pushed_at": r.get("pushed_at"),
+            "default_branch": r.get("default_branch", "main"),
+            "open_issues": int(r.get("open_issues_count") or 0),
+            "stars": int(r.get("stargazers_count") or 0),
+            "html_url": r.get("html_url", ""),
+        })
+    return repos
+
+
+def list_repo_commits(owner: str, name: str, limit: int = 5) -> list[dict]:
+    """Juengste Commits des Standard-Branches (Kurzform fuer das Laufband)."""
+    data = _get(f"/repos/{owner}/{name}/commits", {"per_page": min(limit, 30)})
+    commits: list[dict] = []
+    for c in data or []:
+        commit = c.get("commit") or {}
+        message = (commit.get("message") or "").split("\n", 1)[0]
+        author = (commit.get("author") or {})
+        commits.append({
+            "repo": f"{owner}/{name}",
+            "sha": (c.get("sha") or "")[:7],
+            "message": message[:140],
+            "author": author.get("name") or (c.get("author") or {}).get("login") or "",
+            "date": author.get("date"),
+            "html_url": c.get("html_url", ""),
+        })
+    return commits

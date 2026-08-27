@@ -2,7 +2,7 @@
 import { RouterLink } from 'vue-router'
 import {
   LayoutDashboard, Server, AppWindow, Github, Database, KeyRound, History, Settings, Plane,
-  Activity, Rocket,
+  Activity, Rocket, Radar, MessageSquare, Plug,
 } from 'lucide-vue-next'
 
 const items = [
@@ -15,6 +15,9 @@ const items = [
   { to: '/backups', label: 'Backups', icon: Database },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },
   { to: '/audit', label: 'Audit', icon: History },
+  { to: '/wall', label: 'Wand', icon: Radar },
+  { to: '/chat', label: 'KI-Konsole', icon: MessageSquare },
+  { to: '/mcp', label: 'MCP-Server', icon: Plug },
   { to: '/settings', label: 'Einstellungen', icon: Settings },
 ]
 </script>

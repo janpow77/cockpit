@@ -2,30 +2,30 @@
 
 _Automatisch generiert von graphify-kira aus dem Code-Graphen. Nicht von Hand editieren — wird beim nächsten Lauf überschrieben._
 
-**Umfang:** 702 Knoten, 1421 Kanten, 20 größere Module, 0 zirkuläre Abhängigkeiten.
+**Umfang:** 741 Knoten, 1523 Kanten, 20 größere Module, 0 zirkuläre Abhängigkeiten.
 
 ## Modulkarte
 
-- **Data Models & Audits** (65): `models.py`, `BaseModel`, `audit.py`, `dashboard.py`, `hosts.py`
-- **Backup & Deployment** (58): `models.py`, `backup_runner.py`, `docker_inspect.py`, `health_check.py`, `ssh_runner.py`
-- **Authentication System** (45): `auth.py`, `models.py`, `deployments.py`
-- **App Management** (42): `auth.py`, `models.py`, `apps.py`, `github.py`
-- **Audit Logging** (42): `__init__.py`, `audit.py`, `backups.py`, `deployments.py`, `Base`
-- **Database Setup** (35): `db.py`, `models.py`, `__init__.py`, `RuntimeError`, `traffic_collector.py`
-- **Cockpit Config** (34): `__init__.py`, `config.py`, `main.py`, `models.py`, `settings.py`
-- **Frontend Dependencies** (31): `package.json`
-- **Dashboard Components** (26): `audit.ts`, `client.ts`, `dashboard.ts`, `mock.ts`, `settings.ts`
-- **App CRUD** (26): `apps.py`, `models.py`, `bootstrap.py`
-- **TypeScript Config** (23): `tsconfig.json`
-- **Traffic Source Management** (22): `models.py`, `traffic.py`
-- **Traffic Source CRUD** (21): `traffic.py`, `models.py`
-- **Authentication Client** (19): `App.vue`, `auth.ts`, `client.ts`, `main.ts`, `index.ts`
-- **Backup Management** (17): `models.py`, `backups.py`
-- **GitHub Repo Management** (16): `github_repos.py`, `models.py`
-- **Traffic Data Handling** (15): `traffic.ts`, `types.ts`
-- **Deployment Records** (14): `deployments.ts`, `types.ts`
-- **Host Management** (14): `hosts.py`
-- **GitHub API Client** (14): `github_client.py`
+- **main.py** (71): `__init__.py`, `config.py`, `db.py`, `main.py`, `models.py`
+- **crud/secrets.py** (46): `RuntimeError`, `secrets.py`, `Session`, `SecretRow`, `SecretUpdate`
+- **cockpit/auth.py** (45): `auth.py`, `models.py`, `deployments.py`
+- **models.py** (43): `models.py`, `Base`, `BaseModel`, `audit.py`
+- **docker_inspect.py** (43): `backup_runner.py`, `docker_inspect.py`, `ssh_runner.py`
+- **routes/traffic.py** (42): `traffic.py`, `models.py`
+- **client_ip** (38): `auth.py`, `models.py`, `apps.py`, `backups.py`
+- **github.py** (37): `github_repos.py`, `models.py`, `github.py`
+- **traffic_collector.py** (31): `models.py`, `__init__.py`, `caddy_log.py`, `traffic_collector.py`
+- **crud/apps.py** (27): `apps.py`, `models.py`, `bootstrap.py`
+- **crud/audit.py** (25): `__init__.py`, `audit.py`, `deployments.py`, `models.py`
+- **SecretsView.vue** (24): `secrets.ts`, `SecretsView.vue`
+- **compilerOptions** (23): `tsconfig.json`
+- **routes/hosts.py** (22): `models.py`, `hosts.py`, `tailscale.py`
+- **stores.test.ts** (21): `App.vue`, `main.ts`, `index.ts`, `auth.ts`, `confirm.ts`
+- **types.ts** (19): `dashboard.ts`, `deployments.ts`, `types.ts`
+- **client.ts** (16): `audit.ts`, `auth.ts`, `client.ts`, `types.ts`
+- **mock.ts** (16): `mock.ts`, `settings.ts`, `types.ts`
+- **traffic.ts** (15): `traffic.ts`, `types.ts`
+- **crud/backups.py** (15): `backups.py`, `models.py`
 
 ## Zentrale Bausteine (God Nodes)
 
@@ -36,24 +36,24 @@ _Hohe Zentralität ist nicht automatisch ein Defekt (zentrale Stores/Modelle sin
 - `Base` — Grad 11 (ein 11/aus 0)
 - `SessionRow (src/cockpit/models.py)` — Grad 8 (ein 7/aus 1)
 - `client_ip() (src/cockpit/auth.py)` — Grad 31 (ein 30/aus 1)
-- `auth.py (src/cockpit/auth.py)` — Grad 31 (ein 11/aus 20)
+- `cockpit/auth.py (src/cockpit/auth.py)` — Grad 31 (ein 11/aus 20)
 - `types.ts (frontend/src/api/types.ts)` — Grad 31 (ein 10/aus 21)
+- `RuntimeError` — Grad 4 (ein 4/aus 0)
 - `mock.ts (frontend/src/api/mock.ts)` — Grad 29 (ein 8/aus 21)
 - `main.py (src/cockpit/main.py)` — Grad 28 (ein 1/aus 27)
-- `db.py (src/cockpit/db.py)` — Grad 25 (ein 15/aus 10)
 
 ## Schnittstellen / Brücken (Betweenness)
 
 - `models.py (src/cockpit/models.py)` — Betweenness 0.005
 - `main.py (src/cockpit/main.py)` — Betweenness 0.002
-- `auth.py (src/cockpit/auth.py)` — Betweenness 0.001
-- `traffic.py (src/cockpit/routes/traffic.py)` — Betweenness 0.001
-- `apps.py (src/cockpit/crud/apps.py)` — Betweenness 0.001
-- `github.py (src/cockpit/routes/github.py)` — Betweenness 0.001
-- `deployments.py (src/cockpit/routes/deployments.py)` — Betweenness 0.001
-- `db.py (src/cockpit/db.py)` — Betweenness 0.001
-- `auth.py (src/cockpit/routes/auth.py)` — Betweenness 0.001
-- `bootstrap.py (src/cockpit/services/bootstrap.py)` — Betweenness 0.001
+- `routes/traffic.py (src/cockpit/routes/traffic.py)` — Betweenness 0.001
+- `cockpit/auth.py (src/cockpit/auth.py)` — Betweenness 0.001
+- `traffic_collector.py (src/cockpit/services/traffic_collector.py)` — Betweenness 0.001
+- `dashboard.py (src/cockpit/routes/dashboard.py)` — Betweenness 0.001
+- `crud/apps.py (src/cockpit/crud/apps.py)` — Betweenness 0.001
+- `ssh_runner.py (src/cockpit/services/ssh_runner.py)` — Betweenness 0.001
+- `github_repos.py (src/cockpit/crud/github_repos.py)` — Betweenness 0.001
+- `crud/audit.py (src/cockpit/crud/audit.py)` — Betweenness 0.001
 
 ## Empfohlene Spezialisten
 

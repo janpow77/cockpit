@@ -74,6 +74,7 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
             continue
         try:
             obj = json.loads(line)
+            labels = _parse_labels(obj.get("Labels", ""))
             containers.append({
                 "name": obj.get("Names", ""),
                 "image": obj.get("Image", ""),
@@ -81,11 +82,57 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
                 "status": obj.get("Status", ""),
                 "ports": obj.get("Ports", ""),
                 "id": obj.get("ID", ""),
+                # Compose-Projekt/-Service: Grundlage der automatischen
+                # Gruppierung auf der Wand (Projekte je Host ohne Registrierung).
+                "project": labels.get("com.docker.compose.project", ""),
+                "service": labels.get("com.docker.compose.service", ""),
             })
         except (json.JSONDecodeError, AttributeError):
             continue
     _store(host.id, filter_expr, containers)
     return containers
+
+
+def _parse_labels(raw: str) -> dict[str, str]:
+    """'a=1,b=2' (docker ps --format json) -> {'a': '1', 'b': '2'}."""
+    out: dict[str, str] = {}
+    for part in (raw or "").split(","):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def projects_on_host(host: HostRow, *, refresh: bool = False) -> list[dict]:
+    """Gruppiert alle Container eines Hosts nach Compose-Projekt.
+
+    Container ohne Projekt-Label bilden je Container ein eigenes 'Projekt'
+    (Name = Containername). Ergebnis je Projekt: {name, containers, running,
+    status, names} - Status wie summarize_app.
+    """
+    containers = list_containers(host, filter_expr="", refresh=refresh)
+    gruppen: dict[str, list[dict]] = {}
+    for c in containers:
+        key = c.get("project") or c.get("name") or "?"
+        gruppen.setdefault(key, []).append(c)
+    projekte: list[dict] = []
+    for name, cs in sorted(gruppen.items(), key=lambda kv: kv[0].lower()):
+        running = sum(1 for c in cs if c.get("state") == "running")
+        if running == len(cs):
+            status = "healthy"
+        elif running == 0:
+            status = "down"
+        else:
+            status = "degraded"
+        projekte.append({
+            "name": name,
+            "containers": len(cs),
+            "running": running,
+            "status": status,
+            "names": [c.get("name", "") for c in cs],
+            "images": sorted({(c.get("image") or "").split("@")[0] for c in cs})[:6],
+        })
+    return projekte
 
 
 def summarize_app(host: HostRow, *, filter_expr: str) -> dict:

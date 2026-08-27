@@ -30,7 +30,7 @@ class HostBootstrap:
     is_self: bool = False
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> "HostBootstrap":
+    def from_dict(cls, raw: dict[str, Any]) -> HostBootstrap:
         return cls(
             name=str(raw["name"]).strip(),
             tailscale_ip=str(raw["tailscale_ip"]).strip(),

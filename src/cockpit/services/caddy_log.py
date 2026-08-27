@@ -15,8 +15,8 @@ import json
 import logging
 import statistics
 from collections import defaultdict
+from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Iterator
 
 log = logging.getLogger(__name__)
 

@@ -6,11 +6,9 @@ import secrets
 import time
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AppRow,
     TrafficSampleRow,
     TrafficSourceCreate,
     TrafficSourceRow,
