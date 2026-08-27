@@ -204,6 +204,8 @@ const tickerText = computed(() => {
   for (const e of ev) teile.push(`${e.kind === 'commit' ? '⌥' : e.kind === 'deploy' ? '⇪' : '•'} ${stundeMinute(e.ts)} ${e.text}`)
   return teile.length ? teile.join('   ·   ') : 'Keine Ereignisse'
 })
+/** Laufzeit des Laufbands: rund 6 Zeichen je Sekunde, mindestens 90 s. */
+const tickerDauer = computed(() => Math.max(90, Math.round((tickerText.value.length * 2) / 6)))
 const repos = computed(() => [...(overview.value?.github.repos ?? [])].sort((a, b) => (b.pushed_at || '').localeCompare(a.pushed_at || '')))
 const repoByName = computed(() => new Map(repos.value.map((r) => [r.name.toLowerCase(), r])))
 const alerts = computed(() => overview.value?.alerts ?? [])
@@ -242,27 +244,43 @@ function hoehe(v: number, reihe: number[]): number {
 }
 const seitLoad = ref(0)
 
+const demoLink = ref<string | null>(null)
+const demoSekunden = ref(0)
+let demoTimer: number | undefined
+
 async function demo() {
-  if (!hero.value) return
+  if (!hero.value || demoBusy.value) return
   const ziel = `${hero.value.url.replace(/\/$/, '')}${hero.value.demo_path}`
   if (!hero.value.demo_ready) {
     window.open(ziel, '_blank', 'noopener')
     toast.info('Demo-Seite geöffnet – Aufbau per Klick dort (Vault-Zugang für den Direktstart fehlt).')
     return
   }
+  // Tab noch in der Klick-Geste öffnen, sonst blockiert der Browser das Öffnen nach dem Aufbau
+  const fenster = window.open('', '_blank')
+  if (fenster) {
+    fenster.document.write('<!doctype html><title>HPP-Demo wird aufgebaut …</title><body style="margin:0;display:grid;place-items:center;height:100vh;background:#0B1020;color:#E7ECF7;font:16px/1.5 system-ui"><div style="text-align:center"><p style="font-size:22px;margin:0 0 8px">HPP-Demo wird aufgebaut …</p><p style="color:#AAB3CF">Fünf Demo-Vorgänge werden über die reguläre Verfahrenslogik angelegt – das dauert etwa ein bis zwei Minuten. Diese Seite wechselt danach automatisch zur Demo.</p></div></body>')
+  }
   demoBusy.value = true
+  demoLink.value = null
+  demoSekunden.value = 0
+  demoTimer = window.setInterval(() => { demoSekunden.value += 1 }, 1000)
   demoMeldung.value = 'Demo-Fälle werden aufgebaut …'
   try {
     const res = await startDemo()
-    demoMeldung.value = res.ok ? `${res.faelle.length} Demo-Fälle stehen` : 'Aufbau mit Fehlern'
-    window.open(res.url || ziel, '_blank', 'noopener')
-    toast.success(res.ok ? 'HPP-Demo steht – Seite geöffnet' : 'Demo aufgebaut, aber mit Fehlern (siehe Demo-Seite)')
+    const url = res.url || ziel
+    demoLink.value = url
+    demoMeldung.value = res.ok ? `${res.faelle.length} Demo-Fälle stehen (${demoSekunden.value} s)` : 'Aufbau mit Fehlern – siehe Demo-Seite'
+    if (fenster && !fenster.closed) fenster.location.href = url
+    else window.open(url, '_blank', 'noopener')
+    toast.success(res.ok ? 'HPP-Demo steht – Demo-Seite geöffnet' : 'Demo aufgebaut, aber mit Fehlern (siehe Demo-Seite)')
   } catch (err) {
-    demoMeldung.value = null
+    demoMeldung.value = `Fehler: ${extractError(err)}`
+    if (fenster && !fenster.closed) fenster.close()
     toast.error(extractError(err))
   } finally {
     demoBusy.value = false
-    window.setTimeout(() => { demoMeldung.value = null }, 8000)
+    if (demoTimer) window.clearInterval(demoTimer)
   }
 }
 </script>
@@ -357,8 +375,9 @@ async function demo() {
           </template>
           <text v-if="!heroKpis.length" class="sub" x="466" y="790">{{ hero.probe_note ? `Kennzahlen: ${hero.probe_note}` : 'Kennzahlen folgen mit der Sonde' }}</text>
           <a :href="hero.url" target="_blank" rel="noopener"><rect x="1010" y="690" width="126" height="36" rx="6" class="knopf-svg ghost" /><text x="1073" y="714" text-anchor="middle" class="knopf-text ghost">Öffnen ↗</text></a>
-          <g class="klickbar" @click="demo"><rect x="1010" y="736" width="126" height="36" rx="6" :class="['knopf-svg', { busy: demoBusy }]" /><text x="1073" y="760" text-anchor="middle" class="knopf-text">{{ demoBusy ? 'baut auf …' : 'Demo starten' }}</text></g>
-          <text v-if="demoMeldung" class="sub" x="1010" y="795">{{ demoMeldung }}</text>
+          <g class="klickbar" @click="demo"><rect x="1010" y="736" width="126" height="36" rx="6" :class="['knopf-svg', { busy: demoBusy }]" /><text x="1073" y="760" text-anchor="middle" class="knopf-text">{{ demoBusy ? `baut auf · ${demoSekunden} s` : 'Demo starten' }}</text></g>
+          <a v-if="demoLink && !demoBusy" :href="demoLink" target="_blank" rel="noopener"><rect x="1010" y="782" width="126" height="32" rx="6" class="knopf-svg ghost" /><text x="1073" y="803" text-anchor="middle" class="knopf-text ghost">Demo öffnen ↗</text></a>
+          <text v-if="demoMeldung" class="sub" x="466" y="832">{{ demoMeldung }}{{ demoBusy ? ' (etwa 1–2 Minuten)' : '' }}</text>
         </g>
       </svg>
       <div v-else class="warte mono">{{ error ? error : 'Lade Landschaft …' }}</div>
@@ -481,7 +500,7 @@ async function demo() {
       </div>
     </section>
 
-    <footer class="ticker mono"><span>{{ tickerText }}   ·   {{ tickerText }}</span></footer>
+    <footer class="ticker mono"><span :style="{ animationDuration: `${tickerDauer}s` }">{{ tickerText }}   ·   {{ tickerText }}</span></footer>
   </div>
 </template>
 
@@ -647,7 +666,7 @@ async function demo() {
 
 /* ---------- Ticker ---------- */
 .ticker { position: fixed; left: 0; right: 0; bottom: 0; height: 36px; background: #080C18; border-top: 1px solid var(--linie); display: flex; align-items: center; overflow: hidden; font-size: 12px; color: var(--text-2); white-space: nowrap; z-index: 3; }
-.ticker span { display: inline-block; padding-left: 100%; animation: lauf 70s linear infinite; }
+.ticker span { display: inline-block; padding-left: 100%; animation: lauf 240s linear infinite; }
 @keyframes lauf { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 
 .wand.reduziert .fluss, .wand.reduziert .ring, .wand.reduziert .punkt, .wand.reduziert .einblenden, .wand.reduziert .ticker span { animation: none; }
