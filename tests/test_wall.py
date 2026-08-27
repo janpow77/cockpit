@@ -91,3 +91,16 @@ def test_intern_urls_aus_ports():
     assert [e["url"] for e in out] == ["http://100.99.159.80:3003", "http://100.99.159.80:7843"]
     assert out[0]["service"] == "frontend"
     assert intern_urls(rows, None) == []
+
+
+def test_login_prueft_benutzername_und_passwort(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from cockpit.main import app
+
+    monkeypatch.setenv("COCKPIT_ADMIN_PASSWORD", "geheim-123")
+    with TestClient(app) as c:
+        assert c.post("/admin/api/auth/login", json={"password": "geheim-123"}).status_code == 200
+        assert c.post("/admin/api/auth/login", json={"username": "admin", "password": "geheim-123"}).status_code == 200
+        assert c.post("/admin/api/auth/login", json={"username": "fremd", "password": "geheim-123"}).status_code == 401
+        assert c.post("/admin/api/auth/login", json={"username": "admin", "password": "falsch"}).status_code == 401

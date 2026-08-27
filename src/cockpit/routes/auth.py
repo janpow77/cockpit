@@ -12,6 +12,7 @@ from ..auth import (
     revoke_token,
     verify_password,
 )
+from ..config import load_config
 from ..db import get_session
 from ..models import LoginRequest, LoginResponse, MeResponse
 
@@ -20,10 +21,8 @@ router = APIRouter(prefix="/admin/api/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginResponse)
 async def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)) -> LoginResponse:
-    from ..config import get_settings
-
     benutzer = (req.username or "admin").strip()
-    if benutzer != get_settings().admin_user or not verify_password(req.password):
+    if benutzer != load_config().admin_user or not verify_password(req.password):
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch")
     cleanup_expired(session)
     token, expires = issue_token(session, ip=client_ip(request))
