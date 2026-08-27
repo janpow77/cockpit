@@ -139,3 +139,19 @@ Betrieb: `compose.yaml` bindet zusätzlich `/home/deploy/Projekte:/work/ccx23:ro
 `/home/deploy/backups:/backups:ro`; das Image enthält `git`. Der Ticker führt Alarme
 und Kira-Einträge vor den Ereignissen. Kopfzeile zeigt LIVE mit Sekunden seit dem
 letzten Stand; `R` lädt sofort, `F` schaltet Vollbild.
+
+## 10. Zugänge und Secrets (Stand 27.08.2026, eingerichtet)
+
+| Zweck | Wo | Wert |
+| --- | --- | --- |
+| Demo-Start von der Wand | Vault `hpp_demo_user` / `hpp_demo_password` | HPP-Prod-Benutzer `cockpit-demo` (Rolle admin), Passwort nur auf dem Hetzner in `/home/deploy/.hpp_cockpit_demo_pw` |
+| HPP-Kennzahlen (Sonde) | Vault `hpp_smoke_user` / `hpp_smoke_password` | lesender Account `claude-smoke`; die Sonde meldet sich über `login_url` an (Token 30 min), kein Dauer-Token |
+| MCP flowaudit (Werkzeuge/Skills) | Vault `mcp_flowaudit_token` | Bearer-Token von mcp.flowaudit.de (aus der Claude-Code-Konfiguration) |
+| GitHub-Kachel | `/etc/cockpit/env` → `GITHUB_TOKEN` | Token des gh-CLI (breite Scopes – besser durch ein fein granuliertes Read-only-Token ersetzen) |
+| Kira-Memory | keine Ablage nötig | Schlüssel wird per SSH auf dem NUC aus `audit_designer/.env` gelesen |
+
+Sonden mit Anmeldung: `{"login_url": "…/api/auth/login", "user_secret": "…", "password_secret": "…"}`
+statt `secret_key`; bei HTTP 401 wird einmal neu angemeldet.
+
+`kira_cloudflared` (Compose-Projekt `deploy` in kiraclaw, bewusst gestoppt) steht in der
+Ausblendliste, damit die Wand keinen Dauer-Alarm zeigt.
