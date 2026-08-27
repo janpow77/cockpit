@@ -122,7 +122,10 @@ def build_projects(
             "names": names[:8],
             "url": wc.link_for(p["name"], names, cfg.links),
             "intern": intern_urls(p.get("container_rows") or [], getattr(host, "tailscale_ip", None)),
-            "tunnel": any("cloudflared" in n for n in names),
+            "tunnel": any(
+                "cloudflared" in (c.get("name") or "") and (c.get("state") in (None, "running"))
+                for c in (p.get("container_rows") or [{"name": n} for n in names])
+            ),
             "registered": bool(registered),
             "app_id": registered.id if registered else None,
             "app_status": registered.last_status if registered else None,
@@ -333,10 +336,11 @@ async def overview(_=Depends(require_auth), session: Session = Depends(get_sessi
 
     hosts_out: list[dict] = []
     projects_out: list[dict] = []
-    for res in host_results:
+    for h_cfg, res in zip(hosts, host_results, strict=False):
         if isinstance(res, BaseException):
-            log.warning("Wand: Host-Abfrage fehlgeschlagen: %s", res)
-            continue
+            # Host bleibt sichtbar - mit Fehler statt stillschweigend verschwunden
+            log.warning("Wand: Host-Abfrage %s fehlgeschlagen: %s", h_cfg.name, res)
+            res = (h_cfg, {**host_stats._parse(""), "ok": False, "error": str(res)[:160], "ms": None}, [])
         h, stats, projects = res
         projekte = build_projects(h, projects, apps, cfg, deploy_for_app)
         projects_out.extend(projekte)
@@ -404,8 +408,14 @@ async def overview(_=Depends(require_auth), session: Session = Depends(get_sessi
         except Exception as exc:  # noqa: BLE001 - GitHub darf die Wand nicht kippen
             github_out["error"] = str(exc)[:160]
 
-    probes = await asyncio.gather(*(_run_probe(session, p) for p in cfg.probes))
-    probes_out = [p for p in probes if isinstance(p, dict)]
+    probes = await asyncio.gather(*(_run_probe(session, p) for p in cfg.probes), return_exceptions=True)
+    probes_out = []
+    for p, res in zip(cfg.probes, probes, strict=False):
+        if isinstance(res, dict):
+            probes_out.append(res)
+        else:
+            log.warning("Sonde %s: %s", p.get("id"), res)
+            probes_out.append({"id": p.get("id"), "label": p.get("label"), "ok": False, "kpis": [], "note": str(res)[:120]})
 
     hero_proj = waehle_hero(projects_out, cfg.hero)
     hero_probe = next((p for p in probes_out if p.get("id") == cfg.hero.get("probe")), None)
@@ -491,7 +501,9 @@ async def demo_starten(
             login = await c.post(demo["login_url"], data={"username": user, "password": password})
             if login.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"HPP-Anmeldung fehlgeschlagen (HTTP {login.status_code})")
-            token = login.json().get("access_token")
+            token = (login.json() or {}).get("access_token") if login.headers.get("content-type", "").startswith("application/json") else None
+            if not token:
+                raise HTTPException(status_code=502, detail="HPP-Anmeldung ohne access_token")
             kopf = {"Authorization": f"Bearer {token}"}
             neu = bool(payload and payload.neu)
             if not neu:
@@ -514,7 +526,9 @@ async def demo_starten(
             elif resp.status_code >= 400:
                 raise HTTPException(status_code=502, detail=f"Demo-Aufbau fehlgeschlagen (HTTP {resp.status_code}): {resp.text[:200]}")
             ergebnis = resp.json() if resp.status_code < 400 else {}
-            if resp.status_code == 202 or resp.status_code == 409 or "gestartet" in ergebnis:
+            if not isinstance(ergebnis, dict):
+                raise HTTPException(status_code=502, detail="Demo-Aufbau: unerwartete Antwort von HPP")
+            if resp.status_code in (202, 409) or ergebnis.get("gestartet") is True:
                 # Hintergrund-Aufbau: Fortschritt abfragen, bis er beendet ist (Tunnel-Limit 100 s umgangen)
                 start = time.monotonic()
                 ergebnis = {}
@@ -539,7 +553,7 @@ async def demo_starten(
     ]
     crud_audit.write(session, action="wall.demo_start", target=demo.get("aufbau_url"), after={"faelle": faelle, "neu": bool(payload and payload.neu)})
     return {
-        "ok": all(not f["fehler"] for f in faelle),
+        "ok": bool(faelle) and all(not f["fehler"] for f in faelle),
         "uebersprungen": False,
         "faelle": faelle,
         "url": f"{cfg.hero.get('url', '').rstrip('/')}{cfg.hero.get('demo_path', '')}",

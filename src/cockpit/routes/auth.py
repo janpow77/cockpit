@@ -20,24 +20,22 @@ router = APIRouter(prefix="/admin/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)) -> LoginResponse:
+async def login(
+    req: LoginRequest, request: Request, response: Response, session: Session = Depends(get_session)
+) -> LoginResponse:
     benutzer = (req.username or "admin").strip()
     if benutzer != load_config().admin_user or not verify_password(req.password):
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch")
     cleanup_expired(session)
     token, expires = issue_token(session, ip=client_ip(request))
+    response.headers["Cache-Control"] = "no-store"
     return LoginResponse(token=token, expires_at=expires)
 
 
 @router.post("/logout", status_code=204)
-async def logout(request: Request, _=Depends(require_auth), session: Session = Depends(get_session)) -> Response:
-    auth_header = request.headers.get("authorization") or ""
-    token = ""
-    if auth_header.lower().startswith("bearer "):
-        token = auth_header.split(" ", 1)[1].strip()
-    if token:
-        revoke_token(session, token)
-    return Response(status_code=204)
+async def logout(session_row=Depends(require_auth), session: Session = Depends(get_session)) -> Response:
+    revoke_token(session, session_row.token)
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/me", response_model=MeResponse)

@@ -51,10 +51,11 @@ _tls_cache: dict[str, tuple[float, dict]] = {}
 
 
 def _tls_info(hostname: str, port: int = 443, timeout: float = 6.0) -> dict:
-    """Zertifikat-Ablauf per TLS-Handshake (blockierend, 10 min gecacht)."""
+    """Zertifikat-Ablauf per TLS-Handshake (blockierend, 10 min gecacht je Host und Port)."""
     now = time.time()
+    schluessel = f"{hostname}:{port}"
     with _lock:
-        cached = _tls_cache.get(hostname)
+        cached = _tls_cache.get(schluessel)
     if cached and now - cached[0] < _TLS_TTL_S:
         return cached[1]
     out: dict = {"tls_bis": None, "tls_tage": None, "tls_aussteller": None, "tls_fehler": None}
@@ -77,7 +78,7 @@ def _tls_info(hostname: str, port: int = 443, timeout: float = 6.0) -> dict:
     except (OSError, ssl.SSLError, ValueError) as exc:
         out["tls_fehler"] = str(exc)[:100]
     with _lock:
-        _tls_cache[hostname] = (now, out)
+        _tls_cache[schluessel] = (now, out)
     return out
 
 
@@ -102,7 +103,7 @@ async def _dienst_pruefen(client: httpx.AsyncClient, url: str) -> dict:
         out["ms"] = int((time.monotonic() - t0) * 1000)
         out["note"] = f"{type(exc).__name__}: {str(exc)[:80]}".strip(": ")
     if url.startswith("https://"):
-        out.update(await asyncio.to_thread(_tls_info, hostname))
+        out.update(await asyncio.to_thread(_tls_info, hostname, httpx.URL(url).port or 443))
     else:
         out.update({"tls_bis": None, "tls_tage": None, "tls_aussteller": None, "tls_fehler": None})
     return out
@@ -269,6 +270,8 @@ def kira_cmd(cfg: dict, limit: int = 40) -> str:
     base = str(cfg.get("url") or "http://127.0.0.1:8003/api/memory").rstrip("/")
     env_file = str(cfg.get("env_file") or "")
     env_key = str(cfg.get("env_key") or "MEMORY_API_KEY")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_key):
+        env_key = "MEMORY_API_KEY"  # nur Variablennamen, nie Shell-Syntax
     if env_file:
         key = f"$(sed -n 's/^{env_key}=//p' {shlex.quote(env_file)} | head -1 | tr -d '\\r\"')"
     else:
@@ -370,6 +373,9 @@ def handlungsbedarf(
     for h in hosts:
         st = h.get("stats") or {}
         status = h.get("status")
+        if st.get("ok") is False and (h.get("is_self") or status in ("online", "unknown")):
+            add("warn", f"Kennzahlen von {h['name']} nicht abrufbar ({str(st.get('error') or 'Fehler')[:60]})", host=h["name"])
+            continue
         if not h.get("is_self") and status not in ("online", "unknown"):
             laptop = bool(re.search(r"macbook|laptop|notebook", f"{h.get('name', '')} {h.get('description', '')}", re.I))
             add("info" if laptop else ("krit" if status in ("offline", "unreachable", "down") else "warn"),

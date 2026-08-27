@@ -9,6 +9,7 @@ selbst. Systemprompt und Modell-Whitelist stehen in der Wand-Konfiguration.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Literal
@@ -80,7 +81,7 @@ def allowed_models(cfg: wc.WallConfig, available: list[dict]) -> list[dict]:
 @router.get("/models")
 async def list_models(_=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     cfg = wc.load(session)
-    available = ai_router_client.list_models()
+    available = await asyncio.to_thread(ai_router_client.list_models)
     return {
         "router": ai_router_client.base_url(),
         "router_ok": bool(available),
@@ -94,7 +95,7 @@ async def chat(
     req: ChatRequest, _=Depends(require_auth), session: Session = Depends(get_session)
 ) -> StreamingResponse:
     cfg = wc.load(session)
-    erlaubt = {m["tag"] for m in allowed_models(cfg, ai_router_client.list_models())}
+    erlaubt = {m["tag"] for m in allowed_models(cfg, await asyncio.to_thread(ai_router_client.list_models))}
     if req.model not in erlaubt:
         raise HTTPException(status_code=422, detail=f"Modell „{req.model}“ ist nicht freigegeben oder nicht geladen.")
 

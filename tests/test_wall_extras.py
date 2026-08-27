@@ -130,3 +130,14 @@ def test_handlungsbedarf_prod_hosts_statt_self_host():
     ]
     out = wx.handlungsbedarf(hosts, projects, [], [], {"ok": True}, None, [], prod_hosts=["ccx23"])
     assert [a["text"] for a in out] == ["ZVG auf ccx23: alle Container aus"]
+
+
+def test_kira_cmd_verwirft_shell_syntax_im_env_key():
+    cmd = wx.kira_cmd({"env_file": "/x/.env", "env_key": "$(rm -rf /)"})
+    assert "rm -rf" not in cmd and "MEMORY_API_KEY" in cmd
+
+
+def test_handlungsbedarf_meldet_ausfall_der_kennzahlen():
+    hosts = [{"name": "ccx23", "is_self": True, "status": "online", "stats": {"ok": False, "error": "Timeout"}}]
+    out = wx.handlungsbedarf(hosts, [], [], [], {"ok": True}, None, [])
+    assert out and out[0]["level"] == "warn" and "Kennzahlen von ccx23" in out[0]["text"]

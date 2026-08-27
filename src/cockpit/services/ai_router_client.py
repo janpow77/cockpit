@@ -72,15 +72,25 @@ def list_models(*, refresh: bool = False) -> list[dict]:
             with httpx.Client(timeout=6.0) as c:
                 resp = c.get(f"{url}/api/tags")
                 resp.raise_for_status()
-                for m in resp.json().get("models", []):
-                    details = m.get("details") or {}
+                daten = resp.json()
+                eintraege = daten.get("models") if isinstance(daten, dict) else None
+                if not isinstance(eintraege, list):
+                    raise ValueError("unerwartete Antwort von /api/tags")
+                for m in eintraege:
+                    if not isinstance(m, dict):
+                        continue
+                    details = m.get("details") if isinstance(m.get("details"), dict) else {}
+                    try:
+                        size = int(m.get("size") or 0)
+                    except (TypeError, ValueError):
+                        size = 0
                     models.append({
-                        "name": m.get("name", ""),
-                        "parameter_size": details.get("parameter_size", ""),
-                        "family": details.get("family", ""),
-                        "size_bytes": int(m.get("size") or 0),
+                        "name": str(m.get("name") or ""),
+                        "parameter_size": str(details.get("parameter_size") or ""),
+                        "family": str(details.get("family") or ""),
+                        "size_bytes": size,
                     })
-        except (httpx.HTTPError, ValueError) as exc:
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
             letzter_fehler = exc
             models = []
             continue
