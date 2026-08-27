@@ -335,6 +335,8 @@ export interface WallConfig {
   backup_dir: string
   chat_models: { tag: string; label: string }[]
   chat_system: string
+  chat_num_ctx?: number
+  chat_think?: boolean
   mcp_servers: Record<string, unknown>[]
   work_dirs: Record<string, string>
   kira: Record<string, string>

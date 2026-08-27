@@ -148,6 +148,8 @@ DEFAULT_CHAT_SYSTEM = (
 
 # Kontextfenster des Modells, wenn RAG-Kontext mitgegeben wird (Ollama num_ctx)
 DEFAULT_CHAT_NUM_CTX = 12288
+# Denkmodus (Qwen "thinking"): aus - sonst dauert jede Antwort Minuten (2.700 versteckte Tokens gemessen)
+DEFAULT_CHAT_THINK = False
 
 
 @dataclass
@@ -163,6 +165,7 @@ class WallConfig:
     chat_models: list[dict[str, str]] = field(default_factory=lambda: list(DEFAULT_CHAT_MODELS))
     chat_system: str = DEFAULT_CHAT_SYSTEM
     chat_num_ctx: int = DEFAULT_CHAT_NUM_CTX
+    chat_think: bool = DEFAULT_CHAT_THINK
     mcp_servers: list[dict[str, Any]] = field(default_factory=lambda: list(DEFAULT_MCP_SERVERS))
     work_dirs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_WORK_DIRS))
     kira: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KIRA))
@@ -174,6 +177,7 @@ class WallConfig:
             "backup_dir": self.backup_dir, "chat_models": self.chat_models,
             "chat_system": self.chat_system,
             "chat_num_ctx": self.chat_num_ctx,
+            "chat_think": self.chat_think,
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira,
         }
@@ -217,6 +221,8 @@ def load(session: Session) -> WallConfig:
         cfg.chat_system = raw["chat_system"]
     if isinstance(raw.get("chat_num_ctx"), int) and 2048 <= raw["chat_num_ctx"] <= 131072:
         cfg.chat_num_ctx = raw["chat_num_ctx"]
+    if isinstance(raw.get("chat_think"), bool):
+        cfg.chat_think = raw["chat_think"]
     return cfg
 
 
@@ -234,6 +240,8 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
             raw[name] = patch[name]
     if isinstance(patch.get("chat_num_ctx"), int):
         raw["chat_num_ctx"] = patch["chat_num_ctx"]
+    if isinstance(patch.get("chat_think"), bool):
+        raw["chat_think"] = patch["chat_think"]
     write_setting(session, _KEY, raw)
     return load(session)
 

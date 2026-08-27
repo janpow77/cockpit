@@ -28,6 +28,8 @@ const demo = ref('')
 const backupDir = ref('/backups')
 const chatModels = ref('')
 const chatSystem = ref('')
+const chatNumCtx = ref(12288)
+const chatThink = ref(false)
 const mcpServers = ref('')
 const workDirs = ref('')
 const kira = ref('')
@@ -52,6 +54,8 @@ async function load() {
     backupDir.value = c.backup_dir
     chatModels.value = json(c.chat_models)
     chatSystem.value = c.chat_system
+    chatNumCtx.value = c.chat_num_ctx ?? 12288
+    chatThink.value = !!c.chat_think
     mcpServers.value = json(c.mcp_servers)
     workDirs.value = json(c.work_dirs)
     kira.value = json(c.kira)
@@ -83,6 +87,8 @@ async function save() {
     hide: ausZeilen(hide.value),
     backup_dir: backupDir.value.trim() || '/backups',
     chat_system: chatSystem.value,
+    chat_num_ctx: Math.max(2048, Math.min(131072, Math.round(Number(chatNumCtx.value) || 12288))),
+    chat_think: chatThink.value,
   }
   const l = parse<Record<string, string>>('links', links.value, 'object'); if (l) patch.links = l
   const la = parse<WallConfig['labels']>('labels', labels.value, 'object'); if (la) patch.labels = la
@@ -139,6 +145,15 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
         <label class="block md:col-span-2">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Systemprompt der KI-Konsole</span>
           <textarea v-model="chatSystem" rows="3" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm p-2" />
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Kontextfenster der Konsole bei Kira-RAG (Tokens)</span>
+          <input v-model.number="chatNumCtx" type="number" min="2048" max="131072" step="1024" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
+          <span class="text-[11px] text-slate-400">Ollama num_ctx, nur gesetzt, wenn Quellen mitgegeben werden. Vorgabe 12 288.</span>
+        </label>
+        <label class="flex items-start gap-2">
+          <input v-model="chatThink" type="checkbox" class="mt-1" />
+          <span><span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Denkmodus des Modells</span><br /><span class="text-[11px] text-slate-400">Aus (Vorgabe): Antwort in Sekunden. An: Qwen „denkt“ vor der Antwort – bis zu einige Tausend versteckte Tokens, Minuten Wartezeit.</span></span>
         </label>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Sicherungsverzeichnis (im Container)</span>

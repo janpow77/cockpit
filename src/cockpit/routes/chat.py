@@ -127,7 +127,9 @@ async def chat(
     async def sse():
         if req.rag != "off":
             yield f"data: {json.dumps({'sources': quellen, 'rag_note': rag_note}, ensure_ascii=False)}\n\n"
-        async for chunk in ai_router_client.chat_stream(req.model, messages, options=options or None):
+        async for chunk in ai_router_client.chat_stream(
+            req.model, messages, options=options or None, think=bool(cfg.chat_think)
+        ):
             yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
             if chunk.get("done") or chunk.get("error"):
                 break

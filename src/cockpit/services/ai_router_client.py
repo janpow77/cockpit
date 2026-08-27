@@ -109,6 +109,7 @@ async def chat_stream(
     messages: list[dict],
     *,
     options: dict | None = None,
+    think: bool | None = None,
 ) -> AsyncIterator[dict]:
     """Streamt /api/chat als Folge von Dicts: {"delta": str} je Token,
     zum Schluss {"done": True, "eval_count", "eval_duration_ms", "prompt_eval_count"}.
@@ -116,6 +117,9 @@ async def chat_stream(
     payload = {"model": model, "messages": messages, "stream": True}
     if options:
         payload["options"] = options
+    if think is not None:
+        # Ollama: Denkmodus der Qwen-Modelle abschalten -> Antwort in Sekunden statt Minuten
+        payload["think"] = think
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=10.0)) as c:
             async with c.stream("POST", f"{base_url()}/api/chat", json=payload) as resp:
