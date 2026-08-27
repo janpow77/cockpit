@@ -82,7 +82,7 @@ def test_handlungsbedarf_sortiert_nach_schwere():
     ]}]
     out = wx.handlungsbedarf(hosts, projects, backups, dienste, {"ok": False}, {"enabled": True, "error": "rate limit"}, werkstatt)
     levels = [a["level"] for a in out]
-    assert levels == sorted(levels, key=lambda l: {"krit": 0, "warn": 1, "info": 2}[l])
+    assert levels == sorted(levels, key=lambda lv: {"krit": 0, "warn": 1, "info": 2}[lv])
     assert levels[0] == "krit" and levels[-1] == "info"
     texte = " | ".join(a["text"] for a in out)
     assert "Host nuc ist offline" in texte and "Zertifikat hpp.flowaudit.de" in texte and "Pause offen in cockpit" in texte
