@@ -233,3 +233,11 @@ Voraussetzungen je Host: Docker mit Compose-Plugin, Tailscale, der Host-Schlüss
 `~/.ssh/id_ed25519` ist auf den anderen Hosts eingetragen (Hetzner `deploy`, EVO, MacBook
 `janriener`, janpow-ai). `janpow-ai` (100.114.73.106) war am 27.08.2026 offline – Deploy
 vorbereitet, Ausführung sobald der Rechner läuft.
+
+**Demo-Start (v0.3.10):** HPP baut die Demo seit Commit `regulierung` „Demo-Aufbau als
+Hintergrundauftrag“ asynchron: `POST /demo/aufbauen` antwortet 202, `GET /demo` liefert
+`aufbau {laeuft, beendet, fehler, ergebnis}`, ein zweiter Start bekommt 409. Grund: Der
+Aufbau dauert 1–3 Minuten, der Cloudflare-Tunnel kappt Antworten nach 100 s (HTTP 524),
+und zwei parallele Aufbauten liefen in einen DB-Deadlock. Die Wand startet, zeigt die
+Sekunden auf der Hero-Karte, fragt alle 5 s nach und öffnet danach das reguläre Portal
+(`/kraftstoff/vollzug`) **im selben Fenster** – kein Pop-up, keine eigene Demo-Seite.
