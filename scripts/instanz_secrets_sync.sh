@@ -48,10 +48,14 @@ rm -f "$TMP"
 JSON="$(ssh "$QUELLE_SSH" "bash /tmp/.cockpit_secrets_export.sh '$QUELLE_URL' ${KEYS[*]}; rm -f /tmp/.cockpit_secrets_export.sh")"
 
 ZIEL_PW="$(tr -d '\n\r' < "$PWFILE")"
-printf '%s' "$JSON" | python3 - "$ZIEL" "$ZIEL_PW" <<'PY'
-import json, sys, urllib.request
-ziel, pw = sys.argv[1:3]
-werte = json.load(sys.stdin)
+# Werte per Umgebung (nicht als Argument, nicht ueber stdin - das Heredoc ist das Programm)
+COCKPIT_SYNC_JSON="$JSON" COCKPIT_SYNC_PW="$ZIEL_PW" python3 - "$ZIEL" <<'PY'
+import json, os, sys, urllib.request
+ziel = sys.argv[1]
+pw = os.environ["COCKPIT_SYNC_PW"]
+werte = json.loads(os.environ.get("COCKPIT_SYNC_JSON") or "{}")
+if not werte:
+    print("  keine Werte von der Quelle erhalten"); sys.exit(1)
 def call(method, path, body=None, token=None):
     hdr = {"Content-Type": "application/json"}
     if token: hdr["Authorization"] = f"Bearer {token}"
