@@ -196,3 +196,13 @@ Parameter der Konsole: Modell (Whitelist), Temperatur 0–1,5, Systemprompt (Vor
 den Einstellungen), Kira-Modus + Projekt, Kontextfenster `chat_num_ctx` (Vorgabe 12 288
 Tokens, nur bei aktivem RAG gesetzt). Kein Verlauf auf dem Server; der Browser hält das
 Gespräch in `localStorage`.
+
+**Denkmodus (v0.3.6):** Die Qwen-Modelle „denken“ vor der Antwort (Ollama `think`). Mit
+Denkmodus brauchte eine Drei-Satz-Antwort mit RAG 2 742 Tokens und 241 s, ohne 62 Tokens
+und 5 s. Die Konsole schickt deshalb `think: false` (Einstellung „Denkmodus des Modells“,
+Vorgabe aus). Wer ausdrücklich lange Herleitungen will, schaltet ihn dort ein.
+
+**MCP-Upstreams:** mcp.flowaudit.de wird über den Cloudflare-Tunnel von zwei Replikaten
+bedient (NUC `audit_designer_mcp_memory` und Hetzner `checklist-mcp-memory`); der
+Service-Token-Hash muss daher in BEIDEN Umgebungen stehen (`audit_designer/.env` auf dem
+NUC, `/etc/checklist/env` auf dem Hetzner), sonst antwortet jede zweite Anfrage mit 401.
