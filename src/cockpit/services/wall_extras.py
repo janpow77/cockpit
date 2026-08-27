@@ -358,8 +358,10 @@ def handlungsbedarf(
     ai_router: dict | None,
     github: dict | None,
     werkstatt_hosts: list[dict],
+    prod_hosts: list[str] | None = None,
 ) -> list[dict]:
-    """Leitet aus allen Wand-Daten die Punkte ab, die Aufmerksamkeit brauchen."""
+    """Leitet aus allen Wand-Daten die Punkte ab, die Aufmerksamkeit brauchen.
+    prod_hosts: Hosts, deren registrierte/oeffentliche Projekte alarmieren (Vorgabe: Self-Host)."""
     out: list[dict] = []
 
     def add(level: str, text: str, *, host: str | None = None, hint: str | None = None, url: str | None = None) -> None:
@@ -387,9 +389,9 @@ def handlungsbedarf(
     # Gestoppte Entwicklungs-Stacks sind Alltag. Es zaehlen Instanzen, die Verkehr bedienen
     # (eigener Tunnel), und auf dem Produktionshost (Self-Host) alles, was registriert ist
     # oder eine oeffentliche Adresse hat. Dev-Hosts bleiben still - ihr Zustand steht im Projektraster.
-    prod_hosts = {h.get("name") for h in hosts if h.get("is_self")}
+    prod = set(prod_hosts) if prod_hosts is not None else {h.get("name") for h in hosts if h.get("is_self")}
     for p in projects:
-        auf_prod = p.get("host") in prod_hosts and (p.get("registered") or p.get("url") or p.get("tunnel"))
+        auf_prod = p.get("host") in prod and (p.get("registered") or p.get("url") or p.get("tunnel"))
         if not (auf_prod or p.get("tunnel")):
             continue
         if p.get("status") == "down":

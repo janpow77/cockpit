@@ -21,7 +21,12 @@ from ..models import SettingRow
 DEFAULT_HIDE: list[str] = [
     "love-ai", "x_chat", "sarah", "kino", "mediaarchiv", "portainer",
     "buildx_buildkit", "watchtower", "persona", "16personalities", "wesenszug", "tmp",
+    "kira_cloudflared",  # Kira-Tunnel (kiraclaw/deploy), bewusst gestoppt
 ]
+
+# Produktionshosts: nur dort loesen gestoppte/teilweise Projekte mit Registrierung oder
+# oeffentlicher Adresse einen Alarm aus (unabhaengig davon, auf welchem Host die Wand laeuft).
+DEFAULT_PROD_HOSTS: list[str] = ["ccx23"]
 
 # Oeffentliche Adressen je Projekt (Compose-Projekt oder Container-Praefix).
 DEFAULT_LINKS: dict[str, str] = {
@@ -171,6 +176,7 @@ class WallConfig:
     mcp_servers: list[dict[str, Any]] = field(default_factory=lambda: list(DEFAULT_MCP_SERVERS))
     work_dirs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_WORK_DIRS))
     kira: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KIRA))
+    prod_hosts: list[str] = field(default_factory=lambda: list(DEFAULT_PROD_HOSTS))
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -181,7 +187,7 @@ class WallConfig:
             "chat_num_ctx": self.chat_num_ctx,
             "chat_think": self.chat_think,
             "mcp_servers": self.mcp_servers,
-            "work_dirs": self.work_dirs, "kira": self.kira,
+            "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
         }
 
 
@@ -211,7 +217,7 @@ def write_setting(session: Session, key: str, value: Any) -> None:
 def load(session: Session) -> WallConfig:
     raw = read_setting(session, _KEY, {}) or {}
     cfg = WallConfig()
-    for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers"):
+    for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
     for name in ("links", "labels", "hero", "demo", "work_dirs", "kira"):
@@ -231,7 +237,7 @@ def load(session: Session) -> WallConfig:
 def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     """Teilweise Aktualisierung; unbekannte Schluessel werden ignoriert."""
     raw = read_setting(session, _KEY, {}) or {}
-    for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers"):
+    for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
     for name in ("links", "labels", "hero", "demo", "work_dirs", "kira"):

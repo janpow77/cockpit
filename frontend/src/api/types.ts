@@ -340,6 +340,7 @@ export interface WallConfig {
   mcp_servers: Record<string, unknown>[]
   work_dirs: Record<string, string>
   kira: Record<string, string>
+  prod_hosts?: string[]
 }
 
 export interface DemoStartResult { ok: boolean; faelle: { aktenzeichen: string; schritte: number; fehler: string | null }[]; url: string }

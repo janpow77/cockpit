@@ -417,7 +417,10 @@ async def overview(_=Depends(require_auth), session: Session = Depends(get_sessi
     ai_router_out = await asyncio.to_thread(ai_router_client.status)
     geladen = set(ai_router_out.get("models") or [])
     ai_router_out["freigegeben"] = [m.get("label") or m.get("tag") for m in cfg.chat_models if m.get("tag") in geladen]
-    alerts = wx.handlungsbedarf(hosts_out, projects_out, backups_out, dienste_out, ai_router_out, github_out, werkstatt_out)
+    alerts = wx.handlungsbedarf(
+        hosts_out, projects_out, backups_out, dienste_out, ai_router_out, github_out, werkstatt_out,
+        prod_hosts=cfg.prod_hosts,
+    )
 
     return {
         "generated_at": _iso_now(),

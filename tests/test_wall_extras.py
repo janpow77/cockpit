@@ -118,3 +118,15 @@ def test_parse_kira_bereinigt_text():
     stdout = '{"total_entries": 1}\n---KIRA---\n[{"id": "1", "category": "solution", "project": "p", "content": "PROBLEM: Zeile eins\\nZeile   zwei"}]'
     out = wx.parse_kira(stdout, [])
     assert out["entries"][0]["text"] == "Zeile eins Zeile zwei"
+
+
+def test_handlungsbedarf_prod_hosts_statt_self_host():
+    # Wand laeuft auf dem NUC (Self-Host), Produktion ist ccx23: NUC-Dev-Stacks bleiben still
+    hosts = [{"name": "nuc", "is_self": True, "status": "online", "stats": {"ok": True}},
+             {"name": "ccx23", "is_self": False, "status": "online", "stats": {"ok": True}}]
+    projects = [
+        {"host": "nuc", "name": "zvg", "title": "ZVG", "status": "down", "running": 0, "containers": 2, "registered": True, "url": "https://zvg.example", "tunnel": False},
+        {"host": "ccx23", "name": "zvg", "title": "ZVG", "status": "down", "running": 0, "containers": 9, "registered": False, "url": "https://zvg.example", "tunnel": False},
+    ]
+    out = wx.handlungsbedarf(hosts, projects, [], [], {"ok": True}, None, [], prod_hosts=["ccx23"])
+    assert [a["text"] for a in out] == ["ZVG auf ccx23: alle Container aus"]
