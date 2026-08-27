@@ -204,7 +204,8 @@ const tickerText = computed(() => {
   for (const e of ev) teile.push(`${e.kind === 'commit' ? '⌥' : e.kind === 'deploy' ? '⇪' : '•'} ${stundeMinute(e.ts)} ${e.text}`)
   return teile.length ? teile.join('   ·   ') : 'Keine Ereignisse'
 })
-const repos = computed(() => (overview.value?.github.repos ?? []).slice(0, 8))
+const repos = computed(() => [...(overview.value?.github.repos ?? [])].sort((a, b) => (b.pushed_at || '').localeCompare(a.pushed_at || '')))
+const repoByName = computed(() => new Map(repos.value.map((r) => [r.name.toLowerCase(), r])))
 const alerts = computed(() => overview.value?.alerts ?? [])
 const kritAnzahl = computed(() => alerts.value.filter((a) => a.level === 'krit').length)
 const warnAnzahl = computed(() => alerts.value.filter((a) => a.level === 'warn').length)
@@ -395,7 +396,8 @@ async function demo() {
         <TransitionGroup name="liste" tag="div">
           <div v-for="r in werkstattRepos" :key="r.host + '/' + r.name" class="repo-zeile">
             <div class="r-kopf">
-              <b>{{ r.name }}</b><span class="mono dim">{{ r.host }} · {{ r.branch }}</span>
+              <a v-if="repoByName.get(r.name.toLowerCase())" :href="repoByName.get(r.name.toLowerCase())!.html_url" target="_blank" rel="noopener" class="r-name" title="Repository auf GitHub öffnen">{{ r.name }} ↗</a>
+              <b v-else>{{ r.name }}</b><span class="mono dim">{{ r.host }} · {{ r.branch }}</span>
               <span v-if="r.pause" class="chip pause" :title="`Pause seit ${relativ(r.pause)}`">⏸ Pause</span>
               <span v-else-if="r.dirty" class="chip dirty">{{ r.dirty }} ungesichert</span>
               <span v-else-if="r.ahead" class="chip ahead">{{ r.ahead }} nicht gepusht</span>
@@ -426,6 +428,9 @@ async function demo() {
             <div class="p-kopf"><i :class="['punkt', statusKlasse(p.status)]" /><b>{{ p.title }}</b><span class="mono dim">{{ p.host }}</span></div>
             <div class="mono dim p-sub">{{ p.running }}/{{ p.containers }} Container{{ p.deploy ? ` · ${p.deploy.git_sha} ${relativ(p.deploy.ts)}` : '' }}{{ p.app_status && p.app_status !== p.status ? ` · Health ${statusText(p.app_status)}` : '' }}</div>
             <a v-if="p.url" :href="p.url" target="_blank" rel="noopener" class="p-link mono">{{ p.url.replace(/^https?:\/\//, '') }} ↗</a>
+            <div v-else-if="p.intern && p.intern.length" class="p-intern mono">
+              <a v-for="i in p.intern" :key="i.url" :href="i.url" target="_blank" rel="noopener" class="p-link" :title="`${i.service} · Port ${i.port} (Tailscale)`">:{{ i.port }} {{ i.service }} ↗</a>
+            </div>
           </div>
         </div>
       </div>
@@ -465,11 +470,11 @@ async function demo() {
       </div>
 
       <div class="kachel github einblenden" style="--i: 9">
-        <h4>GitHub <span class="dim">· {{ overview.github.enabled ? `${overview.github.repos.length} Repositories · ${zahl(commitAnzahl)} Commits zuletzt` : 'kein Token' }}</span></h4>
+        <h4>GitHub <span class="dim">· {{ overview.github.enabled ? `alle ${overview.github.repos.length} Repositories · nach Aktivität · ${zahl(commitAnzahl)} Commits zuletzt` : 'kein Token' }}</span></h4>
         <div v-if="!overview.github.enabled" class="dim">GITHUB_TOKEN setzen, dann erscheinen hier alle Repos mit Aktivität.</div>
         <div v-else-if="overview.github.error" class="dim">{{ overview.github.error }}</div>
         <div v-else class="repo-grid">
-          <a v-for="r in repos" :key="r.full_name" :href="r.html_url" target="_blank" rel="noopener" class="repo">
+          <a v-for="r in repos" :key="r.full_name" :href="r.html_url" target="_blank" rel="noopener" class="repo" :class="{ still: !r.pushed_at || Date.now() - new Date(r.pushed_at).getTime() > 90 * 86400000 }" :title="r.description || r.full_name">
             <b>{{ r.name }}</b><span class="mono dim">{{ r.language || '—' }} · {{ relativ(r.pushed_at) }}{{ r.open_issues ? ` · ${r.open_issues} offen` : '' }}</span>
           </a>
         </div>
@@ -587,6 +592,12 @@ async function demo() {
 .repo { display: flex; flex-direction: column; gap: 2px; background: var(--flaeche-2); border: 1px solid var(--linie); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; text-decoration: none; color: var(--text); }
 .repo .mono { font-size: 11px; }
 .repo:hover { border-color: var(--info); }
+.repo.still { opacity: .55; }
+.repo-grid { max-height: 330px; overflow: auto; }
+.r-name { flex: 1; color: var(--text); text-decoration: none; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-name:hover { color: var(--info); }
+.p-intern { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
+.p-intern .p-link { display: inline; margin: 0; }
 
 /* ---------- Mehrwert-Kacheln ---------- */
 .live { display: inline-flex; align-items: center; gap: 2px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ok); text-transform: uppercase; }

@@ -130,6 +130,7 @@ def projects_on_host(host: HostRow, *, refresh: bool = False) -> list[dict]:
             "running": running,
             "status": status,
             "names": [c.get("name", "") for c in cs],
+            "container_rows": [{"name": c.get("name", ""), "service": c.get("service", ""), "ports": c.get("ports", "")} for c in cs],
             "images": sorted({(c.get("image") or "").split("@")[0] for c in cs})[:6],
         })
     return projekte

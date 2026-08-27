@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -60,6 +61,33 @@ def _secret_value(session: Session, key: str | None) -> str | None:
         return None
 
 
+_PORT_RE = re.compile(r"(?P<ip>[\d.]+|\[[0-9a-f:]+\]|::):(?P<port>\d+)->(?P<cport>\d+)/tcp")
+
+
+def intern_urls(containers: list[dict], host_ip: str | None, limit: int = 3) -> list[dict]:
+    """Interne Adressen eines Projekts aus veroeffentlichten Ports (rein, testbar).
+
+    Ports, die auf 0.0.0.0/:: oder die Tailscale-IP gebunden sind, sind ueber das
+    Mesh erreichbar: http://<tailscale-ip>:<port>. Reine 127.0.0.1-Bindungen bleiben weg."""
+    if not host_ip:
+        return []
+    out: list[dict] = []
+    gesehen: set[int] = set()
+    for c in containers:
+        for m in _PORT_RE.finditer(c.get("ports") or ""):
+            ip, port = m.group("ip"), int(m.group("port"))
+            if ip.startswith("127.") or ip == "[::1]":
+                continue
+            if ip not in ("0.0.0.0", "::", "[::]") and ip != host_ip:
+                continue
+            if port in gesehen:
+                continue
+            gesehen.add(port)
+            out.append({"url": f"http://{host_ip}:{port}", "service": c.get("service") or c.get("name", ""), "port": port})
+    out.sort(key=lambda e: e["port"])
+    return out[:limit]
+
+
 def build_projects(
     host: HostRow,
     projects: list[dict],
@@ -92,6 +120,7 @@ def build_projects(
             "images": p.get("images", []),
             "names": names[:8],
             "url": wc.link_for(p["name"], names, cfg.links),
+            "intern": intern_urls(p.get("container_rows") or [], getattr(host, "tailscale_ip", None)),
             "tunnel": any("cloudflared" in n for n in names),
             "registered": bool(registered),
             "app_id": registered.id if registered else None,

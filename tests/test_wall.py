@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 from cockpit.routes.chat import allowed_models
-from cockpit.routes.overview import _newest_backups, build_projects
+from cockpit.routes.overview import _newest_backups, build_projects, intern_urls
 from cockpit.services import wall_config as wc
 from cockpit.services.host_stats import _parse
 
@@ -77,3 +77,17 @@ def test_waehle_hero_bevorzugt_host_dann_tunnel():
     assert waehle_hero(projs, {"project": "hpp", "host": "ccx23"})["host"] == "ccx23"
     assert waehle_hero(projs, {"project": "hpp"})["host"] == "ccx23"  # Tunnel = Prod
     assert waehle_hero(projs, {"project": "gibt-es-nicht"}) is None
+
+
+def test_intern_urls_aus_ports():
+    rows = [
+        {"name": "hpp-frontend", "service": "frontend", "ports": "0.0.0.0:3003->80/tcp, [::]:3003->80/tcp"},
+        {"name": "hpp-backend", "service": "backend", "ports": "127.0.0.1:8090->8000/tcp"},
+        {"name": "cockpit", "service": "cockpit", "ports": "100.99.159.80:7843->7843/tcp"},
+        {"name": "db", "service": "db", "ports": "5432/tcp"},
+        {"name": "fremd", "service": "x", "ports": "10.0.0.5:9000->9000/tcp"},
+    ]
+    out = intern_urls(rows, "100.99.159.80")
+    assert [e["url"] for e in out] == ["http://100.99.159.80:3003", "http://100.99.159.80:7843"]
+    assert out[0]["service"] == "frontend"
+    assert intern_urls(rows, None) == []

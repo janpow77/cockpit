@@ -44,6 +44,7 @@ class HostBootstrap:
 @dataclass
 class CockpitConfig:
     hosts: list[HostBootstrap] = field(default_factory=list)
+    admin_user: str = "admin"
     admin_password: str = "cockpit-admin"
     admin_password_is_default: bool = True
     vault_key: str | None = None
@@ -89,6 +90,7 @@ def load_config() -> CockpitConfig:
 
     return CockpitConfig(
         hosts=hosts,
+        admin_user=(os.environ.get("COCKPIT_ADMIN_USER") or "admin").strip(),
         admin_password=admin_pw,
         admin_password_is_default=not admin_pw_env,
         vault_key=os.environ.get("COCKPIT_VAULT_KEY"),

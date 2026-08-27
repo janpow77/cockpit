@@ -20,8 +20,11 @@ router = APIRouter(prefix="/admin/api/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginResponse)
 async def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)) -> LoginResponse:
-    if not verify_password(req.password):
-        raise HTTPException(status_code=401, detail="Invalid password")
+    from ..config import get_settings
+
+    benutzer = (req.username or "admin").strip()
+    if benutzer != get_settings().admin_user or not verify_password(req.password):
+        raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch")
     cleanup_expired(session)
     token, expires = issue_token(session, ip=client_ip(request))
     return LoginResponse(token=token, expires_at=expires)

@@ -266,6 +266,7 @@ export interface WallProject {
   images: string[]
   names?: string[]
   url: string | null
+  intern?: { url: string; service: string; port: number }[]
   tunnel: boolean
   registered: boolean
   app_id: string | null
