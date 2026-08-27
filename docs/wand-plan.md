@@ -155,3 +155,22 @@ statt `secret_key`; bei HTTP 401 wird einmal neu angemeldet.
 
 `kira_cloudflared` (Compose-Projekt `deploy` in kiraclaw, bewusst gestoppt) steht in der
 Ausblendliste, damit die Wand keinen Dauer-Alarm zeigt.
+
+## 11. Anmeldung, Erreichbarkeit, Stand v0.3.4 (27.08.2026)
+
+- **Anmeldung** über die Seite `/admin/login` mit Benutzername und Passwort. Benutzername
+  aus `COCKPIT_ADMIN_USER` (Vorgabe `admin`), Passwort aus `COCKPIT_ADMIN_PASSWORD`
+  (`/etc/cockpit/env`). Skripte ohne Benutzername laufen weiter (Vorgabe `admin`).
+  Das Cockpit bleibt bewusst Tailscale-only (Docker-Socket, Vault) – eine öffentliche
+  Adresse bräuchte Cloudflare Access davor.
+- **Alle Anwendungen erreichbar:** Projekte mit öffentlicher Adresse verlinken diese;
+  Projekte ohne Adresse verlinken ihre veröffentlichten Ports über die Tailscale-IP des
+  Hosts (`intern_urls()`, nur 0.0.0.0-/Tailscale-Bindungen, keine 127.0.0.1).
+- **Alle Repositories:** Die GitHub-Kachel zeigt sämtliche Repositories nach Aktivität
+  (ältere als 90 Tage abgeblendet), Werkstatt-Zeilen verlinken das passende Repository.
+- **MCP flowaudit:** mcp.flowaudit.de wird vom NUC bedient (Container
+  `audit_designer_mcp_memory` hinter `audit_designer_cloudflared`), nicht vom Hetzner-
+  Replikat. Der Service-Token des Cockpits ist als SHA-256 in
+  `MCP_SERVICE_TOKEN_SHA256S` der `audit_designer/.env` auf dem NUC eingetragen (und
+  zusätzlich in `/etc/checklist/env` auf dem Hetzner); der Token selbst liegt im Vault
+  (`mcp_flowaudit_token`).
