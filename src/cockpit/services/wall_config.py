@@ -52,6 +52,7 @@ DEFAULT_LABELS: dict[str, dict[str, str]] = {
     "zvg": {"title": "ZVG", "sub": "Zwangsversteigerungen"},
     "pdfapp": {"title": "PDF-Editor", "sub": "pdf.flowaudit.de"},
     "ki-pilotprogramm": {"title": "KI-Pilotprogramm", "sub": "pilot.flowaudit.de"},
+    "kira_": {"title": "Kira · Tunnel", "sub": "kiraclaw/deploy · Cloudflare"},
 }
 
 DEFAULT_HERO: dict[str, Any] = {
@@ -71,9 +72,9 @@ DEFAULT_PROBES: list[dict[str, Any]] = [
         "id": "hpp",
         "label": "HPP",
         "url": "https://hpp.flowaudit.de/api/kpang/vollzug/stats",
-        "secret_key": "hpp_token",
-        "header": "Authorization",
-        "header_prefix": "Bearer ",
+        "login_url": "https://hpp.flowaudit.de/api/auth/login",
+        "user_secret": "hpp_smoke_user",
+        "password_secret": "hpp_smoke_password",
         "fields": [
             {"key": "preismeldungen_24h", "label": "Meldungen 24 h"},
             {"key": "tankstellen_aktiv", "label": "Tankstellen"},

@@ -157,8 +157,38 @@ def _newest_backups(backup_dir: str) -> list[dict]:
     return rows
 
 
+_probe_tokens: dict[str, tuple[float, str]] = {}
+_PROBE_TOKEN_TTL_S = 30 * 60
+
+
+async def _probe_login(session: Session, probe: dict) -> tuple[str | None, str | None]:
+    """Anmeldung fuer Sonden mit login_url (OAuth2-Passwortformular wie bei HPP);
+    Token 30 min gemerkt. Liefert (token, fehlertext)."""
+    pid = str(probe.get("id") or probe.get("url"))
+    hit = _probe_tokens.get(pid)
+    if hit and time.time() - hit[0] < _PROBE_TOKEN_TTL_S:
+        return hit[1], None
+    user = _secret_value(session, probe.get("user_secret"))
+    password = _secret_value(session, probe.get("password_secret"))
+    if not user or not password:
+        return None, f"Secrets „{probe.get('user_secret')}“/„{probe.get('password_secret')}“ fehlen im Vault"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            resp = await c.post(probe["login_url"], data={"username": user, "password": password})
+    except httpx.HTTPError as exc:
+        return None, f"Anmeldung: {str(exc)[:80]}"
+    if resp.status_code >= 400:
+        return None, f"Anmeldung fehlgeschlagen (HTTP {resp.status_code})"
+    token = (resp.json() or {}).get("access_token") if resp.headers.get("content-type", "").startswith("application/json") else None
+    if not token:
+        return None, "Anmeldung ohne access_token"
+    _probe_tokens[pid] = (time.time(), token)
+    return token, None
+
+
 async def _run_probe(session: Session, probe: dict) -> dict:
-    """Eine Sonde: JSON holen, konfigurierte Felder als Kennzahlen liefern."""
+    """Eine Sonde: JSON holen, konfigurierte Felder als Kennzahlen liefern.
+    Zugang entweder ueber ein festes Secret (secret_key) oder eine Anmeldung (login_url)."""
     out = {"id": probe.get("id"), "label": probe.get("label"), "ok": False, "kpis": [], "note": None}
     url = probe.get("url")
     if not url:
@@ -166,7 +196,13 @@ async def _run_probe(session: Session, probe: dict) -> dict:
         return out
     headers = {}
     secret_key = probe.get("secret_key")
-    if secret_key:
+    if probe.get("login_url"):
+        token, fehler = await _probe_login(session, probe)
+        if not token:
+            out["note"] = fehler
+            return out
+        headers["Authorization"] = f"Bearer {token}"
+    elif secret_key:
         value = _secret_value(session, secret_key)
         if not value:
             out["note"] = f"Secret „{secret_key}“ fehlt im Vault"
@@ -175,6 +211,11 @@ async def _run_probe(session: Session, probe: dict) -> dict:
     try:
         async with httpx.AsyncClient(timeout=8.0) as c:
             resp = await c.get(url, headers=headers)
+            if resp.status_code == 401 and probe.get("login_url"):
+                _probe_tokens.pop(str(probe.get("id") or probe.get("url")), None)
+                token, fehler = await _probe_login(session, probe)
+                if token:
+                    resp = await c.get(url, headers={"Authorization": f"Bearer {token}"})
         if resp.status_code >= 400:
             out["note"] = f"HTTP {resp.status_code}"
             return out
