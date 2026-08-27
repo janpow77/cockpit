@@ -23,13 +23,26 @@ _cache: dict[str, tuple[float, dict]] = {}
 _lock = threading.Lock()
 
 # Jede Zeile ein Messwert; Fehler einzelner Teile duerfen den Rest nicht kippen.
-_CMD = (
+# Linux liest /proc, macOS (Vorfuehrrechner) sysctl/vm_stat - beide liefern dieselben Zeilen.
+_CMD_LINUX = (
     "cat /proc/loadavg 2>/dev/null | awk '{print \"load\", $1, $2, $3}'; "
     "awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{print \"mem\", int(t/1024), int((t-a)/1024)}' /proc/meminfo 2>/dev/null; "
-    "(df -P /data 2>/dev/null || df -P / 2>/dev/null) | awk 'NR==2{print \"disk\", $2, $3, $5}'; "
     "awk '{print \"uptime\", int($1)}' /proc/uptime 2>/dev/null; "
-    "echo cpus $(nproc 2>/dev/null || echo 0); "
-    "echo containers $(docker ps -q 2>/dev/null | wc -l)"
+    "echo cpus $(nproc 2>/dev/null || echo 0)"
+)
+_CMD_MAC = (
+    "sysctl -n vm.loadavg 2>/dev/null | tr ',' '.' | awk '{print \"load\", $2, $3, $4}'; "
+    "ps=$(sysctl -n hw.pagesize 2>/dev/null || echo 16384); t=$(sysctl -n hw.memsize 2>/dev/null || echo 0); "
+    "vm_stat 2>/dev/null | tr -d '.' | awk -v ps=\"$ps\" -v t=\"$t\" "
+    "'/Pages active/{a=$3} /Pages wired/{w=$4} /occupied by compressor/{c=$5} END{print \"mem\", int(t/1048576), int((a+w+c)*ps/1048576)}'; "
+    "b=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/^{ sec = \\([0-9]*\\),.*/\\1/p'); "
+    "[ -n \"$b\" ] && echo uptime $(( $(date +%s) - b )); "
+    "echo cpus $(sysctl -n hw.ncpu 2>/dev/null || echo 0)"
+)
+_CMD = (
+    f"if [ -r /proc/loadavg ]; then {_CMD_LINUX}; else {_CMD_MAC}; fi; "
+    "(df -P /data 2>/dev/null || df -P / 2>/dev/null) | awk 'NR==2{print \"disk\", $2, $3, $5}'; "
+    "if command -v docker >/dev/null 2>&1; then echo containers $(docker ps -q 2>/dev/null | wc -l); else echo containers 0; fi"
 )
 
 

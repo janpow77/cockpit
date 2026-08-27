@@ -84,12 +84,14 @@ DEFAULT_PROBES: list[dict[str, Any]] = [
     },
 ]
 
-# Projektverzeichnisse je Host fuer die Werkstatt (git-Stand, Pausen).
-# Auf dem Self-Host ccx23 ist /home/deploy/Projekte nur lesend als /work/ccx23 eingehaengt.
+# Projektverzeichnisse je Host fuer die Werkstatt (git-Stand, Pausen). Der jeweilige
+# Self-Host bindet sein Verzeichnis unter demselben Pfad nur lesend in den Container ein,
+# damit dieselbe Vorgabe fuer jede Instanz (Hetzner, NUC, janpow-ai) gilt.
 DEFAULT_WORK_DIRS: dict[str, str] = {
-    "ccx23": "/work/ccx23",
+    "ccx23": "/home/deploy/Projekte",
     "nuc": "/home/janpow/Projekte",
     "evo": "/home/janpow/Projekte",
+    "janpow-ai": "/home/janpow/Projekte",
 }
 
 # Kira-Memory: die API lauscht nur auf 127.0.0.1 des NUC; der Schluessel liegt

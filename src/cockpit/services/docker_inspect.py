@@ -62,6 +62,11 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
 
     result = run_on_host(host, cmd, timeout=15)
     if not result.ok:
+        if result.exit_code == 127:
+            # Host ohne Docker (z. B. MacBook): kein Fehler, nur keine Container
+            log.debug("kein docker auf %s", host.name)
+            _store(host.id, filter_expr, [])
+            return []
         log.warning("docker ps fehlgeschlagen auf %s: rc=%d err=%s", host.name, result.exit_code, result.stderr[:200])
         empty: list[dict] = []
         _store(host.id, filter_expr, empty)

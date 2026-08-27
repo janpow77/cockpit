@@ -206,3 +206,30 @@ Vorgabe aus). Wer ausdrücklich lange Herleitungen will, schaltet ihn dort ein.
 bedient (NUC `audit_designer_mcp_memory` und Hetzner `checklist-mcp-memory`); der
 Service-Token-Hash muss daher in BEIDEN Umgebungen stehen (`audit_designer/.env` auf dem
 NUC, `/etc/checklist/env` auf dem Hetzner), sonst antwortet jede zweite Anfrage mit 401.
+
+## 13. Weitere Instanzen: NUC und janpow-ai (v0.3.7)
+
+Dieselbe Wand kann auf jedem Linux-Host der Landschaft laufen – als Zweitzugang, wenn der
+Hetzner nicht erreichbar ist, oder als lokale Wand mit dem jeweiligen Host in der Mitte.
+
+```bash
+# 1. Image auf den Host bringen (vom NUC aus; auf dem NUC selbst entfaellt das)
+docker save cockpit:v0.3.7 | gzip -1 | ssh janpow@100.114.73.106 'gunzip | docker load'
+# 2. Instanz anlegen (auf dem Host): Self-Host-Name, Image-Tag, optional Verzeichnis
+AI_ROUTER_URL=http://127.0.0.1:7849 scripts/instanz_deploy.sh nuc v0.3.7        # auf dem NUC
+scripts/instanz_deploy.sh janpow-ai v0.3.7                                        # auf janpow-ai
+# 3. Vault-Secrets vom Hetzner abgleichen (vom NUC aus, ueber SSH – nichts auf Platte)
+scripts/instanz_secrets_sync.sh http://100.102.132.11:7843 ~/cockpit-instanz/.admin_pw
+```
+
+Was `instanz_deploy.sh` anlegt (`~/cockpit-instanz/`): `env` mit Admin-Passwort und Vault-
+Schlüssel (einmalig, Passwort zusätzlich in `.admin_pw`), `config.yaml` mit allen fünf Hosts
+(Self-Host markiert), `compose.yaml` im **Host-Netz** (damit Memory-API und ai-router-Hub
+auf 127.0.0.1 erreichbar sind), gebunden **nur an die Tailscale-IP** des Hosts. Mounts wie
+auf dem Hetzner: Docker-Socket, `~/.ssh/id_ed25519` als Cockpit-Schlüssel, `~/Projekte`
+(Werkstatt + Kira-`.env`) und ein Sicherungsverzeichnis, alles nur lesend.
+
+Voraussetzungen je Host: Docker mit Compose-Plugin, Tailscale, der Host-Schlüssel
+`~/.ssh/id_ed25519` ist auf den anderen Hosts eingetragen (Hetzner `deploy`, EVO, MacBook
+`janriener`, janpow-ai). `janpow-ai` (100.114.73.106) war am 27.08.2026 offline – Deploy
+vorbereitet, Ausführung sobald der Rechner läuft.
