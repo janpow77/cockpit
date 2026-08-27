@@ -238,6 +238,7 @@ export interface HostStats {
   disk_pct: number | null
   uptime_s: number | null
   containers: number | null
+  gpus?: { util_pct: number; mem_used_mb: number | null; mem_total_mb: number | null }[]
   ok: boolean
   error: string | null
   ms: number | null

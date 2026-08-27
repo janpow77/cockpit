@@ -42,7 +42,11 @@ _CMD_MAC = (
 _CMD = (
     f"if [ -r /proc/loadavg ]; then {_CMD_LINUX}; else {_CMD_MAC}; fi; "
     "(df -P /data 2>/dev/null || df -P / 2>/dev/null) | awk 'NR==2{print \"disk\", $2, $3, $5}'; "
-    "if command -v docker >/dev/null 2>&1; then echo containers $(docker ps -q 2>/dev/null | wc -l); else echo containers 0; fi"
+    "if command -v docker >/dev/null 2>&1; then echo containers $(docker ps -q 2>/dev/null | wc -l); else echo containers 0; fi; "
+    # GPUs: NVIDIA ueber nvidia-smi, AMD ueber sysfs (nur Auslastung)
+    "if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null "
+    "| awk -F', *' '{print \"gpu\", $1, $2, $3}'; "
+    "else for f in /sys/class/drm/card*/device/gpu_busy_percent; do [ -r \"$f\" ] && echo gpu $(cat \"$f\") 0 0; done 2>/dev/null; fi"
 )
 
 
@@ -51,7 +55,7 @@ def _parse(stdout: str) -> dict:
         "load1": None, "load5": None, "load15": None, "cpus": None,
         "mem_total_mb": None, "mem_used_mb": None, "mem_pct": None,
         "disk_total_kb": None, "disk_used_kb": None, "disk_pct": None,
-        "uptime_s": None, "containers": None,
+        "uptime_s": None, "containers": None, "gpus": [],
     }
     for line in stdout.splitlines():
         parts = line.split()
@@ -74,6 +78,12 @@ def _parse(stdout: str) -> dict:
                 out["cpus"] = int(vals[0]) or None
             elif key == "containers" and vals:
                 out["containers"] = int(vals[0])
+            elif key == "gpu" and vals:
+                out["gpus"].append({
+                    "util_pct": int(float(vals[0])),
+                    "mem_used_mb": int(float(vals[1])) if len(vals) > 1 else None,
+                    "mem_total_mb": int(float(vals[2])) if len(vals) > 2 else None,
+                })
         except ValueError:
             continue
     return out

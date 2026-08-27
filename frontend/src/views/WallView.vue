@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Die Wand: oben die Landschaft (Hosts als Knoten, Tailscale-Mesh, Cloudflare-Rand,
- * fließender Verkehr), darunter der Leitstand (Kacheln), unten das Laufband.
+ * Das Cockpit: oben die Karte (Hosts als Knoten, Tailscale-Mesh, Cloudflare-Rand,
+ * fließender Verkehr), darunter die Kacheln, unten das Laufband.
  * Vollbild, dunkel, alle 30 s aktualisiert. Nur Whitelist-Inhalte (Backend).
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -238,6 +238,9 @@ const werkstattSumme = computed(() => {
 const kira = computed(() => overview.value?.kira ?? null)
 const KATEGORIE: Record<string, string> = { architecture: 'Architektur', solution: 'Lösung', problem: 'Problem', reference: 'Referenz', pattern: 'Muster', workflow: 'Ablauf', preference: 'Präferenz', feedback: 'Feedback' }
 function kategorie(k: string | null): string { return (k && KATEGORIE[k]) || k || '–' }
+function gpuLast(gpus: { util_pct: number }[]): number {
+  return gpus.length ? Math.round(gpus.reduce((a, g) => a + g.util_pct, 0) / gpus.length) : 0
+}
 function hoehe(v: number, reihe: number[]): number {
   const m = Math.max(1, ...reihe)
   return Math.max(1, Math.round((v / m) * 17))
@@ -284,7 +287,7 @@ async function demo(neu = false) {
     <header class="wand-kopf">
       <div class="titel">
         <span class="marke">flowaudit</span>
-        <span class="untertitel">Landschaft · Leitstand</span>
+        <span class="untertitel">Cockpit</span>
       </div>
       <div class="kopf-mitte">
         <span v-if="overview" class="mono dim">{{ hosts.length }} Hosts · {{ projekte.length }} Projekte · {{ zahl(gesamtContainer) }} Container</span>
@@ -301,7 +304,7 @@ async function demo(neu = false) {
     </header>
 
     <!-- ============================ Landschaft ============================ -->
-    <section class="landschaft" aria-label="Landschaft">
+    <section class="landschaft" aria-label="Cockpit-Karte">
       <div class="legende mono">
         <span><i class="strich mesh" /> Mesh (Tailscale)</span>
         <span><i class="strich fluss" /> Verkehr</span>
@@ -315,8 +318,16 @@ async function demo(neu = false) {
             <stop offset="0%" stop-color="#2A3F80" stop-opacity=".55" />
             <stop offset="100%" stop-color="#0B1020" stop-opacity="0" />
           </radialGradient>
+          <linearGradient id="sweep" gradientUnits="userSpaceOnUse" :x1="MITTE.x + 330" :y1="MITTE.y" :x2="MITTE.x + 330 * Math.cos(0.75)" :y2="MITTE.y + 330 * Math.sin(0.75)">
+            <stop offset="0%" stop-color="#F2B84B" stop-opacity="0" />
+            <stop offset="100%" stop-color="#F2B84B" stop-opacity=".16" />
+          </linearGradient>
         </defs>
         <circle :cx="MITTE.x" :cy="MITTE.y" r="330" fill="url(#glow)" />
+        <!-- Radar-Sweep um den Self-Host -->
+        <g class="radar" :style="{ transformOrigin: `${MITTE.x}px ${MITTE.y}px` }">
+          <path :d="`M ${MITTE.x} ${MITTE.y} L ${MITTE.x + 330} ${MITTE.y} A 330 330 0 0 1 ${(MITTE.x + 330 * Math.cos(0.75)).toFixed(1)} ${(MITTE.y + 330 * Math.sin(0.75)).toFixed(1)} Z`" fill="url(#sweep)" />
+        </g>
 
         <!-- Cloudflare-Rand -->
         <g class="einblenden" style="--i: 0">
@@ -331,8 +342,15 @@ async function demo(neu = false) {
           <text class="sub" x="102" y="598">{{ tunnelAnzahl }} Tunnel · {{ cloudListe.length }} öffentliche Dienste</text>
         </g>
 
-        <!-- Mesh-Kanten -->
+        <!-- Mesh-Kanten mit laufenden Paketen -->
         <line v-for="(k, i) in kanten" :key="'k' + i" :x1="k.x1" :y1="k.y1" :x2="k.x2" :y2="k.y2" class="kante" />
+        <template v-if="!reduziert">
+          <template v-for="(k, i) in kanten" :key="'p' + i">
+            <circle r="3.5" class="paket"><animateMotion :dur="`${3.2 + i * 0.6}s`" repeatCount="indefinite" :path="`M ${k.x1} ${k.y1} L ${k.x2} ${k.y2}`" /></circle>
+            <circle r="2.5" class="paket zurueck"><animateMotion :dur="`${4.1 + i * 0.5}s`" :begin="`${1 + i * 0.4}s`" repeatCount="indefinite" :path="`M ${k.x2} ${k.y2} L ${k.x1} ${k.y1}`" /></circle>
+          </template>
+          <circle r="4" class="paket cloud-paket"><animateMotion dur="2.6s" repeatCount="indefinite" :path="`M 350 455 C 500 455, 560 ${MITTE.y}, ${MITTE.x - 130} ${MITTE.y}`" /></circle>
+        </template>
         <!-- Verkehr Cloudflare -> Self-Host -->
         <path v-if="knoten.length" class="fluss" :d="`M 350 455 C 500 455, 560 ${MITTE.y}, ${MITTE.x - 130} ${MITTE.y}`" />
         <!-- Verkehr Self -> LLM-Host -->
@@ -341,12 +359,12 @@ async function demo(neu = false) {
         </template>
 
         <!-- Knoten -->
-        <g v-for="(kn, i) in knoten" :key="kn.host.name" class="einblenden" :style="{ '--i': i + 1 }">
+        <g v-for="(kn, i) in knoten" :key="kn.host.name" class="einblenden host" :style="{ '--i': i + 1 }">
           <circle :cx="kn.x" :cy="kn.y" :r="kn.r" :class="['knoten', { hero: kn.host.is_self, aus: statusKlasse(kn.host.status) !== 'ok' }]" />
           <circle :cx="kn.x" :cy="kn.y" :r="kn.r + 10" :class="['ring', statusKlasse(kn.host.status)]" />
           <text class="label" :x="kn.x" :y="kn.y - kn.r * 0.42" text-anchor="middle" :style="{ fontSize: kn.host.is_self ? '28px' : '19px' }">{{ kn.host.name }}</text>
           <text class="sub" :x="kn.x" :y="kn.y - kn.r * 0.42 + 20" text-anchor="middle" :style="{ fontSize: kn.host.is_self ? '11.5px' : '10px' }">
-            {{ kn.host.stats.cpus ? `${kn.host.stats.cpus} vCPU · ` : '' }}{{ kn.host.stats.mem_total_mb ? `${gb(kn.host.stats.mem_total_mb)} · ` : '' }}{{ kn.host.stats.containers != null ? `${kn.host.stats.containers} Ctr.` : (kn.host.description || statusText(kn.host.status)).slice(0, 34) }}
+            {{ kn.host.stats.cpus ? `${kn.host.stats.cpus} vCPU · ` : '' }}{{ kn.host.stats.mem_total_mb ? `${gb(kn.host.stats.mem_total_mb)} · ` : '' }}{{ kn.host.stats.gpus?.length ? `${kn.host.stats.gpus.length} GPU ${gpuLast(kn.host.stats.gpus)} % · ` : '' }}{{ kn.host.stats.containers != null ? `${kn.host.stats.containers} Ctr.` : (kn.host.description || statusText(kn.host.status)).slice(0, 34) }}
           </text>
           <template v-for="(p, j) in (projekteJeHost[kn.host.name] || []).slice(0, kn.host.is_self ? 4 : 2)" :key="p.name">
             <circle :cx="kn.x - 62" :cy="kn.y - kn.r * 0.42 + 44 + j * 20 - 4" r="4" :class="['dot', statusKlasse(p.status)]" />
@@ -364,7 +382,7 @@ async function demo(neu = false) {
           <text class="label" x="466" y="712" style="font-size: 30px">{{ hero.title }}</text>
           <text class="sub" x="466" y="734">{{ hero.url.replace(/^https?:\/\//, '') }} · {{ heroProjekt ? `${heroProjekt.running}/${heroProjekt.containers} Container · ${statusText(heroProjekt.status)}` : 'nicht entdeckt' }}{{ heroProjekt?.deploy ? ` · Deploy ${heroProjekt.deploy.git_sha} ${relativ(heroProjekt.deploy.ts)}` : '' }}</text>
           <template v-for="(k, i) in heroKpis.slice(0, 4)" :key="k.label">
-            <text class="kpi" :x="466 + i * 165" y="790">{{ zahl(kpiWerte[i].value ?? k.value) }}</text>
+            <text class="kpi" :x="466 + i * 165" y="790"><tspan :key="String(k.value)" class="blitz">{{ zahl(kpiWerte[i].value ?? k.value) }}</tspan></text>
             <text class="sub" :x="466 + i * 165" y="812">{{ k.label }}</text>
           </template>
           <text v-if="!heroKpis.length" class="sub" x="466" y="790">{{ hero.probe_note ? `Kennzahlen: ${hero.probe_note}` : 'Kennzahlen folgen mit der Sonde' }}</text>
@@ -375,12 +393,12 @@ async function demo(neu = false) {
           <text v-if="demoMeldung" class="sub" x="466" y="832">{{ demoMeldung }}{{ demoBusy ? ' (etwa 1–2 Minuten)' : '' }}</text>
         </g>
       </svg>
-      <div v-else class="warte mono">{{ error ? error : 'Lade Landschaft …' }}</div>
+      <div v-else class="warte mono">{{ error ? error : 'Lade Cockpit …' }}</div>
     </section>
 
     <!-- ============================ Leitstand ============================ -->
-    <section v-if="overview" class="leitstand" aria-label="Leitstand">
-      <div class="kachel alarm einblenden" :class="{ ruhig: !alerts.length }" style="--i: 0">
+    <section v-if="overview" class="leitstand" aria-label="Cockpit">
+      <div class="kachel alarm einblenden" :class="{ ruhig: !alerts.length, krit: kritAnzahl > 0 }" style="--i: 0">
         <h4>Handlungsbedarf <span class="dim">· {{ alerts.length ? `${kritAnzahl} kritisch · ${warnAnzahl} prüfen` : 'nichts offen' }}</span></h4>
         <div v-if="!alerts.length" class="ruhe"><i class="punkt ok" /><div><b>Alles läuft.</b><span class="mono dim">Hosts, Container, Sicherungen, Dienste und Zertifikate ohne Befund</span></div></div>
         <TransitionGroup v-else name="liste" tag="div" class="alarm-liste">
@@ -399,7 +417,7 @@ async function demo(neu = false) {
           <a :href="d.url" target="_blank" rel="noopener" class="d-name" :title="d.note || d.url">{{ d.host }}</a>
           <span class="mono d-ms">{{ d.ms != null ? `${zahl(d.ms)} ms` : '–' }}</span>
           <span class="mono d-tls" :class="{ warn: d.tls_tage != null && d.tls_tage < 14 }" :title="d.tls_aussteller || ''">{{ d.tls_tage != null ? `TLS ${d.tls_tage} d` : (d.note || '') }}</span>
-          <svg class="funken" viewBox="0 0 96 18" preserveAspectRatio="none" :title="d.requests_24h != null ? `${zahl(d.requests_24h)} Zugriffe in 24 h` : 'keine Verkehrsdaten'"><rect v-for="(v, i) in d.verlauf" :key="i" :x="i * 4" :y="18 - hoehe(v, d.verlauf)" width="3" :height="hoehe(v, d.verlauf)" /></svg>
+          <svg class="funken" viewBox="0 0 96 18" preserveAspectRatio="none" :title="d.requests_24h != null ? `${zahl(d.requests_24h)} Zugriffe in 24 h` : 'keine Verkehrsdaten'"><rect v-for="(v, i) in d.verlauf" :key="i" :x="i * 4" :y="18 - hoehe(v, d.verlauf)" width="3" :height="hoehe(v, d.verlauf)" :style="{ '--i': i }" /></svg>
           <span class="mono d-req">{{ d.requests_24h != null ? `${zahl(d.requests_24h)} / 24 h` : '' }}</span>
         </div>
         <div v-if="!dienste.length" class="dim">Keine öffentlichen Adressen hinterlegt.</div>
@@ -431,6 +449,9 @@ async function demo(neu = false) {
             <span class="mono dim">Load</span><div class="balken"><i :style="{ width: `${Math.min(100, ((h.stats.load1 ?? 0) / (h.stats.cpus || 1)) * 100)}%` }" /></div>
             <span class="mono dim">RAM</span><div class="balken"><i :style="{ width: `${h.stats.mem_pct ?? 0}%` }" /></div>
             <span class="mono dim">Disk</span><div class="balken"><i :class="{ warn: (h.stats.disk_pct ?? 0) > 80 }" :style="{ width: `${h.stats.disk_pct ?? 0}%` }" /></div>
+          </div>
+          <div v-if="h.stats.gpus?.length" class="balken-reihe gpu">
+            <template v-for="(g, gi) in h.stats.gpus" :key="gi"><span class="mono dim">GPU{{ h.stats.gpus!.length > 1 ? gi + 1 : '' }}</span><div class="balken" :title="g.mem_total_mb ? `${gb(g.mem_used_mb)} / ${gb(g.mem_total_mb)} VRAM` : ''"><i class="gpu" :style="{ width: `${g.util_pct}%` }" /></div></template>
           </div>
         </div>
       </div>
@@ -527,7 +548,8 @@ async function demo(neu = false) {
 .knopf:hover { filter: brightness(1.08); }
 
 /* ---------- Landschaft ---------- */
-.landschaft { position: relative; flex: 0 0 auto; height: min(62vh, 760px); background: radial-gradient(ellipse at 50% 45%, #12203F 0%, #070B18 72%); border-bottom: 1px solid var(--linie); }
+.landschaft { position: relative; flex: 0 0 auto; height: min(62vh, 760px); background: radial-gradient(ellipse at 50% 45%, #12203F 0%, #070B18 72%); background-size: 120% 120%; border-bottom: 1px solid var(--linie); animation: atmen 24s ease-in-out infinite; }
+@keyframes atmen { 0%, 100% { background-position: 50% 45%; } 50% { background-position: 52% 50%; } }
 .karte { width: 100%; height: 100%; display: block; }
 .legende { position: absolute; right: 22px; top: 14px; display: flex; gap: 16px; font-size: 11px; color: var(--text-3); z-index: 2; }
 .legende .strich { display: inline-block; width: 22px; height: 0; border-top: 2px solid #34508F; vertical-align: middle; margin-right: 4px; }
@@ -562,6 +584,18 @@ async function demo(neu = false) {
 .klickbar { cursor: pointer; }
 .klickbar:hover .knopf-svg { filter: brightness(1.1); }
 .einblenden { animation: einblenden .7s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.radar { animation: radar 14s linear infinite; transform-box: view-box; }
+@keyframes radar { to { transform: rotate(360deg); } }
+.paket { fill: #8FB4FF; opacity: .9; filter: drop-shadow(0 0 4px rgba(143,180,255,.9)); }
+.paket.zurueck { fill: #5B79C9; opacity: .6; }
+.paket.cloud-paket { fill: var(--akzent); filter: drop-shadow(0 0 5px rgba(242,184,75,.9)); }
+.host .knoten { transition: filter .3s ease, stroke-width .3s ease; }
+.host:hover .knoten { filter: drop-shadow(0 0 14px rgba(111,168,255,.75)); stroke-width: 2.5; }
+.host:hover .label { fill: #fff; }
+.hero-karte { animation: hero-glow 5s ease-in-out infinite; }
+@keyframes hero-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(242,184,75,0)); } 50% { filter: drop-shadow(0 0 16px rgba(242,184,75,.35)); } }
+.blitz { animation: blitz 1.4s ease-out both; }
+@keyframes blitz { 0% { fill: var(--akzent); } 100% { fill: var(--text); } }
 @keyframes einblenden { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Leitstand ---------- */
@@ -579,6 +613,8 @@ async function demo(neu = false) {
 .balken { height: 6px; background: #1E2A4A; border-radius: 3px; overflow: hidden; }
 .balken i { display: block; height: 100%; background: var(--info); border-radius: 3px; transition: width 1.2s cubic-bezier(.2,.7,.2,1); }
 .balken i.warn { background: var(--warn); }
+.balken i.gpu { background: linear-gradient(90deg, #6FA8FF, #B58BFF); }
+.balken-reihe.gpu { grid-template-columns: 34px 1fr 34px 1fr; margin-top: 4px; }
 .punkt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: #3A4463; }
 .punkt.ok { background: var(--ok); box-shadow: 0 0 0 0 rgba(76,195,138,.55); animation: puls 2.4s ease-out infinite; }
 .punkt.warn { background: var(--warn); }
@@ -617,6 +653,8 @@ async function demo(neu = false) {
 .live { display: inline-flex; align-items: center; gap: 2px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ok); text-transform: uppercase; }
 .live em { font-style: normal; color: var(--text-3); letter-spacing: 0; margin-left: 4px; font-variant-numeric: tabular-nums; }
 .kachel.alarm { border-color: rgba(242,109,109,.4); }
+.kachel.alarm.krit { animation: alarm-puls 2.6s ease-in-out infinite; }
+@keyframes alarm-puls { 0%, 100% { border-color: rgba(242,109,109,.35); box-shadow: 0 0 0 0 rgba(242,109,109,0); } 50% { border-color: rgba(242,109,109,.9); box-shadow: 0 0 22px rgba(242,109,109,.18); } }
 .kachel.alarm.ruhig { border-color: rgba(76,195,138,.4); }
 .ruhe { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 6px 0; }
 .ruhe div { display: flex; flex-direction: column; }
@@ -637,7 +675,8 @@ async function demo(neu = false) {
 .d-ms, .d-tls, .d-req { font-size: 11px; color: var(--text-2); text-align: right; white-space: nowrap; }
 .d-tls.warn { color: var(--warn); }
 .funken { width: 96px; height: 18px; fill: var(--info); opacity: .75; }
-.funken rect { transition: height .8s ease, y .8s ease; }
+.funken rect { transition: height .8s ease, y .8s ease; transform-box: fill-box; transform-origin: bottom; animation: wachsen .9s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 25ms); }
+@keyframes wachsen { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .chip { font-family: var(--mono); font-size: 10px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--linie); color: var(--text-2); white-space: nowrap; }
 .chip.pause { border-color: var(--akzent); color: var(--akzent); }
 .chip.dirty { border-color: var(--warn); color: var(--warn); }
@@ -660,11 +699,11 @@ async function demo(neu = false) {
 .liste-leave-active { position: absolute; }
 
 /* ---------- Ticker ---------- */
-.ticker { position: fixed; left: 0; right: 0; bottom: 0; height: 36px; background: #080C18; border-top: 1px solid var(--linie); display: flex; align-items: center; overflow: hidden; font-size: 12px; color: var(--text-2); white-space: nowrap; z-index: 3; }
+.ticker { position: fixed; left: 0; right: 0; bottom: 0; height: 36px; background: #080C18; border-top: 1px solid var(--linie); display: flex; align-items: center; overflow: hidden; font-size: 12px; color: var(--text-2); white-space: nowrap; z-index: 3; mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
 .ticker span { display: inline-block; padding-left: 100%; animation: lauf 240s linear infinite; }
 @keyframes lauf { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 
-.wand.reduziert .fluss, .wand.reduziert .ring, .wand.reduziert .punkt, .wand.reduziert .einblenden, .wand.reduziert .ticker span { animation: none; }
+.wand.reduziert .fluss, .wand.reduziert .ring, .wand.reduziert .punkt, .wand.reduziert .einblenden, .wand.reduziert .ticker span, .wand.reduziert .radar, .wand.reduziert .hero-karte, .wand.reduziert .blitz, .wand.reduziert .landschaft, .wand.reduziert .funken rect, .wand.reduziert .kachel.alarm.krit { animation: none; }
 .wand.reduziert .liste-enter-active, .wand.reduziert .liste-leave-active, .wand.reduziert .liste-move, .wand.reduziert .funken rect, .wand.reduziert .balken i { transition: none; }
 @media (max-width: 1100px) {
   .leitstand { grid-template-columns: 1fr 1fr; }
