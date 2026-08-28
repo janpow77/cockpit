@@ -565,3 +565,24 @@ Runde rot: im frischen Worktree fehlten `node_modules` (jetzt per Symlink aus de
 ebenso `.venv`), und `.cockpit.yaml` war nicht versioniert (jetzt im Repo). Erste PRs aus dem
 Cockpit: #1 „README: ASCII-Umlaute korrigieren“ (Codex, direkt umsetzen), #2 „README:
 Abschnitt Aufträge (Kanban)“ (Claude, Plan mit Freigabe) – Merge bleibt Handarbeit.
+
+## 19. Telegram-Dialog (Phase 2, v0.4.19)
+
+`services/telegram_dialog.py`: Die Instanz mit aktivem Push (Hetzner) holt Bot-Updates per
+Long-Polling (`getUpdates`, 25 s, Offset in Setting `telegram_offset`). Statuswechsel eines
+Auftrags (Freigabe, Rückfrage, unterbrochen, fertig, Fehler) gehen als Nachricht mit
+Inline-Schaltflächen raus (`push.dialog.aktiv`, Vorgabe an): Freigeben · Mit Hinweis · Ganzer
+Plan · Nur Bericht / Ja · Nein · Antworten · Stopp / Fortsetzen · Verwerfen / PR erstellen ·
+Worktree aufräumen / Erneut in Eingang · Löschen. `callback_data` =
+`aktion:auftrag:ablauf:hmac16` (Schlüssel `COCKPIT_VAULT_KEY`, Ablauf 7 Tage). Jede gesendete
+Nachricht steht in `cockpit_telegram` (message_id → Auftrag): eine Telegram-*Antwort* auf die
+Nachricht ist die Antwort an den Agenten (Rückfrage → `--resume`/`exec resume`/`--conversation`)
+bzw. der Hinweis zur Freigabe. „Mit Hinweis“/„Antworten“ merken sich den nächsten Text
+(Setting `telegram_pending`, 30 min). Kommandos: /status, /auftraege, /neu <projekt> <text>
+(Claude, Plan mit Freigabe), /vorschlaege <projekt> (Codex, Bericht), /plan <id>, /stop <id>,
+/pause, /weiter, /hilfe. Whitelist: Chat-ID aus dem Vault, optional `push.dialog.erlaubte_user_ids`;
+Abgewiesenes im Audit-Log (`telegram.abgewiesen`), jede Aktion als `auftrag.<aktion>` mit
+`actor=telegram:<user_id>`. Kurzfassungen (`services/kurzfassung.py`) über das erste Modell der
+Konsolen-Whitelist (Qwen, `think=false`, ≤ 160 Tokens, 40 s), sonst die ersten 400 Zeichen.
+Claude-Läufe mit `permission_denials` im Ergebnis werden zur Rückfrage „Berechtigung verweigert
+für …“ statt still „fertig“. Migration 007.
