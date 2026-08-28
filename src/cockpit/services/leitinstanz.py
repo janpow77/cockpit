@@ -30,9 +30,31 @@ def ziel_url(basis: str, pfad: str, query: str | None) -> str:
     return f"{basis.rstrip('/')}{pfad}" + (f"?{query}" if query else "")
 
 
-def url_aus(cfg_leitinstanz: dict | None) -> str | None:
+HOP_HEADER = "X-Cockpit-Leitinstanz-Hop"
+
+
+def eigene_adresse(request_host: str | None, port: int | None = None) -> set[str]:
+    """Adressen, unter denen diese Instanz selbst erreichbar ist (für die Schleifenprüfung, rein)."""
+    aus = {f"{request_host}".strip().lower()} if request_host else set()
+    if port:
+        aus |= {f"127.0.0.1:{port}", f"localhost:{port}"}
+    return {a for a in aus if a}
+
+
+def zeigt_auf_sich(url: str, eigene: set[str]) -> bool:
+    """Zeigt die Leitinstanz auf diese Instanz? (rein, testbar) – sonst proxyt sich das Cockpit endlos selbst."""
+    ziel = url.split("://", 1)[-1].rstrip("/").lower()
+    return ziel in {e.rstrip("/").lower() for e in eigene}
+
+
+def url_aus(cfg_leitinstanz: dict | None, eigene: set[str] | None = None) -> str | None:
     url = str((cfg_leitinstanz or {}).get("url") or "").strip()
-    return url or None
+    if not url:
+        return None
+    if eigene and zeigt_auf_sich(url, eigene):
+        log.warning("Leitinstanz zeigt auf diese Instanz (%s) – Weiterleitung wird übersprungen", url)
+        return None
+    return url
 
 
 async def token_holen(basis: str, benutzer: str, passwort: str, *, erneuern: bool = False) -> str | None:
@@ -60,7 +82,7 @@ async def token_holen(basis: str, benutzer: str, passwort: str, *, erneuern: boo
 
 
 async def weiterleiten(basis: str, token: str, methode: str, pfad: str, query: str | None, body: bytes, content_type: str | None) -> httpx.Response:
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}", HOP_HEADER: "1"}
     if content_type:
         headers["Content-Type"] = content_type
     async with httpx.AsyncClient(timeout=httpx.Timeout(190.0, connect=8.0)) as client:

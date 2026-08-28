@@ -44,6 +44,25 @@ TASTATUREN: dict[str, list[list[tuple[str, str]]]] = {
     "fertig": [[("🔗 PR erstellen", "pr"), ("🧹 Worktree aufräumen", "aufraeumen")]],
     "fehler": [[("↩ Erneut in Eingang", "eingang"), ("🗑 Löschen", "loeschen")]],
 }
+# Aus welchem Status eine Schaltfläche wirken darf – alte Nachrichten (Ablauf 7 Tage) dürfen nichts Destruktives
+# auf einem inzwischen ganz anderen Zustand auslösen (z. B. „Löschen“ auf einem wieder laufenden Auftrag).
+ERLAUBTE_STATUS: dict[str, tuple[str, ...]] = {
+    "freigeben": ("freigabe",),
+    "hinweis": ("freigabe",),
+    "bericht": ("freigabe",),
+    "plan": ("freigabe", "rueckfrage", "fertig", "unterbrochen", "fehler", "abgebrochen"),
+    "ja": ("rueckfrage",),
+    "nein": ("rueckfrage",),
+    "antworten": ("rueckfrage", "freigabe", "fertig", "unterbrochen", "fehler"),
+    "stopp": ("laeuft",),
+    "fortsetzen": ("unterbrochen",),
+    "verwerfen": ("unterbrochen", "fehler", "rueckfrage"),
+    "pr": ("fertig", "rueckfrage"),
+    "aufraeumen": ("fertig", "fehler", "abgebrochen"),
+    "eingang": ("fertig", "fehler", "abgebrochen", "rueckfrage", "freigabe", "unterbrochen"),
+    "loeschen": ("fertig", "fehler", "abgebrochen"),
+}
+
 SYMBOLE = {"freigabe": "📋", "rueckfrage": "❓", "unterbrochen": "⏸", "fertig": "✅", "fehler": "🔴", "abgebrochen": "⏹"}
 HILFE = (
     "Cockpit-Kommandos:\n"
@@ -285,6 +304,9 @@ def _pending_setzen(session: Session, chat_id: str, eintrag: dict | None) -> Non
 
 async def _aktion(session: Session, cfg: wc.WallConfig, aktion: str, a, token: str, chat_id: str, user: str) -> str:
     """Schaltfläche ausführen; liefert die Kurzantwort für answerCallbackQuery / Bestätigung."""
+    erlaubt = ERLAUBTE_STATUS.get(aktion)
+    if erlaubt is not None and a.status not in erlaubt:
+        return f"Nicht möglich: Auftrag ist »{a.status}« (erlaubt: {', '.join(erlaubt)})"
     bins = _bins(cfg)
     try:
         if aktion == "freigeben":
@@ -329,6 +351,8 @@ async def _aktion(session: Session, cfg: wc.WallConfig, aktion: str, a, token: s
         elif aktion == "pr":
             if a.pr_url:
                 return f"PR existiert: {a.pr_url}"
+            if a.pruefung_ok != 1:
+                return "PR gesperrt: " + ("Prüfung ist rot" if a.pruefung_ok == 0 else "keine Prüfung gelaufen") + " – im Kanban prüfen lassen"
             a = await asyncio.to_thread(svc.pr_erstellen, session, a)
             antwort = f"PR angelegt: {a.pr_url}" if a.pr_url else f"PR nicht angelegt: {(a.fehler or '')[:120]}"
         elif aktion == "aufraeumen":

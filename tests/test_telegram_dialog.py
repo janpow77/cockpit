@@ -50,3 +50,9 @@ def test_kurzfassung_fallback():
     assert kurzfassung.fallback("a  b\n c", 10) == "a b c"
     lang = "x" * 500
     assert kurzfassung.fallback(lang, 100).endswith("…") and len(kurzfassung.fallback(lang, 100)) == 100
+
+
+def test_erlaubte_status_je_aktion():
+    assert td.ERLAUBTE_STATUS["loeschen"] == ("fertig", "fehler", "abgebrochen")
+    assert "laeuft" not in td.ERLAUBTE_STATUS["loeschen"] and "laeuft" not in td.ERLAUBTE_STATUS["aufraeumen"]
+    assert td.ERLAUBTE_STATUS["freigeben"] == ("freigabe",) and td.ERLAUBTE_STATUS["stopp"] == ("laeuft",)

@@ -159,17 +159,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+def cfg_port(_cfg) -> int | None:
+    """Eigener Port für die Schleifenprüfung der Leitinstanz (COCKPIT_PORT, sonst 7843)."""
+    try:
+        return int(os.environ.get("COCKPIT_PORT") or 7843)
+    except ValueError:
+        return 7843
+
+
 class LeitinstanzMiddleware(BaseHTTPMiddleware):
     """Reicht /admin/api/auftraege an die Leitinstanz durch (Einstellung leitinstanz.url), nach lokaler Anmeldeprüfung."""
 
     async def dispatch(self, request: Request, call_next):
         if not leitinstanz.betrifft(request.url.path):
             return await call_next(request)
+        if request.headers.get(leitinstanz.HOP_HEADER):
+            return await call_next(request)  # kommt bereits von einer weiterleitenden Instanz – nicht erneut proxen
         factory = get_session_factory()
         session = factory()
         try:
             cfg = wc.load(session)
-            basis = leitinstanz.url_aus(cfg.leitinstanz)
+            eigene = leitinstanz.eigene_adresse(request.headers.get("host"), cfg_port(cfg))
+            basis = leitinstanz.url_aus(cfg.leitinstanz, eigene)
             if not basis:
                 return await call_next(request)
             tok = auth._extract_token(request)

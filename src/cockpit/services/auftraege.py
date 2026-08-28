@@ -70,7 +70,8 @@ PROFILE: dict[str, str] = {
     # Nur lesen und analysieren
     "lesen": (
         "--permission-mode dontAsk --allowedTools 'Read,Grep,Glob,Bash(git diff *),Bash(git log *),Bash(git status *),"
-        "Bash(git show *),Bash(git blame *),Bash(rg *),Bash(gh pr *),Bash(gh issue *),Bash(gh run *),Bash(gh api *),Bash(gh repo view *),"
+        "Bash(git show *),Bash(git blame *),Bash(rg *),Bash(gh pr list *),Bash(gh pr view *),Bash(gh pr diff *),Bash(gh pr checks *),"
+        "Bash(gh issue list *),Bash(gh issue view *),Bash(gh run list *),Bash(gh run view *),Bash(gh repo view *),"
         "Bash(graphify *),mcp__graphify'"
     ),
     # Dateien aendern
@@ -249,10 +250,10 @@ def status_nach_erfolg(a: AuftragRow, ergebnis: str | None) -> str:
 
 def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool, pfade: dict[str, str]) -> str:
     """Der eigentliche Agentenaufruf im Worktree (rein, testbar). Ausgabe als JSON-Zeilen ins Protokoll."""
-    prompt = f'"$(cat {pfade["prompt"]})"'
+    prompt = f'"$(cat {shlex.quote(pfade["prompt"])})"'
     profil = effektives_profil(a)
     if a.agent == "codex":
-        bin_ = bins.get("codex", "codex")
+        bin_ = shlex.quote(bins.get("codex", "codex"))
         sandbox = bins.get("codex_sandbox")
         if resume and a.session_id:
             # Nach hartem Abbruch hält Codex eine Schreibsperre auf den Thread (~/.codex/thread-writer-locks) –
@@ -261,7 +262,7 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
             return f"{sperre}{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json --skip-git-repo-check {codex_flags(profil, sandbox, True)}"
         return f"{bin_} exec {prompt} --json {codex_flags(profil, sandbox, False)} --skip-git-repo-check"
     if a.agent == "gemini":
-        bin_ = bins.get("gemini", "gemini")
+        bin_ = shlex.quote(bins.get("gemini", "gemini"))
         if bin_.rstrip("/").rsplit("/", 1)[-1] == "agy":
             # Antigravity CLI (Google-Abo): agy -p … --output-format stream-json, Fortsetzung über --conversation <id>
             flags = PROFILE_AGY.get(profil, PROFILE_AGY["bearbeiten"])
@@ -271,7 +272,7 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
         flags = PROFILE_GEMINI.get(profil, PROFILE_GEMINI["bearbeiten"])
         resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
         return f"{bin_} -p {prompt} -o stream-json {flags} {resume_flag}".strip()
-    bin_ = bins.get("claude", "claude")
+    bin_ = shlex.quote(bins.get("claude", "claude"))
     flags = PROFILE.get(profil, PROFILE["bearbeiten"])
     resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
     max_turns = MAX_TURNS_PROFIL.get(profil, MAX_TURNS)
@@ -288,7 +289,7 @@ def start_befehl(a: AuftragRow, *, bins: dict[str, str] | None = None, resume: b
         text = f"Arbeitsverzeichnis (Git-Worktree, Branch {branch}): {p['worktree']}\nAlle Änderungen ausschließlich dort, nie außerhalb.\n\n{text}"
     lauf = agent_befehl(a, bins=bins or {}, text=text, resume=resume, pfade=p)
     wt = shlex.quote(p["worktree"])
-    lauf_hinten = f"{lauf} > {p['log']} 2> {p['stderr']}; echo $? > {p['done']}"
+    lauf_hinten = f"{lauf} > {shlex.quote(p['log'])} 2> {shlex.quote(p['stderr'])}; echo $? > {shlex.quote(p['done'])}"
     teile = [
         f"mkdir -p {shlex.quote(p['basis'])}",
         f"cd {shlex.quote(a.projekt)}",
@@ -368,7 +369,8 @@ def abschluss_befehl(a: AuftragRow) -> str:
     ausnahmen = " ".join(shlex.quote(f":!{x}") for x in HOOK_ARTEFAKTE)
     zuruecksetzen = " ".join(shlex.quote(x) for x in HOOK_ARTEFAKTE)
     return (
-        f"cd {shlex.quote(p['worktree'])} && git checkout -q -- {zuruecksetzen} 2>/dev/null; git add -A -- . {ausnahmen} && "
+        f"cd {shlex.quote(p['worktree'])} && [ \"$(git rev-parse --show-toplevel 2>/dev/null)\" = {shlex.quote(p['worktree'])} ] && "
+        f"{{ git checkout -q -- {zuruecksetzen} 2>/dev/null || true; }} && git add -A -- . {ausnahmen} && "
         f"(git diff --cached --quiet || git -c core.hooksPath=/dev/null -c user.name=cockpit -c user.email=cockpit@flowaudit.de commit -q -m {shlex.quote(msg)}) ; "
         "echo \"COMMITS=$(git rev-list --count HEAD ^$(git merge-base HEAD $(git rev-parse --abbrev-ref HEAD@{upstream} 2>/dev/null || echo master) 2>/dev/null || echo HEAD) 2>/dev/null)\"; "
         "echo \"HEAD=$(git rev-parse --short HEAD)\"; "
@@ -717,7 +719,26 @@ def agent_aufloesen(session: Session, a: AuftragRow, *, bins: dict[str, str], au
     return aendern(session, a, agent=agent, agent_auto=1, agent_grund=f"{typ}: {grund}")
 
 
+def anspruch_nehmen(session: Session, a: AuftragRow, *, resume: bool = False) -> bool:
+    """Atomar auf »laeuft« setzen – nur einer von Runner, Web und Telegram darf denselben Auftrag starten (rein DB-seitig)."""
+    from sqlalchemy import update
+
+    erlaubt = ("eingang", "geplant", "unterbrochen", "fehler", "abgebrochen") if not resume else ("freigabe", "rueckfrage", "fertig", "unterbrochen", "fehler", "laeuft")
+    res = session.execute(
+        update(AuftragRow).where(AuftragRow.id == a.id, AuftragRow.status.in_(erlaubt)).values(status="laeuft", aktualisiert=_iso())
+    )
+    session.commit()
+    if res.rowcount != 1:
+        session.refresh(a)
+        return False
+    session.refresh(a)
+    return True
+
+
 def starten(session: Session, a: AuftragRow, *, bins: dict[str, str], resume: bool = False, nachfrage: str | None = None, auslastung: dict | None = None) -> AuftragRow:
+    if not anspruch_nehmen(session, a, resume=resume):
+        log.info("Auftrag %s: Start übersprungen, Status ist %s (anderer Starter war schneller)", a.id, a.status)
+        return a
     a = agent_aufloesen(session, a, bins=bins, auslastung=auslastung)
     host = host_fuer(session, a.host)
     if host is None:
@@ -753,19 +774,22 @@ def stoppen(session: Session, a: AuftragRow) -> AuftragRow:
 PRUEFUNG_ZEITLIMIT_S = 900
 PRUEFUNG_STANDARD: dict[str, list[str]] = {
     # Erkennung über Manifestdateien, wenn keine .cockpit.yaml vorliegt
-    "pyproject.toml": ["ruff check . || true", "python3 -m pytest -q"],
+    "pyproject.toml": ["ruff check .", "python3 -m pytest -q"],
     "backend/requirements.txt": ["cd backend && python3 -m pytest -q"],
     "frontend/package.json": ["cd frontend && npm run type-check && npm run build"],
     "package.json": ["npm run build"],
 }
 
 
-def pruefung_lesen_befehl(a: AuftragRow) -> str:
-    """Liest .cockpit.yaml (falls vorhanden) und meldet vorhandene Manifestdateien – für die Wahl der Prüfbefehle."""
+def pruefung_lesen_befehl(a: AuftragRow, basis: str = "master") -> str:
+    """Prüfbefehle stammen aus dem Basis-Commit (`git show <basis>:.cockpit.yaml`), nicht aus dem Worktree –
+    sonst könnte ein Schreibagent seine eigenen Prüfbefehle setzen und beliebige Host-Kommandos auslösen."""
     p = _lauf_pfade(a)
     wt = shlex.quote(p["worktree"])
     return (
-        f"cd {wt} && echo '---COCKPIT_YAML---'; cat .cockpit.yaml 2>/dev/null; echo '---MANIFESTE---'; "
+        f"cd {wt} && echo '---COCKPIT_YAML---'; "
+        f"(git show {shlex.quote(basis)}:.cockpit.yaml 2>/dev/null || git show origin/{shlex.quote(basis)}:.cockpit.yaml 2>/dev/null || git show main:.cockpit.yaml 2>/dev/null); "
+        "echo '---MANIFESTE---'; "
         "for f in pyproject.toml backend/requirements.txt frontend/package.json package.json .github/workflows; do [ -e \"$f\" ] && echo \"$f\"; done; "
         "echo '---PYTEST---'; (ls tests 2>/dev/null | head -1 || ls backend/tests 2>/dev/null | head -1)"
     )
@@ -851,7 +875,7 @@ def pr_befehl(a: AuftragRow, basis: str, titel: str, body_pfad: str) -> str:
     p = _lauf_pfade(a)
     branch = a.branch or f"auftrag/{a.id}"
     return (
-        f"cd {shlex.quote(p['worktree'])} && git push -u origin {shlex.quote(branch)} 2>&1 | tail -n 2; "
+        f"cd {shlex.quote(p['worktree'])} && git push -u origin {shlex.quote(branch)} 2>&1 | tail -n 2 && "
         f"gh pr create --base {shlex.quote(basis)} --head {shlex.quote(branch)} --title {shlex.quote(titel[:200])} --body-file {shlex.quote(body_pfad)} 2>&1 | tail -n 3"
     )
 
@@ -979,6 +1003,8 @@ def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None
     # Aenderungen committen (Profil lesen: nichts zu committen)
     try:
         ab = run_on_host(host, abschluss_befehl(a), timeout=40)
+        if not (ab.stdout or "").strip():
+            felder["fehler"] = "Abschluss im Worktree fehlgeschlagen (kein Ergebnis) – Änderungen ggf. nicht committet"
         kopf = re.search(r"HEAD=(\w+)", ab.stdout or "")
         felder["letzte_zeile"] = (ab.stdout or "").strip().splitlines()[-1][:200] if (ab.stdout or "").strip() else "fertig"
         if kopf and github_url:

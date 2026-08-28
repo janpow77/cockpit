@@ -146,7 +146,8 @@ def test_vorschlaege_aus_ergebnis():
 
 def test_lesen_profil_erlaubt_gh_und_graphify():
     cmd = svc.start_befehl(_auftrag(profil="lesen"), bins={})
-    assert "Bash(gh pr *)" in cmd and "mcp__graphify" in cmd and "dangerously" not in cmd
+    assert "Bash(gh pr list *)" in cmd and "mcp__graphify" in cmd and "dangerously" not in cmd
+    assert "Bash(gh api *)" not in cmd and "Bash(gh issue *)" not in cmd  # keine mutierenden gh-Aufrufe im Leseprofil
 
 
 def test_vorlagen_vollstaendig():
@@ -314,3 +315,20 @@ def test_claude_md_kontext_nur_fuer_codex_und_agy():
     claude = svc.start_befehl(_auftrag(agent="claude"), bins={})
     assert "[ 1 = 1 ] && [ -f /home/janpow/Projekte/x/.cockpit-auftraege/wt-a_test1/CLAUDE.md ]" in codex and "head -c 4000" in codex
     assert "[ 0 = 1 ]" in claude
+
+
+def test_pruefbefehle_aus_basis_commit():
+    cmd = svc.pruefung_lesen_befehl(_auftrag(), "main")
+    assert "git show main:.cockpit.yaml" in cmd and "cat .cockpit.yaml" not in cmd
+
+
+def test_startbefehl_quotet_pfade_und_programme():
+    a = _auftrag(projekt="/home/janpow/Mein Projekt")
+    cmd = svc.start_befehl(a, bins={"claude": "/pfad mit leer/claude"})
+    assert "'/pfad mit leer/claude'" in cmd
+    assert "'/home/janpow/Mein Projekt/.cockpit-auftraege/a_test1/lauf.jsonl'" in cmd
+
+
+def test_abschluss_prueft_worktree():
+    cmd = svc.abschluss_befehl(_auftrag())
+    assert "rev-parse --show-toplevel" in cmd and "; git add" not in cmd

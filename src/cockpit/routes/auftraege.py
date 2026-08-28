@@ -85,6 +85,10 @@ class Aufraeumen(BaseModel):
     branch_loeschen: bool = False
 
 
+class PrAnfrage(BaseModel):
+    trotz_roter_pruefung: bool = False
+
+
 def _projekt_name(pfad: str) -> str:
     return pfad.rstrip("/").rsplit("/", 1)[-1]
 
@@ -348,13 +352,16 @@ async def pruefen(auftrag_id: str, _=Depends(require_auth), session: Session = D
 
 
 @router.post("/{auftrag_id}/pr")
-async def pr_erstellen(auftrag_id: str, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+async def pr_erstellen(auftrag_id: str, req: PrAnfrage | None = None, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     """Pull Request anlegen (Branch pushen, gh pr create). Das Cockpit mergt nie."""
     a = svc.holen(session, auftrag_id)
     if a is None:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
     if a.status not in ("fertig", "rueckfrage") or not a.branch:
         raise HTTPException(status_code=409, detail="PR nur für beendete Aufträge mit Branch")
+    if a.pruefung_ok != 1 and not (req and req.trotz_roter_pruefung):
+        grund = "Prüfung ist rot" if a.pruefung_ok == 0 else "keine Prüfung gelaufen"
+        raise HTTPException(status_code=409, detail=f"PR gesperrt: {grund}. Erst prüfen lassen – oder ausdrücklich mit »trotz_roter_pruefung« anfordern.")
     if a.pr_url:
         raise HTTPException(status_code=409, detail=f"PR existiert bereits: {a.pr_url}")
     a = await asyncio.to_thread(svc.pr_erstellen, session, a)

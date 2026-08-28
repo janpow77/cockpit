@@ -659,3 +659,32 @@ tmux-Sitzung `arbeit`; `agent_hosts = [nuc, janpow-ai]`. flow-agent dort neu enr
 Systemdienst, Rolle gpu-server, keine Unauthorized-Meldungen), Ollama an `100.114.73.106:11434`
 gebunden, ai-router-Spoke `janpow-ai` grün, beide GPUs im Pool. Testauftrag (Codex, Bericht über
 flow-agent) in 42 s fertig.
+
+## 23. Codex-Prüfung der Auftragsfunktionen (v0.5.1, 29.08.2026)
+
+Auftrag `a_2b2f0c41f2` (Codex, nur Bericht, 348 s) prüfte Aufträge, Runner, Telegram-Dialog,
+Agentenwahl, Leitinstanz und Routen. Behoben:
+
+- **Leseprofil war nicht schreibgeschützt (Teil):** Claudes `lesen`-Whitelist erlaubte
+  `gh api *`, `gh pr *`, `gh issue *` – also auch mutierende Aufrufe. Jetzt nur noch
+  `gh pr list|view|diff|checks`, `gh issue list|view`, `gh run list|view`, `gh repo view`.
+- **Quoting:** Prompt-, Protokoll- und Programmpfade werden durchgängig `shlex.quote`t –
+  Projektpfade mit Leerzeichen brachen den Start, Metazeichen wären Shell-Code gewesen.
+- **Vertrauensgrenze `.cockpit.yaml`:** Prüfbefehle kommen jetzt aus dem Basis-Commit
+  (`git show <basis>:.cockpit.yaml`), nicht aus dem Worktree – ein Schreibagent konnte sonst
+  seine eigenen Prüfbefehle setzen und damit beliebige Host-Kommandos auslösen.
+- **Doppelter Start:** `anspruch_nehmen()` setzt den Auftrag atomar per `UPDATE … WHERE status IN (…)`
+  auf `laeuft`; Runner, Web und Telegram können nicht mehr denselben Worktree doppelt starten.
+- **Alte Telegram-Schaltflächen:** `ERLAUBTE_STATUS` je Aktion – „Löschen“/„Aufräumen“ wirken nicht
+  mehr auf einen inzwischen laufenden Auftrag.
+- **Leitinstanz-Schleife:** `zeigt_auf_sich()` plus Hop-Header `X-Cockpit-Leitinstanz-Hop`.
+- **Abschluss-Commit:** `cd` und `git add` sind verkettet und der Worktree wird geprüft
+  (`rev-parse --show-toplevel`); leeres Ergebnis wird als Fehler vermerkt.
+- **Qualitätstor ernst genommen:** `ruff check .` ohne `|| true`; PR nur bei grüner Prüfung –
+  sonst 409 mit Begründung (Übersteuerung nur ausdrücklich, auch im Telegram-Knopf).
+- **Push und PR** strikt verkettet (`&&`), nicht mehr per Semikolon.
+
+Offen (dokumentiert, Entscheidung nötig): Codex/agy laufen im Leseprofil technisch nicht
+schreibgeschützt, solange die bwrap-Sandbox auf dem NUC fehlt (Arbeitspaket E); `node_modules`/`.venv`
+sind aus dem Hauptrepo verlinkt (parallele Läufe teilen sich diese Verzeichnisse); `stoppen()` meldet
+Erfolg auch ohne bestätigten Prozesstod; Basisbranch ist in `diff_url` weiterhin `master`.
