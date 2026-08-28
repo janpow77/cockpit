@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -43,8 +43,11 @@ def kapazitaet(session: Session, stand: dict | None = None) -> dict:
     a = _auslastung(stand)
     maximal, grund = svc.parallel_max(a["claude_5h"], a["claude_woche"], basis=int(cfg.auftrag_parallel))
     laufend = sum(1 for x in svc.liste(session) if x.status == "laeuft")
+    angehalten = bool(wc.read_setting(session, "runner_angehalten", False))
+    if angehalten:
+        maximal, grund = 0, "Runner angehalten"
     return {
-        "parallel_max": maximal, "laufend": laufend, "pause_grund": grund,
+        "parallel_max": maximal, "laufend": laufend, "pause_grund": grund, "angehalten": angehalten,
         "fuenf_stunden_pct": a["claude_5h"], "woche_pct": a["claude_woche"], "codex_woche_pct": a["codex_woche"],
     }
 
@@ -59,8 +62,8 @@ async def _pushen(session: Session, a, cfg: wc.WallConfig) -> None:
     chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
     if not token or not chat_id:
         return
-    symbol = {"fertig": "✅", "rueckfrage": "❓", "freigabe": "📋", "fehler": "🔴", "abgebrochen": "⏹"}.get(a.status, "•")
-    label = {"freigabe": "Plan liegt vor – Freigabe im Kanban", "rueckfrage": "Rückfrage"}.get(a.status, a.status)
+    symbol = {"fertig": "✅", "rueckfrage": "❓", "freigabe": "📋", "unterbrochen": "⏸", "fehler": "🔴", "abgebrochen": "⏹"}.get(a.status, "•")
+    label = {"freigabe": "Plan liegt vor – Freigabe im Kanban", "rueckfrage": "Rückfrage", "unterbrochen": "unterbrochen – Fortsetzen im Kanban"}.get(a.status, a.status)
     zeilen = [f"{symbol} Auftrag {label}: {a.titel}", f"{a.agent} · {a.projekt_name} auf {a.host}"]
     if a.dauer_s:
         zeilen.append(f"Dauer {a.dauer_s // 60} min {a.dauer_s % 60} s" + (f" · {a.kosten_usd:.2f} $" if a.kosten_usd else ""))
@@ -109,20 +112,38 @@ def vorschlagslaeufe_planen(session: Session, cfg: wc.WallConfig, stand: dict | 
     return n
 
 
+_runden = 0
+
+
 async def runde() -> None:
+    global _runden
     from . import wall_loop
 
+    _runden += 1
     factory = get_session_factory()
     session = factory()
     try:
         cfg = wc.load(session)
+        # 0. GitHub-Checks offener PRs nachziehen (alle 5 Runden ≈ 100 s)
+        if _runden % 5 == 1:
+            for a in [x for x in svc.liste(session) if x.pr_url and x.status == "fertig" and (x.pr_checks or "").find("rot") < 0]:
+                host = svc.host_fuer(session, a.host)
+                if host is None:
+                    continue
+                try:
+                    res = await asyncio.to_thread(svc.run_on_host, host, svc.pr_checks_befehl(a), 40)
+                    kurz = svc.pr_checks_kurz(res.stdout or "")
+                    if kurz != a.pr_checks:
+                        svc.aendern(session, a, pr_checks=kurz)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("PR-Checks %s: %s", a.id, exc)
         stand = wall_loop.letzter_stand()
         github_url = None
         # 1. laufende Aufträge nachsehen
         for a in [x for x in svc.liste(session) if x.status == "laeuft"]:
             vorher = a.status
             repo_url = next((r.get("html_url") for r in ((stand or {}).get("github") or {}).get("repos") or [] if r.get("name") == a.projekt_name), None)
-            a = await asyncio.to_thread(svc.stand_pruefen, session, a, repo_url or github_url)
+            a = await asyncio.to_thread(svc.stand_pruefen, session, a, repo_url or github_url, int(cfg.auftrag_max_dauer_min) * 60)
             if a.status != vorher:
                 log.info("Auftrag %s: %s → %s", a.id, vorher, a.status)
                 if a.status == "fertig" and svc.ist_vorschlagslauf(a):
@@ -130,6 +151,20 @@ async def runde() -> None:
                     if n:
                         a = svc.aendern(session, a, ergebnis=f"{n} Vorschläge in den Eingang gelegt.\n\n{a.ergebnis or ''}")
                 await _pushen(session, a, cfg)
+        # 1a. alte Worktrees aufräumen (fertig/fehler/abgebrochen älter als N Tage)
+        try:
+            grenze = datetime.now(UTC).timestamp() - int(cfg.auftrag_aufraeumen_tage) * 86400
+            for a in svc.liste(session):
+                if a.status in ("fertig", "fehler", "abgebrochen") and a.worktree and a.beendet:
+                    try:
+                        alt = datetime.fromisoformat(a.beendet.replace("Z", "+00:00")).timestamp() < grenze
+                    except ValueError:
+                        alt = False
+                    if alt:
+                        await asyncio.to_thread(svc.aufraeumen, session, a)
+                        log.info("Auftrag %s: Worktree nach %d Tagen aufgeräumt", a.id, int(cfg.auftrag_aufraeumen_tage))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Aufräumen: %s", exc)
         # 1b. wöchentliche Vorschlagsläufe für aktive Projekte einplanen
         try:
             vorschlagslaeufe_planen(session, cfg, stand)
@@ -138,7 +173,7 @@ async def runde() -> None:
         # 2. freie Kapazität füllen
         kap = kapazitaet(session, stand)
         frei = kap["parallel_max"] - kap["laufend"]
-        if frei <= 0:
+        if frei <= 0 or kap.get("angehalten"):
             return
         tz = ZoneInfo(str((cfg.push or {}).get("zeitzone") or "Europe/Berlin"))
         jetzt = datetime.now(tz)

@@ -528,3 +528,31 @@ auf dem Hetzner-Cockpit (`push.aktiv=false` auf NUC und janpow-ai, `push.instanz
 aufeinanderfolgenden Läufen gemeldet, die Entwarnung erst nach ebenso vielen Läufen ohne den
 Alarm; Zähler in Setting `alerts_zaehler`, gemeldete Schlüssel weiter in `alerts_state`.
 Ruhezeit: zurückgehaltene Warnungen gelten als bestätigt und gehen morgens gesammelt raus.
+
+## 18. Ausbaukonzept, Phase 1 und 3 (v0.4.17, 28.08.2026)
+
+Konzept: https://claude.ai/code/artifact/3ba85022-812c-45fc-91b1-6b4065dc9522 (sechs
+Arbeitspakete; entschieden: immer PR, das Cockpit prüft, mergt aber nie).
+
+**Phase 1 – robuster Runner:** `stand_befehl` meldet zusätzlich `PID_LEBT` und `LOG_ALTER`;
+ohne Ende-Marke und ohne lebenden Prozess (Neustart des NUC) oder nach
+`auftrag_max_dauer_min` (90) gilt der Lauf als **unterbrochen** (Sitzungs-ID aus dem Protokoll
+gesichert, Worktree bleibt). „Fortsetzen“ (`POST /{id}/fortsetzen`) setzt die Sitzung mit
+`UNTERBROCHEN_PROMPT` fort (git status/diff prüfen, dort weitermachen), ohne Sitzung neuer Lauf
+im bestehenden Worktree. Zughöchstzahl je Profil (`MAX_TURNS_PROFIL`: lesen 40, bearbeiten 120,
+bearbeiten_tests/voll 150), agy `--print-timeout 45m`. Runner-Schalter
+(`POST /auftraege/runner {angehalten}`, Setting `runner_angehalten`): geplante Aufträge starten
+nicht, laufende laufen weiter – vor dem NUC-Aus. Aufräumen: `POST /{id}/aufraeumen`
+(Worktree, optional Branch) und automatisch nach `auftrag_aufraeumen_tage` (14) für
+fertig/fehler/abgebrochen.
+
+**Phase 3 – Qualitätstor und PR:** Nach jeder Umsetzung (nicht nach Bericht/Plan) führt
+`pruefen()` die Prüfbefehle im Worktree aus – aus `.cockpit.yaml` (`basis`, `pruefung: [...]`,
+`merge: pr`) oder per Erkennung (pyproject → ruff + pytest, backend/requirements.txt →
+pytest im backend, frontend/package.json → type-check + build), je Befehl 15 min Zeitlimit,
+Ergebnis als JSON in `pruefung` und `pruefung_ok` (Abzeichen auf der Karte). „PR erstellen“
+(`POST /{id}/pr`): Branch pushen, `gh pr create --base <basis>` mit Ergebnis und Prüfprotokoll
+als Beschreibung; `pr_url` an der Karte, GitHub-Checks per `gh pr checks` alle ~100 s als
+Kurzstand `pr_checks`. Das Cockpit mergt nie. `.cockpit.yaml` liegt im Cockpit-Repo und
+(uncommittet) im HPP-Repo. `act` (GitHub Actions lokal) ist auf dem NUC nicht installiert –
+optionaler Zusatz für Repos mit Workflows. Migration 006.

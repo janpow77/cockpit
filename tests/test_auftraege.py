@@ -13,7 +13,8 @@ from cockpit.services import auftrag_vorlagen
 def _auftrag(**kw):
     basis = dict(id="a_test1", titel="T", text="Prüfe das Repo", host="nuc", projekt="/home/janpow/Projekte/x",
                  projekt_name="x", agent="claude", profil="bearbeiten", prioritaet=3, zeitfenster="sofort",
-                 status="geplant", reihenfolge=10, branch=None, worktree=None, session_id=None, modus="umsetzen", freigegeben=None)
+                 status="geplant", reihenfolge=10, branch=None, worktree=None, session_id=None, modus="umsetzen", freigegeben=None,
+                 pruefung=None, pruefung_ok=None, pr_url=None, pr_checks=None, ergebnis=None)
     basis.update(kw)
     return SimpleNamespace(**basis)
 
@@ -49,6 +50,8 @@ def test_startbefehl_claude_ohne_bypass():
     assert "( nohup bash -c " in cmd and "& echo $! > " in cmd and cmd.rstrip().endswith("echo gestartet")
     assert "mkdir -p .git/info" in cmd
     assert "Arbeitsverzeichnis (Git-Worktree, Branch auftrag/a_test1)" in cmd
+    # node_modules/.venv des Hauptrepos werden in den Worktree verlinkt
+    assert "ln -s /home/janpow/Projekte/x/$d/$m" in cmd and "node_modules .venv venv" in cmd
 
 
 def test_startbefehl_lesen_nur_lesewerkzeuge():
@@ -65,6 +68,7 @@ def test_agentbefehl_codex_und_gemini():
     codex_r = svc.agent_befehl(_auftrag(agent="codex", session_id="thr_1"), bins=ww, text="x", resume=True, pfade=p)
     assert "exec resume thr_1" in codex_r and "-c sandbox_mode=workspace-write" in codex_r and "-c approval_policy=never" in codex_r
     assert " -s " not in codex_r and "--approve-for-me" not in codex_r  # exec resume kennt diese Flags nicht
+    assert 'thread-writer-locks/*thr_1*' in codex_r  # Schreibsperre eines toten Prozesses räumen
     codex_rl = svc.agent_befehl(_auftrag(agent="codex", profil="lesen", session_id="thr_1"), bins=ww, text="x", resume=True, pfade=p)
     assert "-c sandbox_mode=read-only" in codex_rl
     # Vorgabe auf dem NUC: bwrap unbrauchbar → ohne Isolierung, aber nie --dangerously-bypass-approvals-and-sandbox
@@ -228,3 +232,71 @@ def test_abschluss_ohne_hook_artefakte():
     assert "':!ARCHITEKTUR.md'" in cmd and "git checkout -q -- ARCHITEKTUR.md" in cmd
     assert "-c core.hooksPath=/dev/null" in cmd and "git add -A -- ." in cmd
     assert "keine Änderungen im Branch" in cmd and "git diff --shortstat master HEAD" in cmd
+
+
+def test_stand_werte_und_unterbrochen_erkennung():
+    roh = "DONE=\nPID_LEBT=0\nLOG_ALTER=125\n{\"type\":\"system\"}\n---STDERR---\n"
+    w = svc.stand_werte(roh)
+    assert w == {"done": None, "pid_lebt": False, "log_alter": 125}
+    w2 = svc.stand_werte("DONE=0\nPID_LEBT=1\nLOG_ALTER=3\n")
+    assert w2["done"] == "0" and w2["pid_lebt"] is True
+    cmd = svc.stand_befehl(_auftrag(), 30)
+    assert "PID_LEBT=" in cmd and "LOG_ALTER=" in cmd and "kill -0" in cmd
+
+
+def test_zeitlimits_je_agent_und_profil():
+    p = svc._lauf_pfade(_auftrag())
+    lesen = svc.agent_befehl(_auftrag(profil="lesen"), bins={}, text="x", resume=False, pfade=p)
+    umsetzung = svc.agent_befehl(_auftrag(profil="bearbeiten_tests"), bins={}, text="x", resume=False, pfade=p)
+    assert "--max-turns 40" in lesen and "--max-turns 150" in umsetzung
+    agy = svc.agent_befehl(_auftrag(agent="gemini"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
+    assert "--print-timeout 45m" in agy
+
+
+def test_aufraeumen_befehl():
+    cmd = svc.aufraeumen_befehl(_auftrag(branch="auftrag/a_test1"))
+    assert "git worktree remove --force" in cmd and "git worktree prune" in cmd and "branch -D" not in cmd
+    cmd2 = svc.aufraeumen_befehl(_auftrag(branch="auftrag/a_test1"), branch_loeschen=True)
+    assert "git branch -D auftrag/a_test1" in cmd2
+
+
+def test_fortsetzen_prompt_nach_unterbrechung():
+    a = _auftrag(session_id="sess-9", modus="plan_freigabe", freigegeben="2026-08-28T10:00:00Z", profil="bearbeiten_tests")
+    cmd = svc.start_befehl(a, bins={}, resume=True, nachfrage=svc.UNTERBROCHEN_PROMPT)
+    assert "--resume sess-9" in cmd and "unterbrochen" in cmd and "--permission-mode acceptEdits" in cmd
+
+
+def test_pruefbefehle_aus_cockpit_yaml_und_erkennung():
+    roh = "---COCKPIT_YAML---\nbasis: main\npruefung:\n  - PYTHONPATH=src python3 -m pytest -q\n  - ruff check src\nmerge: pr\n---MANIFESTE---\npyproject.toml\n---PYTEST---\ntest_x.py"
+    befehle, basis = svc.pruefbefehle_aus(roh)
+    assert basis == "main" and befehle == ["PYTHONPATH=src python3 -m pytest -q", "ruff check src"]
+    roh2 = "---COCKPIT_YAML---\n---MANIFESTE---\nbackend/requirements.txt\nfrontend/package.json\n---PYTEST---\n"
+    befehle2, basis2 = svc.pruefbefehle_aus(roh2)
+    assert basis2 == "master" and befehle2 == ["cd backend && python3 -m pytest -q", "cd frontend && npm run type-check && npm run build"]
+    assert svc.pruefbefehle_aus("")[0] == []
+
+
+def test_pruefung_auswerten():
+    befehle = ["pytest -q", "ruff check ."]
+    roh = "---PRUEF 0---\n3 passed\n---ENDE 0 rc=0 dauer=4---\n---PRUEF 1---\nE501 zu lang\n---ENDE 1 rc=1 dauer=1---\n"
+    erg, ok = svc.pruefung_auswerten(roh, befehle)
+    assert not ok and erg[0]["ok"] and erg[0]["dauer_s"] == 4 and not erg[1]["ok"] and "E501" in erg[1]["auszug"]
+    erg2, ok2 = svc.pruefung_auswerten("---PRUEF 0---\nok\n---ENDE 0 rc=0 dauer=2---\n", ["pytest -q"])
+    assert ok2
+    erg3, ok3 = svc.pruefung_auswerten("", ["pytest -q"])
+    assert not ok3 and "Zeitlimit" in erg3[0]["auszug"]
+    cmd = svc.pruefung_befehl(_auftrag(), befehle)
+    assert "timeout 900 bash -lc 'pytest -q'" in cmd and "---ENDE 1" in cmd
+
+
+def test_pr_befehl_und_body():
+    a = _auftrag(branch="auftrag/a_test1", ergebnis="Alles umgesetzt.", pruefung=json.dumps([{"befehl": "pytest -q", "ok": True, "dauer_s": 3}]))
+    cmd = svc.pr_befehl(a, "master", "README ergänzen", "/tmp/body.md")
+    assert "git push -u origin auftrag/a_test1" in cmd and "gh pr create --base master --head auftrag/a_test1" in cmd and "merge" not in cmd
+    body = svc.pr_body(a)
+    assert "Alles umgesetzt." in body and "✅ `pytest -q`" in body and "mergt aber nicht" in body
+
+
+def test_pr_checks_kurz():
+    assert svc.pr_checks_kurz("build\tpass\t1m2s\thttps://x\ntests\tfail\t30s\thttps://y\nlint\tpending\t0\thttps://z\n") == "1 grün · 1 rot · 1 läuft"
+    assert svc.pr_checks_kurz("no checks reported on the 'auftrag/x' branch\n") == "keine Checks"

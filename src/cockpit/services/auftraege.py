@@ -26,7 +26,7 @@ from .ssh_runner import run_on_host
 
 log = logging.getLogger(__name__)
 
-STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "freigabe", "fertig", "fehler", "abgebrochen")
+STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "freigabe", "unterbrochen", "fertig", "fehler", "abgebrochen")
 AGENTEN = ("claude", "codex", "gemini")
 # Modus: nur berichten/planen · Plan zeigen und erst nach Freigabe umsetzen · direkt umsetzen
 MODI = ("bericht", "plan_freigabe", "umsetzen")
@@ -84,7 +84,10 @@ PROFILE: dict[str, str] = {
     "voll": "--permission-mode auto",
 }
 ZEITFENSTER = ("sofort", "nachts", "nach_reset")
-MAX_TURNS = 80
+MAX_TURNS = 80  # Rückfalloption
+# Zughöchstzahl je Profil (Claude): Berichte kurz, Umsetzungen brauchen Luft
+MAX_TURNS_PROFIL: dict[str, int] = {"lesen": 40, "bearbeiten": 120, "bearbeiten_tests": 150, "voll": 150}
+AGY_PRINT_TIMEOUT = "45m"  # Vorgabe von agy wären 5 min – zu kurz für Umsetzungen
 LAUF_DIR = ".cockpit-auftraege"  # unterhalb des Projektverzeichnisses (gitignored per Runner)
 
 
@@ -107,6 +110,8 @@ def as_dict(a: AuftragRow) -> dict:
         "ergebnis": a.ergebnis, "fehler": a.fehler, "kosten_usd": a.kosten_usd,
         "tokens_in": a.tokens_in, "tokens_out": a.tokens_out, "turns": a.turns,
         "letzte_zeile": a.letzte_zeile, "diff_url": a.diff_url, "erstellt": a.erstellt, "aktualisiert": a.aktualisiert,
+        "pruefung": json.loads(a.pruefung) if a.pruefung else None, "pruefung_ok": (None if a.pruefung_ok is None else bool(a.pruefung_ok)),
+        "pr_url": a.pr_url, "pr_checks": a.pr_checks,
     }
 
 
@@ -249,7 +254,10 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
         bin_ = bins.get("codex", "codex")
         sandbox = bins.get("codex_sandbox")
         if resume and a.session_id:
-            return f"{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json --skip-git-repo-check {codex_flags(profil, sandbox, True)}"
+            # Nach hartem Abbruch hält Codex eine Schreibsperre auf den Thread (~/.codex/thread-writer-locks) –
+            # der Prozess ist nachweislich tot (unterbrochen), die Sperre darf weg, sonst „already has an active writer“
+            sperre = f"rm -f \"$HOME\"/.codex/thread-writer-locks/*{shlex.quote(a.session_id)}* 2>/dev/null; "
+            return f"{sperre}{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json --skip-git-repo-check {codex_flags(profil, sandbox, True)}"
         return f"{bin_} exec {prompt} --json {codex_flags(profil, sandbox, False)} --skip-git-repo-check"
     if a.agent == "gemini":
         bin_ = bins.get("gemini", "gemini")
@@ -258,14 +266,15 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
             flags = PROFILE_AGY.get(profil, PROFILE_AGY["bearbeiten"])
             resume_flag = f"--conversation {shlex.quote(a.session_id)}" if resume and a.session_id else ""
             # ohne --add-dir schreibt agy in sein eigenes Scratch-Verzeichnis statt in den Worktree
-            return f"{bin_} -p {prompt} --output-format stream-json {flags} --add-dir {shlex.quote(pfade['worktree'])} {resume_flag}".strip()
+            return f"{bin_} -p {prompt} --output-format stream-json --print-timeout {AGY_PRINT_TIMEOUT} {flags} --add-dir {shlex.quote(pfade['worktree'])} {resume_flag}".strip()
         flags = PROFILE_GEMINI.get(profil, PROFILE_GEMINI["bearbeiten"])
         resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
         return f"{bin_} -p {prompt} -o stream-json {flags} {resume_flag}".strip()
     bin_ = bins.get("claude", "claude")
     flags = PROFILE.get(profil, PROFILE["bearbeiten"])
     resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
-    return f"{bin_} -p {prompt} {flags} {resume_flag} --output-format stream-json --verbose --max-turns {MAX_TURNS}".replace("  ", " ")
+    max_turns = MAX_TURNS_PROFIL.get(profil, MAX_TURNS)
+    return f"{bin_} -p {prompt} {flags} {resume_flag} --output-format stream-json --verbose --max-turns {max_turns}".replace("  ", " ")
 
 
 def start_befehl(a: AuftragRow, *, bins: dict[str, str] | None = None, resume: bool = False, nachfrage: str | None = None) -> str:
@@ -287,6 +296,8 @@ def start_befehl(a: AuftragRow, *, bins: dict[str, str] | None = None, resume: b
         f"{{ [ -d {wt} ] || git worktree add -B {shlex.quote(branch)} {wt} >/dev/null 2>&1 || git worktree add {wt} {shlex.quote(branch)} >/dev/null 2>&1; }}",
         f"printf '%s' {shlex.quote(text)} > {shlex.quote(p['prompt'])}",
         f"rm -f {shlex.quote(p['done'])}",
+        # Abhängigkeiten des Hauptrepos in den Worktree verlinken (node_modules, .venv) – sonst scheitern Build, Tests und Qualitätstor
+        f"for d in . frontend backend; do for m in node_modules .venv venv; do [ -d {shlex.quote(a.projekt)}/$d/$m ] && [ ! -e {wt}/$d/$m ] && ln -s {shlex.quote(a.projekt)}/$d/$m {wt}/$d/$m 2>/dev/null; done; done; true",
         f"cd {wt}",
         # Start in einer Untershell, sonst löst das & die ganze &&-Kette in den Hintergrund; $! ist die PID der Hülle (Elternprozess des Agenten)
         f"( nohup bash -c {shlex.quote(lauf_hinten)} >/dev/null 2>&1 & echo $! > {shlex.quote(p['pid'])} )",
@@ -301,9 +312,43 @@ def stopp_befehl(a: AuftragRow) -> str:
 
 
 def stand_befehl(a: AuftragRow, zeilen: int = 60) -> str:
-    """Liefert done-Code (oder leer), dann die letzten Protokollzeilen."""
+    """Liefert done-Code (oder leer), ob der Prozess lebt, Alter des Protokolls, dann die letzten Protokollzeilen."""
     p = _lauf_pfade(a)
-    return f"echo \"DONE=$(cat {shlex.quote(p['done'])} 2>/dev/null)\"; tail -n {int(zeilen)} {shlex.quote(p['log'])} 2>/dev/null; echo '---STDERR---'; tail -n 5 {shlex.quote(p['stderr'])} 2>/dev/null"
+    return (
+        f"echo \"DONE=$(cat {shlex.quote(p['done'])} 2>/dev/null)\"; "
+        f"pid=$(cat {shlex.quote(p['pid'])} 2>/dev/null); echo \"PID_LEBT=$([ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null && echo 1 || echo 0)\"; "
+        f"echo \"LOG_ALTER=$(( $(date +%s) - $(stat -c %Y {shlex.quote(p['log'])} 2>/dev/null || date +%s) ))\"; "
+        f"tail -n {int(zeilen)} {shlex.quote(p['log'])} 2>/dev/null; echo '---STDERR---'; tail -n 5 {shlex.quote(p['stderr'])} 2>/dev/null"
+    )
+
+
+def stand_werte(roh: str) -> dict:
+    """DONE/PID_LEBT/LOG_ALTER aus der Stand-Ausgabe (rein, testbar)."""
+    out: dict = {"done": None, "pid_lebt": None, "log_alter": None}
+    m = re.search(r"^DONE=(\S*)$", roh, re.M)
+    if m and m.group(1):
+        out["done"] = m.group(1)
+    m = re.search(r"^PID_LEBT=([01])$", roh, re.M)
+    if m:
+        out["pid_lebt"] = m.group(1) == "1"
+    m = re.search(r"^LOG_ALTER=(\d+)$", roh, re.M)
+    if m:
+        out["log_alter"] = int(m.group(1))
+    return out
+
+
+def aufraeumen_befehl(a: AuftragRow, branch_loeschen: bool = False) -> str:
+    """Worktree entfernen (Branch bleibt bis zum Merge, außer ausdrücklich gewünscht)."""
+    p = _lauf_pfade(a)
+    branch = a.branch or f"auftrag/{a.id}"
+    teile = [
+        f"cd {shlex.quote(a.projekt)}",
+        f"git worktree remove --force {shlex.quote(p['worktree'])} 2>/dev/null; rm -rf {shlex.quote(p['worktree'])}; git worktree prune",
+    ]
+    if branch_loeschen:
+        teile.append(f"git branch -D {shlex.quote(branch)} 2>/dev/null")
+    teile.append("echo aufgeraeumt")
+    return " && ".join(teile[:1]) + " && " + "; ".join(teile[1:])
 
 
 # Dateien, die Commit-Hooks des Nutzers (graphify) im Worktree neu erzeugen – gehören nicht in den Abschluss-Commit
@@ -675,8 +720,193 @@ def stoppen(session: Session, a: AuftragRow) -> AuftragRow:
     return aendern(session, a, status="abgebrochen", beendet=_iso(), letzte_zeile="abgebrochen")
 
 
-def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None) -> AuftragRow:
-    """Protokoll des laufenden Auftrags lesen; bei Ende Ergebnis uebernehmen und committen."""
+# ---------------------------------------------------------------------------
+# Qualitätstor: Prüfbefehle des Projekts im Worktree (.cockpit.yaml oder Erkennung), danach PR per gh
+# ---------------------------------------------------------------------------
+
+PRUEFUNG_ZEITLIMIT_S = 900
+PRUEFUNG_STANDARD: dict[str, list[str]] = {
+    # Erkennung über Manifestdateien, wenn keine .cockpit.yaml vorliegt
+    "pyproject.toml": ["ruff check . || true", "python3 -m pytest -q"],
+    "backend/requirements.txt": ["cd backend && python3 -m pytest -q"],
+    "frontend/package.json": ["cd frontend && npm run type-check && npm run build"],
+    "package.json": ["npm run build"],
+}
+
+
+def pruefung_lesen_befehl(a: AuftragRow) -> str:
+    """Liest .cockpit.yaml (falls vorhanden) und meldet vorhandene Manifestdateien – für die Wahl der Prüfbefehle."""
+    p = _lauf_pfade(a)
+    wt = shlex.quote(p["worktree"])
+    return (
+        f"cd {wt} && echo '---COCKPIT_YAML---'; cat .cockpit.yaml 2>/dev/null; echo '---MANIFESTE---'; "
+        "for f in pyproject.toml backend/requirements.txt frontend/package.json package.json .github/workflows; do [ -e \"$f\" ] && echo \"$f\"; done; "
+        "echo '---PYTEST---'; (ls tests 2>/dev/null | head -1 || ls backend/tests 2>/dev/null | head -1)"
+    )
+
+
+def pruefbefehle_aus(roh: str) -> tuple[list[str], str]:
+    """Prüfbefehle und Basis-Branch aus der Ausgabe von pruefung_lesen_befehl (rein, testbar).
+
+    .cockpit.yaml: einfache Form ohne YAML-Bibliothek – Zeilen `basis: master` und unter `pruefung:` je `- befehl`.
+    """
+    yaml_teil = roh.split("---COCKPIT_YAML---", 1)[1].split("---MANIFESTE---", 1)[0] if "---COCKPIT_YAML---" in roh else ""
+    manifeste = roh.split("---MANIFESTE---", 1)[1].split("---PYTEST---", 1)[0].split() if "---MANIFESTE---" in roh else []
+    basis = "master"
+    befehle: list[str] = []
+    in_pruefung = False
+    for line in yaml_teil.splitlines():
+        st = line.strip()
+        if not st or st.startswith("#"):
+            continue
+        if st.startswith("basis:"):
+            basis = st.split(":", 1)[1].strip().strip("'\"") or basis
+            in_pruefung = False
+        elif st.startswith("pruefung:"):
+            in_pruefung = True
+        elif in_pruefung and st.startswith("- "):
+            befehle.append(st[2:].strip().strip("'\""))
+        elif not line.startswith((" ", "\t")):
+            in_pruefung = False
+    if not befehle:
+        for manifest, standard in PRUEFUNG_STANDARD.items():
+            if manifest in manifeste:
+                befehle.extend(standard)
+        if "backend/requirements.txt" in manifeste and "pyproject.toml" in manifeste:
+            befehle = [b for b in befehle if not b.startswith("python3 -m pytest")]
+    return befehle, basis
+
+
+def pruefung_befehl(a: AuftragRow, befehle: list[str]) -> str:
+    """Prüfbefehle nacheinander im Worktree ausführen; je Befehl Marker mit Exit-Code und Dauer, Ausgabe gekürzt."""
+    p = _lauf_pfade(a)
+    teile = [f"cd {shlex.quote(p['worktree'])}"]
+    for i, b in enumerate(befehle):
+        teile.append(
+            f"echo '---PRUEF {i}---'; s=$(date +%s); (timeout {PRUEFUNG_ZEITLIMIT_S} bash -lc {shlex.quote(b)}) 2>&1 | tail -n 25; "
+            f"rc=${{PIPESTATUS[0]}}; echo \"---ENDE {i} rc=$rc dauer=$(( $(date +%s) - s ))---\""
+        )
+    return " ; ".join(teile)
+
+
+def pruefung_auswerten(roh: str, befehle: list[str]) -> tuple[list[dict], bool]:
+    """Marker der Prüfausgabe → [{befehl, ok, dauer_s, auszug}], gesamt_ok (rein, testbar)."""
+    out: list[dict] = []
+    for i, b in enumerate(befehle):
+        m = re.search(rf"---PRUEF {i}---\n(.*?)---ENDE {i} rc=(\d+) dauer=(\d+)---", roh, re.S)
+        if not m:
+            out.append({"befehl": b, "ok": False, "dauer_s": None, "auszug": "keine Ausgabe (Zeitlimit oder Abbruch)"})
+            continue
+        auszug = m.group(1).strip()
+        out.append({"befehl": b, "ok": m.group(2) == "0", "dauer_s": int(m.group(3)), "auszug": auszug[-1200:]})
+    return out, bool(out) and all(x["ok"] for x in out)
+
+
+def pruefen(session: Session, a: AuftragRow) -> AuftragRow:
+    """Qualitätstor: Prüfbefehle im Worktree laufen lassen und Ergebnis an der Karte speichern (mergt nie)."""
+    host = host_fuer(session, a.host)
+    if host is None or not a.worktree:
+        return a
+    try:
+        roh = run_on_host(host, pruefung_lesen_befehl(a), timeout=20).stdout or ""
+        befehle, _basis = pruefbefehle_aus(roh)
+        if not befehle:
+            return aendern(session, a, pruefung=json.dumps([{"befehl": "–", "ok": True, "dauer_s": 0, "auszug": "keine Prüfbefehle gefunden (.cockpit.yaml oder Manifest)"}], ensure_ascii=False), pruefung_ok=None)
+        res = run_on_host(host, pruefung_befehl(a, befehle), timeout=PRUEFUNG_ZEITLIMIT_S * len(befehle) + 30)
+        ergebnisse, ok = pruefung_auswerten(res.stdout or "", befehle)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Auftrag %s Prüfung: %s", a.id, exc)
+        ergebnisse, ok = [{"befehl": "–", "ok": False, "dauer_s": None, "auszug": str(exc)[:300]}], False
+    return aendern(session, a, pruefung=json.dumps(ergebnisse, ensure_ascii=False), pruefung_ok=1 if ok else 0)
+
+
+def pr_befehl(a: AuftragRow, basis: str, titel: str, body_pfad: str) -> str:
+    """Branch pushen und PR per gh anlegen (Body aus Datei); liefert die PR-URL."""
+    p = _lauf_pfade(a)
+    branch = a.branch or f"auftrag/{a.id}"
+    return (
+        f"cd {shlex.quote(p['worktree'])} && git push -u origin {shlex.quote(branch)} 2>&1 | tail -n 2; "
+        f"gh pr create --base {shlex.quote(basis)} --head {shlex.quote(branch)} --title {shlex.quote(titel[:200])} --body-file {shlex.quote(body_pfad)} 2>&1 | tail -n 3"
+    )
+
+
+def pr_body(a: AuftragRow) -> str:
+    zeilen = [f"Auftrag `{a.id}` aus dem Cockpit-Kanban · Agent {a.agent} · Profil {a.profil}", "", "## Ergebnis des Agenten", "", (a.ergebnis or "–")[:6000], ""]
+    if a.pruefung:
+        try:
+            pr = json.loads(a.pruefung)
+        except ValueError:
+            pr = []
+        zeilen += ["## Prüfung im Worktree (Cockpit)", ""]
+        for x in pr:
+            zeilen.append(f"- {'✅' if x.get('ok') else '❌'} `{x.get('befehl')}`" + (f" ({x.get('dauer_s')} s)" if x.get("dauer_s") is not None else ""))
+        zeilen.append("")
+    zeilen.append("Das Cockpit prüft, mergt aber nicht – Merge nach Durchsicht auf GitHub.")
+    return "\n".join(zeilen)
+
+
+def pr_erstellen(session: Session, a: AuftragRow) -> AuftragRow:
+    """Pull Request per gh anlegen (Branch wird gepusht); nie mergen."""
+    host = host_fuer(session, a.host)
+    if host is None or not a.branch:
+        return aendern(session, a, fehler="Kein Host oder Branch für den PR")
+    p = _lauf_pfade(a)
+    body_pfad = f"{p['basis']}/pr_body.md"
+    try:
+        roh = run_on_host(host, pruefung_lesen_befehl(a), timeout=20).stdout or ""
+        _befehle, basis = pruefbefehle_aus(roh)
+        run_on_host(host, f"mkdir -p {shlex.quote(p['basis'])} && printf '%s' {shlex.quote(pr_body(a))} > {shlex.quote(body_pfad)}", timeout=20)
+        res = run_on_host(host, pr_befehl(a, basis, a.titel, body_pfad), timeout=120)
+        out = (res.stdout or "") + (res.stderr or "")
+        m = re.search(r"https://github\.com/\S+/pull/\d+", out)
+        if not m:
+            return aendern(session, a, fehler=f"PR nicht angelegt: {out.strip()[-300:]}")
+        return aendern(session, a, pr_url=m.group(0), fehler=None, letzte_zeile=f"PR {m.group(0).rsplit('/', 1)[-1]} angelegt")
+    except Exception as exc:  # noqa: BLE001
+        return aendern(session, a, fehler=f"PR nicht angelegt: {str(exc)[:300]}")
+
+
+def pr_checks_befehl(a: AuftragRow) -> str:
+    p = _lauf_pfade(a)
+    return f"cd {shlex.quote(a.projekt)} && gh pr checks {shlex.quote(a.pr_url or '')} 2>&1 | tail -n 12; cd {shlex.quote(p['worktree'])} 2>/dev/null; true"
+
+
+def pr_checks_kurz(roh: str) -> str:
+    """Ausgabe von `gh pr checks` → Kurzstand (rein, testbar): z. B. »2 grün · 1 rot · 1 läuft« oder »keine Checks«."""
+    gruen = rot = laeuft = 0
+    for line in roh.splitlines():
+        st = line.strip().lower()
+        if not st or st.startswith("no checks"):
+            continue
+        if "\tpass" in st or "\tsuccess" in st or " pass\t" in st or "✓" in st:
+            gruen += 1
+        elif "\tfail" in st or " fail\t" in st or "✗" in st or "\tfailure" in st:
+            rot += 1
+        elif "\tpending" in st or "queued" in st or "in_progress" in st or "*" in st.split("\t")[0]:
+            laeuft += 1
+    if not (gruen or rot or laeuft):
+        return "keine Checks"
+    teile = [f"{gruen} grün"] if gruen else []
+    if rot:
+        teile.append(f"{rot} rot")
+    if laeuft:
+        teile.append(f"{laeuft} läuft")
+    return " · ".join(teile)
+
+
+UNTERBROCHEN_PROMPT = (
+    "Der vorherige Lauf wurde unterbrochen (Neustart oder Zeitlimit). Prüfe zuerst den Stand im Worktree "
+    "(`git status`, `git diff`, letzte Commits) und setze die Arbeit am Auftrag genau dort fort, wo sie stehen geblieben ist. "
+    "Wiederhole nichts, was schon erledigt ist."
+)
+
+
+def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None, max_dauer_s: int | None = None) -> AuftragRow:
+    """Protokoll des laufenden Auftrags lesen; bei Ende Ergebnis uebernehmen und committen.
+
+    Ohne Ende-Marke und ohne lebenden Prozess (Neustart des Hosts) oder nach Überschreiten von
+    ``max_dauer_s`` gilt der Lauf als *unterbrochen* – Worktree und Sitzung bleiben, Fortsetzen ist möglich.
+    """
     host = host_fuer(session, a.host)
     if host is None:
         return a
@@ -686,17 +916,28 @@ def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None
         log.warning("Auftrag %s Stand: %s", a.id, exc)
         return a
     roh = res.stdout or ""
-    done = None
-    m = re.match(r"DONE=(\S*)", roh)
-    if m:
-        done = m.group(1) or None
+    werte = stand_werte(roh)
+    done = werte["done"]
     stderr_teil = roh.split("---STDERR---", 1)[1].strip() if "---STDERR---" in roh else ""
     zeilen = log_zeilen(roh, max_zeilen=3, agent=a.agent)
     letzte = zeilen[-1]["text"] if zeilen else a.letzte_zeile
     gestartet = datetime.fromisoformat(a.gestartet.replace("Z", "+00:00")) if a.gestartet else datetime.now(UTC)
     dauer = int((datetime.now(UTC) - gestartet).total_seconds())
     if done is None:
-        return aendern(session, a, letzte_zeile=(letzte or "")[:200], dauer_s=dauer)
+        sitzung = (ergebnis_aus_log(roh, agent=a.agent) or {}).get("session_id") or a.session_id
+        if werte["pid_lebt"] is False:
+            log.warning("Auftrag %s: Prozess verschwunden (Neustart?)", a.id)
+            return aendern(session, a, status="unterbrochen", session_id=sitzung, beendet=_iso(), dauer_s=dauer,
+                           fehler="Prozess verschwunden (Neustart des Hosts?) – Fortsetzen möglich", letzte_zeile="unterbrochen")
+        if max_dauer_s and dauer > max_dauer_s:
+            log.warning("Auftrag %s: Zeitlimit %d s überschritten – wird beendet", a.id, max_dauer_s)
+            try:
+                run_on_host(host, stopp_befehl(a), timeout=20)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Auftrag %s stoppen: %s", a.id, exc)
+            return aendern(session, a, status="unterbrochen", session_id=sitzung, beendet=_iso(), dauer_s=dauer,
+                           fehler=f"Zeitlimit von {max_dauer_s // 60} min überschritten – Fortsetzen möglich", letzte_zeile="Zeitlimit")
+        return aendern(session, a, letzte_zeile=(letzte or "")[:200], dauer_s=dauer, session_id=sitzung)
     # Lauf beendet
     erg = ergebnis_aus_log(roh, agent=a.agent) or {}
     felder: dict = {
@@ -721,7 +962,30 @@ def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None
     felder["status"] = status_nach_erfolg(a, felder.get("ergebnis"))
     if felder["status"] == "freigabe":
         felder["letzte_zeile"] = "Plan liegt vor – Freigabe im Kanban"
-    return aendern(session, a, **felder)
+    a = aendern(session, a, **felder)
+    # Qualitätstor: nach einer Umsetzung (nicht nach Bericht/Plan) die Prüfbefehle des Projekts im Worktree laufen lassen
+    if a.status == "fertig" and phase(a) == "umsetzung" and a.worktree:
+        a = pruefen(session, a)
+    return a
+
+
+def fortsetzen(session: Session, a: AuftragRow, *, bins: dict[str, str]) -> AuftragRow:
+    """Unterbrochenen Lauf fortsetzen: mit Sitzung per Resume, sonst neuer Lauf im bestehenden Worktree."""
+    a = aendern(session, a, fehler=None, beendet=None)
+    if a.session_id:
+        return starten(session, a, bins=bins, resume=True, nachfrage=UNTERBROCHEN_PROMPT)
+    return starten(session, a, bins=bins)
+
+
+def aufraeumen(session: Session, a: AuftragRow, *, branch_loeschen: bool = False) -> AuftragRow:
+    """Worktree (und optional Branch) auf dem Host entfernen; Karte bleibt mit Ergebnis erhalten."""
+    host = host_fuer(session, a.host)
+    if host is not None and (a.worktree or a.branch):
+        try:
+            run_on_host(host, aufraeumen_befehl(a, branch_loeschen=branch_loeschen), timeout=40)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Auftrag %s aufräumen: %s", a.id, exc)
+    return aendern(session, a, worktree=None, branch=None if branch_loeschen else a.branch, letzte_zeile="Worktree aufgeräumt" + (" · Branch gelöscht" if branch_loeschen else ""))
 
 
 def umsetzen(session: Session, a: AuftragRow, *, bins: dict[str, str], hinweis: str | None = None) -> AuftragRow:

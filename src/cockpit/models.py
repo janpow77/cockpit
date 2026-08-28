@@ -170,6 +170,10 @@ class AuftragRow(Base):
     turns = Column(Integer, nullable=True)
     letzte_zeile = Column(String, nullable=True)
     diff_url = Column(String, nullable=True)
+    pruefung = Column(Text, nullable=True)  # JSON: [{befehl, ok, dauer_s, auszug}] – Qualitätstor im Worktree
+    pruefung_ok = Column(Integer, nullable=True)  # 1 = alle Prüfbefehle grün, 0 = mindestens einer rot
+    pr_url = Column(String, nullable=True)
+    pr_checks = Column(String, nullable=True)  # Kurzstand der GitHub-Checks (gh pr checks)
     erstellt = Column(String, nullable=False)
     aktualisiert = Column(String, nullable=False)
 

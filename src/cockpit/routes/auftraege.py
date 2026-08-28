@@ -77,6 +77,14 @@ class Freigabe(BaseModel):
     hinweis: str | None = Field(default=None, max_length=4000)
 
 
+class RunnerSchalter(BaseModel):
+    angehalten: bool
+
+
+class Aufraeumen(BaseModel):
+    branch_loeschen: bool = False
+
+
 def _projekt_name(pfad: str) -> str:
     return pfad.rstrip("/").rsplit("/", 1)[-1]
 
@@ -213,7 +221,7 @@ async def aendern(auftrag_id: str, req: AuftragPatch, _=Depends(require_auth), s
     if "status" in felder:
         if a.status == "laeuft":
             raise HTTPException(status_code=409, detail="Laufender Auftrag – zuerst stoppen")
-        if felder["status"] in ("eingang", "geplant") and a.status in ("fertig", "fehler", "abgebrochen", "rueckfrage", "freigabe"):
+        if felder["status"] in ("eingang", "geplant") and a.status in ("fertig", "fehler", "abgebrochen", "rueckfrage", "freigabe", "unterbrochen"):
             felder.update({"beendet": None, "fehler": None, "freigegeben": None})
     if "text" in felder:
         felder["text"] = felder["text"].strip()
@@ -284,6 +292,75 @@ async def freigeben(auftrag_id: str, req: Freigabe | None = None, _=Depends(requ
     cfg = wc.load(session)
     a = await asyncio.to_thread(svc.umsetzen, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox}, hinweis=(req.hinweis if req else None))
     crud_audit.write(session, action="auftrag.freigabe", target=a.id, after={"status": a.status, "hinweis": (req.hinweis if req else None)})
+    return svc.as_dict(a)
+
+
+@router.post("/runner")
+async def runner_schalten(req: RunnerSchalter, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Runner anhalten (z. B. vor dem Herunterfahren des NUC) oder fortsetzen; laufende Aufträge laufen weiter."""
+    wc.write_setting(session, "runner_angehalten", bool(req.angehalten))
+    crud_audit.write(session, action="auftrag.runner", after={"angehalten": req.angehalten})
+    return runner.kapazitaet(session)
+
+
+@router.post("/{auftrag_id}/fortsetzen")
+async def fortsetzen(auftrag_id: str, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Unterbrochenen Lauf fortsetzen (Sitzung und Worktree bleiben)."""
+    a = svc.holen(session, auftrag_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
+    if a.status != "unterbrochen":
+        raise HTTPException(status_code=409, detail="Nur unterbrochene Aufträge lassen sich fortsetzen")
+    cfg = wc.load(session)
+    _agent_host_pruefen(cfg, a.host)
+    kap = runner.kapazitaet(session)
+    if kap["laufend"] >= kap["parallel_max"]:
+        raise HTTPException(status_code=409, detail=kap.get("pause_grund") or "Kapazität erschöpft – bitte später fortsetzen")
+    a = await asyncio.to_thread(svc.fortsetzen, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox})
+    crud_audit.write(session, action="auftrag.fortsetzen", target=a.id, after={"status": a.status})
+    return svc.as_dict(a)
+
+
+@router.post("/{auftrag_id}/aufraeumen")
+async def aufraeumen(auftrag_id: str, req: Aufraeumen | None = None, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Worktree des Auftrags entfernen (Branch bleibt, außer branch_loeschen)."""
+    a = svc.holen(session, auftrag_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
+    if a.status == "laeuft":
+        raise HTTPException(status_code=409, detail="Laufender Auftrag – zuerst stoppen")
+    a = await asyncio.to_thread(svc.aufraeumen, session, a, branch_loeschen=bool(req.branch_loeschen if req else False))
+    crud_audit.write(session, action="auftrag.aufraeumen", target=a.id, after={"branch_loeschen": bool(req.branch_loeschen if req else False)})
+    return svc.as_dict(a)
+
+
+@router.post("/{auftrag_id}/pruefen")
+async def pruefen(auftrag_id: str, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Qualitätstor erneut ausführen (Prüfbefehle aus .cockpit.yaml oder Manifest-Erkennung im Worktree)."""
+    a = svc.holen(session, auftrag_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
+    if a.status == "laeuft" or not a.worktree:
+        raise HTTPException(status_code=409, detail="Prüfung nur für beendete Aufträge mit Worktree")
+    a = await asyncio.to_thread(svc.pruefen, session, a)
+    crud_audit.write(session, action="auftrag.pruefen", target=a.id, after={"pruefung_ok": a.pruefung_ok})
+    return svc.as_dict(a)
+
+
+@router.post("/{auftrag_id}/pr")
+async def pr_erstellen(auftrag_id: str, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Pull Request anlegen (Branch pushen, gh pr create). Das Cockpit mergt nie."""
+    a = svc.holen(session, auftrag_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
+    if a.status not in ("fertig", "rueckfrage") or not a.branch:
+        raise HTTPException(status_code=409, detail="PR nur für beendete Aufträge mit Branch")
+    if a.pr_url:
+        raise HTTPException(status_code=409, detail=f"PR existiert bereits: {a.pr_url}")
+    a = await asyncio.to_thread(svc.pr_erstellen, session, a)
+    crud_audit.write(session, action="auftrag.pr", target=a.id, after={"pr_url": a.pr_url, "fehler": a.fehler})
+    if not a.pr_url:
+        raise HTTPException(status_code=502, detail=a.fehler or "PR nicht angelegt")
     return svc.as_dict(a)
 
 
