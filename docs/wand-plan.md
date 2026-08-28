@@ -269,3 +269,27 @@ Jetzt: Gedächtnis ≥ 0,32, Wissensbasis ≥ 0,62 im Modus „Beides“ (≥ 0,
 Dubletten je Chunk entfernt, Suchanfrage bei kurzen Rückfragen um die vorige Frage ergänzt,
 Systemprompt mit Glossar (HPP, KPAnG, MTS-K, VerwK, TER/RER). Jede Anfrage schreibt eine
 Protokollzeile („Konsole: modell=… rag=… quellen=… suche=… ms“) ins Container-Log.
+
+## 15. Alltagstauglichkeit (v0.3.15, 28.08.2026)
+
+| Baustein | Was er tut | Wo |
+| --- | --- | --- |
+| **Hintergrundlauf** | ermittelt den Stand alle 90 s (`COCKPIT_WALL_INTERVAL`), die API liefert ihn sofort aus (`?frisch=1` erzwingt Neuermittlung) | `services/wall_loop.py` |
+| **Push-Alarme** | neue Punkte ab `min_level` (warn) per Telegram über den Kira-Bot, Entwarnung bei Wegfall, Ruhezeit 22–07 Uhr nur Kritisches; Vergleich gegen `alerts_state` (kein Doppelalarm nach Neustart); Test-Knopf in den Einstellungen | `services/push.py`, Vault `telegram_bot_token`/`telegram_chat_id`, Einstellung `push` |
+| **Verlauf** | Kennzahlen je Lauf in `cockpit_wall_samples` (Host-Last/RAM/Platte/GPU, Hero-Kennzahlen, Alarmzahlen, Dienst-Antwortzeiten, Kira-Bestand), 30 Tage; Verlaufslinien unter den Hero-Zahlen und bei den Hosts; `GET /admin/api/overview/verlauf?hours=24&keys=…` | `services/verlauf.py` |
+| **tmux-Sitzungen** | Kachel „Sitzungen“: Sitzung, Fenster mit laufendem Programm, verbunden/seit; Self-Hosts per Loopback-SSH (Cockpit-Schlüssel für `deploy@ccx23` bzw. `janpow@nuc` eingetragen) | Host-Sonde `host_stats._CMD` |
+| **Werkstatt** | nur Repos mit Commit oder Pause in den letzten 14 Tagen (`werkstatt_aktiv_tage`), ältere aufklappbar, „Nächster Schritt“ der jüngsten Pause oben | `wall_extras.parse_werkstatt` |
+| **Konsole** | Wissensbasis bei „Beides“ nur für fachliche Fragen (Regex), Antwortlänge `chat_max_tokens` (900), knapperer Systemprompt; „Ins Gedächtnis“ schreibt Frage+Antwort als Kira-Eintrag (`POST /admin/api/chat/merken` → `memory_add` über MCP, Rückfall Memory-API) | `routes/chat.py` |
+| **Handy** | `/kompakt`: Handlungsbedarf, HPP-Kennzahlen, Dienste, Hosts, 60-s-Takt | `views/KompaktView.vue` |
+| **Login** | 5 Fehlversuche je IP → 60 s Sperre (429); Token-Antworten `Cache-Control: no-store` | `routes/auth.py` |
+| **Deploy** | `scripts/hetzner_deploy.sh [tag]`: bauen, laden, starten, aufräumen, Smoketest | |
+
+**Sicherheitslage (Bewertung 28.08.2026):** Beide Instanzen hängen ausschließlich an
+Tailscale-Adressen – aus dem Internet sind sie nicht erreichbar, jede Verbindung ist
+über WireGuard authentifiziert. Innen: ein Admin-Konto mit zufälligem Passwort, jetzt
+mit Sperre nach Fehlversuchen; Sitzungstoken mit Ablauf; Vault mit Fernet verschlüsselt;
+Secrets werden nie ausgeliefert. Wer das Passwort hat, hat aber den Docker-Socket des
+Hosts (root-gleich) und den Vault – das Passwort ist der eine Schlüssel. Offen bleibt die
+Allowlist für konfigurierbare Ziel-URLs (Sonden, Demo, MCP) und ein Zweitfaktor; beides
+wird Pflicht, sobald das Cockpit je hinter einer öffentlichen Adresse hinge (dann nur mit
+Cloudflare Access davor).
