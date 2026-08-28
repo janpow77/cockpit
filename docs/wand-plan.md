@@ -474,3 +474,12 @@ Scratch-Verzeichnis (`~/.gemini/antigravity-cli/scratch/`) statt in den Worktree
 leer). Behoben mit `--add-dir <worktree>` und einer ersten Prompt-Zeile „Arbeitsverzeichnis
 (Git-Worktree, Branch …): <pfad> – alle Änderungen ausschließlich dort“ für alle Agenten beim
 Erststart.
+
+**Instanz janpow-ai (28.08.2026, v0.4.10):** `http://100.114.73.106:7843` (Tailscale-only,
+Host-Netz), Admin-Passwort in `/home/janpow/cockpit-instanz/.admin_pw` auf janpow-ai, Vault-
+Secrets vom Hetzner gespiegelt, `AI_ROUTER_URL=http://100.102.132.11:7849` (Router des NUC über
+Tailscale), `agent_bins.gemini` → agy. Ablauf: Image `docker save | ssh janpow-ai docker load`,
+`instanz_deploy.sh` per scp auf den Host und **dort** ausführen (das Skript arbeitet immer lokal –
+ein Aufruf auf dem NUC mit `janpow-ai` als Argument rollt auf den NUC aus). SSH von janpow-ai zu
+NUC (`janpow@`) und Hetzner (`deploy@`) funktioniert. Desktop-Verknüpfung
+`~/Schreibtisch/Cockpit.desktop` (xdg-open auf die Wand).
