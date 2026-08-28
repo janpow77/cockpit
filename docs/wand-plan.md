@@ -556,3 +556,12 @@ als Beschreibung; `pr_url` an der Karte, GitHub-Checks per `gh pr checks` alle ~
 Kurzstand `pr_checks`. Das Cockpit mergt nie. `.cockpit.yaml` liegt im Cockpit-Repo und
 (uncommittet) im HPP-Repo. `act` (GitHub Actions lokal) ist auf dem NUC nicht installiert –
 optionaler Zusatz für Repos mit Workflows. Migration 006.
+
+**Prüfstand 28.08. (v0.4.17/18):** Runner-Schalter ok; getöteter Codex-Lauf nach 20 s als
+„unterbrochen“ erkannt; Fortsetzen scheiterte zuerst an Codex’ Schreibsperre
+(`~/.codex/thread-writer-locks`, „already has an active writer“) – wird beim Resume geräumt, da
+der Prozess nachweislich tot ist; danach läuft der Resume an. Qualitätstor lief in der ersten
+Runde rot: im frischen Worktree fehlten `node_modules` (jetzt per Symlink aus dem Hauptrepo,
+ebenso `.venv`), und `.cockpit.yaml` war nicht versioniert (jetzt im Repo). Erste PRs aus dem
+Cockpit: #1 „README: ASCII-Umlaute korrigieren“ (Codex, direkt umsetzen), #2 „README:
+Abschnitt Aufträge (Kanban)“ (Claude, Plan mit Freigabe) – Merge bleibt Handarbeit.
