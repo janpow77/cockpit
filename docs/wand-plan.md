@@ -461,3 +461,10 @@ Kommandos (`command(git)`, `command(rg)`, `command(cat)`, `command(sed)`, …,
 `command(pytest)`, `command(ruff)`). `--sandbox` scheitert auf dem NUC („connecting to
 sandbox server … connection reset“) und bleibt weg. `agent_bins.gemini` zeigt auf beiden
 Instanzen auf agy. Gemini CLI 0.46 bleibt installiert, wird aber nicht mehr benutzt.
+
+**v0.4.9:** Erster Gemini-Lauf im Worktree endete mit `CANCELED` – agy setzte Kommandos
+außerhalb der Allow-Regeln ab (`pgrep`, `ps` …); im Druckmodus bricht dann der ganze Lauf ab.
+Daher agy-Profile mit `--dangerously-skip-permissions` (wie Codex ohne Sandbox auf dem NUC),
+der Ausführungsmodus (`--mode plan` bzw. `accept-edits`) begrenzt weiterhin Dateiänderungen;
+Schutz bleibt Worktree + Branch. Die Allow-Regeln in `settings.json` bleiben für interaktive
+agy-Nutzung erhalten.
