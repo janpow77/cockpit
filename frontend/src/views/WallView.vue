@@ -73,6 +73,9 @@ onBeforeUnmount(() => {
 })
 
 function tasten(e: KeyboardEvent) {
+  const ziel = e.target
+  if (e.metaKey || e.ctrlKey || e.altKey) return
+  if (ziel instanceof HTMLInputElement || ziel instanceof HTMLTextAreaElement || ziel instanceof HTMLSelectElement || (ziel instanceof HTMLElement && ziel.isContentEditable)) return
   if (e.key === 'f' || e.key === 'F') vollbild()
   if (e.key === 'r' || e.key === 'R') void load()
 }

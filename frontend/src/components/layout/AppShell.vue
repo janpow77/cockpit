@@ -3,7 +3,6 @@ import { onBeforeUnmount } from 'vue'
 import { RouterView } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopBar from './TopBar.vue'
-import Toasts from '../shared/Toasts.vue'
 import { usePollStore } from '../../stores/poll'
 
 const poll = usePollStore()
@@ -27,7 +26,6 @@ onBeforeUnmount(() => {
         </RouterView>
       </main>
     </div>
-    <Toasts />
   </div>
 </template>
 
