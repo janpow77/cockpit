@@ -28,11 +28,11 @@ let mockAuftraege: Auftrag[] = [
 ]
 
 const mockProjekte: Projekt[] = [
-  { host: 'nuc', pfad: '/home/jan/projekte/cockpit', name: 'cockpit' },
-  { host: 'nuc', pfad: '/home/jan/projekte/flowinvoice', name: 'flowinvoice' },
-  { host: 'nuc', pfad: '/home/jan/projekte/regulierung', name: 'regulierung' },
-  { host: 'ccx23', pfad: '/srv/cockpit', name: 'cockpit' },
-  { host: 'ccx23', pfad: '/srv/regulierung', name: 'regulierung' },
+  { host: 'nuc', pfad: '/home/jan/projekte/cockpit', name: 'cockpit', quelle: 'flow-agent', ausfuehrbar: true, branch: 'main', dirty: true, technologien: ['Vue 3', 'TypeScript', 'FastAPI', 'PostgreSQL'], graphify_stand: '2026-08-27T08:30:00Z' },
+  { host: 'nuc', pfad: '/home/jan/projekte/flowinvoice', name: 'flowinvoice', quelle: 'werkstatt', ausfuehrbar: true, branch: 'develop', dirty: false, technologien: ['Python', 'FastAPI', 'Vue 3'], graphify_stand: null },
+  { host: 'nuc', pfad: '/home/jan/projekte/regulierung', name: 'regulierung', quelle: 'flow-agent', ausfuehrbar: true, branch: 'main', dirty: false, technologien: ['Python', 'FastAPI', 'React', 'PostgreSQL', 'Redis'], graphify_stand: '2026-08-26T17:10:00Z' },
+  { host: 'ccx23', pfad: '/srv/cockpit', name: 'cockpit', quelle: 'work_dirs', ausfuehrbar: false, branch: 'main', dirty: false, technologien: ['Vue 3', 'TypeScript'], graphify_stand: null },
+  { host: 'ccx23', pfad: '/srv/regulierung', name: 'regulierung', quelle: 'werkstatt', ausfuehrbar: true, branch: 'release', dirty: true, technologien: ['Python', 'Docker', 'PostgreSQL'], graphify_stand: '2026-08-25T12:00:00Z' },
 ]
 
 const mockVorlagen: Vorlage[] = [

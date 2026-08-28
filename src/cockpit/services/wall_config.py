@@ -231,6 +231,7 @@ class WallConfig:
     flow_agent: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_FLOW_AGENT))
     auftrag_vorlagen: list[dict[str, Any]] = field(default_factory=list)
     auftrag_parallel: int = 3
+    codex_sandbox: str = "danger-full-access"  # bubblewrap auf dem NUC nicht nutzbar; "workspace-write" wo es geht
     werkstatt_aktiv_tage: int = 14
     verlauf_tage: int = 30
     chat_max_tokens: int = 900
@@ -246,7 +247,7 @@ class WallConfig:
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
             "push": self.push, "ki_nutzung": self.ki_nutzung, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
-            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege, "flow_agent": self.flow_agent,
+            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege, "flow_agent": self.flow_agent, "codex_sandbox": self.codex_sandbox,
             "verlauf_tage": self.verlauf_tage, "chat_max_tokens": self.chat_max_tokens,
         }
 
@@ -285,6 +286,8 @@ def load(session: Session) -> WallConfig:
             setattr(cfg, name, raw[name])
     if isinstance(raw.get("auftrag_vorlagen"), list):
         cfg.auftrag_vorlagen = raw["auftrag_vorlagen"]
+    if raw.get("codex_sandbox") in ("danger-full-access", "workspace-write"):
+        cfg.codex_sandbox = str(raw["codex_sandbox"])
     for name, lo, hi in (("werkstatt_aktiv_tage", 1, 365), ("verlauf_tage", 1, 365), ("chat_max_tokens", 100, 8000), ("auftrag_parallel", 1, 8)):
         if isinstance(raw.get(name), int) and lo <= raw[name] <= hi:
             setattr(cfg, name, raw[name])
@@ -310,6 +313,8 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
             raw[name] = patch[name]
     if isinstance(patch.get("auftrag_vorlagen"), list):
         raw["auftrag_vorlagen"] = patch["auftrag_vorlagen"]
+    if patch.get("codex_sandbox") in ("danger-full-access", "workspace-write"):
+        raw["codex_sandbox"] = patch["codex_sandbox"]
     for name in ("werkstatt_aktiv_tage", "verlauf_tage", "chat_max_tokens", "auftrag_parallel"):
         if isinstance(patch.get(name), int):
             raw[name] = patch[name]

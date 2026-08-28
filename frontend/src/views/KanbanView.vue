@@ -89,6 +89,8 @@ const projektGruppen = computed(() => {
   }
   return [...gruppen.entries()].map(([host, liste]) => ({ host, liste }))
 })
+const neuProjekt = computed(() => projektAuswahl(neuForm.projektKey))
+const vorschlaegeProjekt = computed(() => projektAuswahl(vorschlaegeForm.projektKey))
 
 async function laden() {
   try {
@@ -103,8 +105,9 @@ async function laden() {
 async function projekteLaden() {
   try {
     projektListe.value = await projekte()
-    if (!neuForm.projektKey && projektListe.value[0]) neuForm.projektKey = projektKey(projektListe.value[0])
-    if (!vorschlaegeForm.projektKey && projektListe.value[0]) vorschlaegeForm.projektKey = projektKey(projektListe.value[0])
+    const standard = projektListe.value.find((projekt) => projekt.ausfuehrbar) ?? projektListe.value[0]
+    if (!neuForm.projektKey && standard) neuForm.projektKey = projektKey(standard)
+    if (!vorschlaegeForm.projektKey && standard) vorschlaegeForm.projektKey = projektKey(standard)
   } catch (err) { toast.error(extractError(err)) }
 }
 
@@ -116,6 +119,16 @@ async function vorlagenLaden() {
 
 function projektKey(projekt: Projekt): string { return `${projekt.host}\u0000${projekt.pfad}` }
 function projektAuswahl(key = neuForm.projektKey): Projekt | undefined { return projektListe.value.find((p) => projektKey(p) === key) }
+function projektOption(projekt: Projekt): string {
+  return `${projekt.name}${projekt.branch ? ` — ${projekt.branch}` : ''}${projekt.dirty ? ' · uncommittet' : ''}${projekt.ausfuehrbar ? '' : ' (kein SSH-Zugang)'}`
+}
+function quellenLabel(quelle: Projekt['quelle']): string { return quelle === 'werkstatt' ? 'Werkstatt' : quelle }
+function graphifyDatum(iso: string | null | undefined): string {
+  if (!iso) return '–'
+  const wert = new Date(iso)
+  if (Number.isNaN(wert.getTime())) return '–'
+  return wert.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
 function projektName(key: string): string { return projektListe.value.find((p) => projektKey(p) === key)?.name ?? 'Projekt' }
 function vorlagenTitel(vorlage: Vorlage, projekt: string): string { return vorlage.titel.replace(/\{projekt\}/g, projekt) }
 function vorlageAnwenden() {
@@ -383,9 +396,12 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
         <form v-if="panel === 'neu'" class="formular" @submit.prevent="neuAnlegen(false)">
           <label>Vorlage<select v-model="neuForm.vorlageId" @change="vorlageAnwenden"><option value="">– ohne Vorlage –</option><option v-for="vorlage in vorlagenListe" :key="vorlage.id" :value="vorlage.id">{{ vorlage.titel }}</option></select></label>
           <label>Titel<input v-model="neuForm.titel" required placeholder="Kurzer, eindeutiger Auftrag" /></label>
-          <label>Projekt<select v-model="neuForm.projektKey" required><optgroup v-for="gruppe in projektGruppen" :key="gruppe.host" :label="gruppe.host"><option v-for="projekt in gruppe.liste" :key="projektKey(projekt)" :value="projektKey(projekt)">{{ projekt.name }} · {{ projekt.pfad }}</option></optgroup></select></label>
+          <label>Projekt<select v-model="neuForm.projektKey" required><optgroup v-for="gruppe in projektGruppen" :key="gruppe.host" :label="gruppe.host"><option v-for="projekt in gruppe.liste" :key="projektKey(projekt)" :value="projektKey(projekt)" :disabled="!projekt.ausfuehrbar">{{ projektOption(projekt) }}</option></optgroup></select></label>
+          <div v-if="neuProjekt" class="projekt-details"><span :class="['quellen-chip', `quelle-${neuProjekt.quelle}`]">{{ quellenLabel(neuProjekt.quelle) }}</span><span v-for="technik in (neuProjekt.technologien ?? []).slice(0, 4)" :key="technik" class="technik-chip">{{ technik }}</span><span class="graphify mono">graphify: {{ graphifyDatum(neuProjekt.graphify_stand) }}</span></div>
+          <p class="projekt-hinweis">Projektliste aus flow-agent (alle Hosts) und Werkstatt.</p>
           <label>Auftragstext<textarea v-model="neuForm.text" required rows="7" placeholder="Behebe …, führe die Tests aus, committe mit sprechender Meldung" /></label>
           <fieldset class="agent-auswahl"><legend>Agent</legend><label v-for="agent in AGENTEN" :key="agent.id" class="agent-radio" :class="{ aktiv: neuForm.agent === agent.id }"><input v-model="neuForm.agent" type="radio" name="agent" :value="agent.id" /><span><strong>{{ agent.titel }}</strong><small>{{ agent.text }}</small></span></label></fieldset>
+          <p v-if="neuForm.agent === 'codex'" class="formular-hinweis codex-hinweis mono">Läuft auf dem NUC ohne Sandbox-Isolierung (bwrap nicht verfügbar) – Schutz durch eigenen Worktree und Branch.</p>
           <p v-if="neuForm.agent === 'gemini'" class="formular-hinweis mono">Gemini CLI muss auf dem Host angemeldet sein (API-Schlüssel in ~/.gemini/.env oder Antigravity-Login).</p>
           <fieldset class="agent-auswahl modus-auswahl"><legend>Vorgehen</legend><label v-for="modus in MODI" :key="modus.id" class="agent-radio modus-radio" :class="{ aktiv: neuForm.modus === modus.id }"><input v-model="neuForm.modus" type="radio" name="modus" :value="modus.id" /><span><strong>{{ modus.titel }}</strong><small>{{ modus.text }}</small></span></label></fieldset>
           <p class="formular-hinweis modus-hinweis">Das Profil gilt für die Umsetzung; Bericht und Plan laufen immer lesend.</p>
@@ -396,8 +412,11 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
 
         <form v-else-if="panel === 'vorschlaege'" class="formular vorschlaege-form" @submit.prevent="analyseStarten">
           <p class="erklaerung">Der Agent liest Git-Verlauf, GitHub (Issues, PRs, CI), graphify-Analyse und Code und legt 5–10 priorisierte Vorschläge als Karten in den Eingang. Es wird nichts geändert.</p>
-          <label>Projekt<select v-model="vorschlaegeForm.projektKey" required><optgroup v-for="gruppe in projektGruppen" :key="gruppe.host" :label="gruppe.host"><option v-for="projekt in gruppe.liste" :key="projektKey(projekt)" :value="projektKey(projekt)">{{ projekt.name }} · {{ projekt.pfad }}</option></optgroup></select></label>
+          <label>Projekt<select v-model="vorschlaegeForm.projektKey" required><optgroup v-for="gruppe in projektGruppen" :key="gruppe.host" :label="gruppe.host"><option v-for="projekt in gruppe.liste" :key="projektKey(projekt)" :value="projektKey(projekt)" :disabled="!projekt.ausfuehrbar">{{ projektOption(projekt) }}</option></optgroup></select></label>
+          <div v-if="vorschlaegeProjekt" class="projekt-details"><span :class="['quellen-chip', `quelle-${vorschlaegeProjekt.quelle}`]">{{ quellenLabel(vorschlaegeProjekt.quelle) }}</span><span v-for="technik in (vorschlaegeProjekt.technologien ?? []).slice(0, 4)" :key="technik" class="technik-chip">{{ technik }}</span><span class="graphify mono">graphify: {{ graphifyDatum(vorschlaegeProjekt.graphify_stand) }}</span></div>
+          <p class="projekt-hinweis">Projektliste aus flow-agent (alle Hosts) und Werkstatt.</p>
           <fieldset class="agent-auswahl"><legend>Agent</legend><label v-for="agent in AGENTEN" :key="agent.id" class="agent-radio" :class="{ aktiv: vorschlaegeForm.agent === agent.id }"><input v-model="vorschlaegeForm.agent" type="radio" name="vorschlaege-agent" :value="agent.id" /><span><strong>{{ agent.titel }}</strong><small>{{ agent.text }}</small></span></label></fieldset>
+          <p v-if="vorschlaegeForm.agent === 'codex'" class="formular-hinweis codex-hinweis mono">Läuft auf dem NUC ohne Sandbox-Isolierung (bwrap nicht verfügbar) – Schutz durch eigenen Worktree und Branch.</p>
           <div class="aktionen"><button class="knopf" type="submit" :disabled="busy">Analyse starten</button><button class="knopf ghost" type="button" @click="schliessen">Abbrechen</button></div>
         </form>
 
@@ -466,6 +485,7 @@ button, input, textarea, select { font: inherit; } button { cursor: pointer; } b
 .karten-move { transition: transform .25s ease; }.karten-enter-active, .karten-leave-active { transition: opacity .18s ease, transform .18s ease; }.karten-enter-from, .karten-leave-to { opacity: 0; transform: scale(.97); }
 .panel-blende { position: fixed; z-index: 30; inset: 0; border: 0; background: rgba(4, 7, 16, .6); backdrop-filter: blur(2px); }.panel { position: fixed; z-index: 31; top: 0; right: 0; width: min(620px, 94vw); height: 100vh; overflow-y: auto; background: #10172B; border-left: 1px solid var(--linie); box-shadow: -18px 0 50px rgba(0,0,0,.4); }.panel-kopf { position: sticky; z-index: 2; top: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 19px 22px 16px; background: rgba(16,23,43,.96); border-bottom: 1px solid var(--linie); backdrop-filter: blur(8px); }.panel-kopf h2 { margin: 2px 0 0; font-family: var(--display); font-size: 27px; line-height: 1.1; }.panel-kopf span { font-size: 9px; letter-spacing: .14em; }.icon-knopf { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--linie); border-radius: 5px; background: transparent; color: var(--text-2); }.panel-enter-active, .panel-leave-active, .blende-enter-active, .blende-leave-active { transition: transform .24s cubic-bezier(.2,.7,.2,1), opacity .2s ease; }.panel-enter-from, .panel-leave-to { transform: translateX(100%); }.blende-enter-from, .blende-leave-to { opacity: 0; }
 .panel.panel-klein { width: min(540px, 94vw); }.erklaerung { margin: 0; padding: 11px 12px; border-left: 2px solid var(--akzent); background: rgba(242,184,75,.05); color: var(--text-2); font-size: 11px; line-height: 1.55; }.formular-hinweis { margin: -8px 0 0; color: #7DB5FF; font-size: 9px; line-height: 1.5; }
+.codex-hinweis { color: #60D5B7; }.projekt-details { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: -9px; color: var(--text-3); font-size: 9px; }.quellen-chip, .technik-chip { padding: 2px 6px; border: 1px solid var(--linie); border-radius: 9px; font-family: var(--mono); }.quellen-chip { color: var(--akzent); border-color: rgba(242,184,75,.4); }.quelle-flow-agent { color: #60D5B7; border-color: rgba(76,195,165,.45); }.quelle-work_dirs { color: #7DB5FF; border-color: rgba(111,168,255,.45); }.graphify { margin-left: auto; }.projekt-hinweis { margin: -10px 0 0; color: var(--text-3); font-size: 9px; }
 .formular, .detail { padding: 20px 22px 35px; }.formular { display: flex; flex-direction: column; gap: 15px; }.formular label, .nachfrage label { display: flex; flex-direction: column; gap: 6px; color: var(--text-2); font-size: 11px; font-weight: 600; letter-spacing: .03em; }.formular input, .formular textarea, .formular select, .nachfrage textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--linie); border-radius: 5px; background: var(--flaeche); color: var(--text); padding: 9px 10px; outline: none; font-size: 13px; font-weight: 400; letter-spacing: 0; }.formular input:focus, .formular textarea:focus, .formular select:focus, .nachfrage textarea:focus { border-color: var(--akzent); }.formular textarea, .nachfrage textarea { resize: vertical; line-height: 1.5; }.formular fieldset { margin: 0; padding: 11px 12px; border: 1px solid var(--linie); border-radius: 6px; }.formular legend { padding: 0 5px; color: var(--text-2); font-size: 11px; font-weight: 600; }.formular .radio { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 9px; padding: 6px 2px; cursor: pointer; }.radio input { width: auto; margin-top: 3px; accent-color: var(--akzent); }.radio span { display: flex; flex-direction: column; gap: 1px; }.radio strong { color: var(--text); font-size: 12px; }.radio small { color: var(--text-3); font-size: 10px; }.formular-zeile { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }.aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }.edit-form { padding: 0 0 24px; border-bottom: 1px solid var(--linie); }
 .formular .agent-auswahl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }.formular .agent-radio { position: relative; min-width: 0; padding: 9px; border: 1px solid var(--linie); border-radius: 5px; background: var(--flaeche); cursor: pointer; }.agent-radio.aktiv { background: rgba(242,184,75,.06); }.agent-radio input { position: absolute; opacity: 0; pointer-events: none; }.agent-radio span { display: flex; flex-direction: column; gap: 3px; }.agent-radio strong { color: var(--text); font-family: var(--display); font-size: 15px; letter-spacing: .03em; }.agent-radio small { color: var(--text-3); font-size: 9px; line-height: 1.35; }.agent-radio:nth-of-type(1).aktiv { border-color: #E79A5A; }.agent-radio:nth-of-type(2).aktiv { border-color: #4CC3A5; }.agent-radio:nth-of-type(3).aktiv { border-color: #6FA8FF; }
 .formular .modus-radio.aktiv { border-color: var(--akzent); }.modus-hinweis { color: var(--text-3); }

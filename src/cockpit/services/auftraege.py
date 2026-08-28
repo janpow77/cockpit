@@ -44,6 +44,18 @@ PROFILE_CODEX: dict[str, str] = {
     "bearbeiten_tests": "-s workspace-write --approve-for-me",
     "voll": "-s workspace-write --approve-for-me",
 }
+# Codex-Sandbox (bubblewrap) ist auf dem NUC nicht nutzbar (RTM_NEWADDR: Operation not permitted) – dann läuft Codex
+# ohne Isolierung; Schutz durch eigenen Worktree und Branch. Einstellung codex_sandbox: "danger-full-access" | "workspace-write"
+CODEX_SANDBOX_VORGABE = "danger-full-access"
+
+
+def codex_flags(profil: str, sandbox: str | None, resume: bool) -> str:
+    """Sandbox-/Freigabe-Flags für Codex (rein, testbar). `exec resume` kennt nur -c-Overrides."""
+    if (sandbox or CODEX_SANDBOX_VORGABE) == "danger-full-access":
+        return "-c sandbox_mode=danger-full-access -c approval_policy=never" if resume else "-s danger-full-access -c approval_policy=never"
+    if resume:
+        return f"-c sandbox_mode={'read-only' if profil == 'lesen' else 'workspace-write'} -c approval_policy=never"
+    return PROFILE_CODEX.get(profil, PROFILE_CODEX["bearbeiten"])
 PROFILE_GEMINI: dict[str, str] = {
     "lesen": "--approval-mode default --skip-trust",
     "bearbeiten": "--approval-mode auto_edit --skip-trust",
@@ -232,15 +244,10 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
     profil = effektives_profil(a)
     if a.agent == "codex":
         bin_ = bins.get("codex", "codex")
-        flags = PROFILE_CODEX.get(profil, PROFILE_CODEX["bearbeiten"])
+        sandbox = bins.get("codex_sandbox")
         if resume and a.session_id:
-            # `exec resume` kennt weder -s noch --approve-for-me: Sandbox/Freigabe als Konfigurations-Overrides
-            sandbox = "read-only" if profil == "lesen" else "workspace-write"
-            return (
-                f"{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json --skip-git-repo-check "
-                f"-c sandbox_mode={shlex.quote(sandbox)} -c approval_policy=never"
-            )
-        return f"{bin_} exec {prompt} --json {flags} --skip-git-repo-check"
+            return f"{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json --skip-git-repo-check {codex_flags(profil, sandbox, True)}"
+        return f"{bin_} exec {prompt} --json {codex_flags(profil, sandbox, False)} --skip-git-repo-check"
     if a.agent == "gemini":
         bin_ = bins.get("gemini", "gemini")
         if bin_.rstrip("/").rsplit("/", 1)[-1] == "agy":

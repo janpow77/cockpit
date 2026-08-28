@@ -426,3 +426,11 @@ aller Hosts (Quelle, Branch, uncommittete Änderungen, graphify-Stand); Hosts oh
 des Cockpits sind als nicht ausführbar markiert. Vorschlagsläufe bekommen einen Kontextblock
 „Stand laut flow-agent“ (Git-Zustand, Technologien, graphify-Alter, Hinweise) an den
 Auftragstext gehängt. 5 min Cache, Fehler → leere Ergebnisse.
+
+**Codex-Sandbox (v0.4.5):** Codex' bubblewrap-Sandbox scheitert auf dem NUC
+(`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, auch für `read-only`) –
+der Planlauf lieferte den Plan ohne Lesezugriff, die Umsetzung „nichts geändert“. Einstellung
+`codex_sandbox` (Vorgabe `danger-full-access` = ohne Isolierung, wie in der `~/.codex/config.toml`
+des Nutzers; `workspace-write` dort, wo bwrap läuft). Nie `--dangerously-bypass-approvals-and-sandbox`;
+Schutz bleibt Worktree + Branch je Auftrag. Beim `exec resume` gehen Sandbox und Freigabe nur
+als `-c sandbox_mode=… -c approval_policy=never` (keine `-s`/`--approve-for-me`-Flags).

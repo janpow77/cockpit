@@ -42,6 +42,8 @@ const agentBins = ref('')
 const vorschlaege = ref('')
 const auftragVorlagen = ref('')
 const auftragParallel = ref(3)
+const codexSandbox = ref<'danger-full-access' | 'workspace-write'>('danger-full-access')
+const flowAgent = ref('')
 const fehler = ref<Record<string, string>>({})
 
 function zeilen(list: string[]): string { return list.join('\n') }
@@ -76,6 +78,8 @@ async function load() {
     vorschlaege.value = json(c.vorschlaege ?? {})
     auftragVorlagen.value = json(c.auftrag_vorlagen ?? [])
     auftragParallel.value = c.auftrag_parallel ?? 3
+    codexSandbox.value = c.codex_sandbox ?? 'danger-full-access'
+    flowAgent.value = json(c.flow_agent ?? {})
   } catch (err) { toast.error(extractError(err)) }
   finally { loading.value = false }
 }
@@ -110,6 +114,7 @@ async function save() {
     verlauf_tage: Math.max(1, Math.min(365, Math.round(Number(verlaufTage.value) || 30))),
     chat_max_tokens: Math.max(100, Math.min(8000, Math.round(Number(chatMaxTokens.value) || 900))),
     auftrag_parallel: Math.max(1, Math.min(8, Math.round(Number(auftragParallel.value) || 3))),
+    codex_sandbox: codexSandbox.value,
   }
   const pu = parse<Record<string, unknown>>('push', push.value, 'object'); if (pu) patch.push = pu
   const l = parse<Record<string, string>>('links', links.value, 'object'); if (l) patch.links = l
@@ -124,6 +129,7 @@ async function save() {
   const ab = parse<Record<string, string>>('agent_bins', agentBins.value, 'object'); if (ab) patch.agent_bins = ab
   const vs = parse<Record<string, unknown>>('vorschlaege', vorschlaege.value, 'object'); if (vs) patch.vorschlaege = vs
   const av = parse<Record<string, unknown>[]>('auftrag_vorlagen', auftragVorlagen.value, 'array'); if (av) patch.auftrag_vorlagen = av
+  const fl = parse<Record<string, unknown>>('flow_agent', flowAgent.value, 'object'); if (fl) patch.flow_agent = fl
   if (Object.keys(fehler.value).length) { toast.error('Bitte die markierten Felder korrigieren'); return }
   saving.value = true
   try {
@@ -150,6 +156,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
   { key: 'kira', label: 'Kira-Memory', hint: 'host, url, env_file, env_key – der Schlüssel wird auf dem Host aus der .env gelesen', model: kira, rows: 6 },
   { key: 'agent_bins', label: 'Aufträge: Agenten-Programme (claude, codex, gemini → absoluter Pfad auf dem Host)', hint: 'bash -lc über SSH kennt ~/bin und ~/.npm-global/bin nicht', model: agentBins, rows: 5 },
   { key: 'vorschlaege', label: 'Aufträge: wöchentliche Vorschlagsläufe', hint: 'aktiv, wochentag (0 = Montag … 6 = Sonntag), stunde, agent – je aktivem Werkstatt-Projekt, Ergebnis als Karten im Eingang', model: vorschlaege, rows: 5 },
+  { key: 'flow_agent', label: 'flow-agent (Projektinventar aller Hosts)', hint: 'url, secret_key (Vault: Lese-Schlüssel), hosts = flow-agent-Hostname → Cockpit-Host', model: flowAgent, rows: 6 },
   { key: 'auftrag_vorlagen', label: 'Aufträge: eigene Vorlagen', hint: '[{id, titel mit {projekt}, profil, prioritaet, text}] – gleiche id ersetzt die Vorgabe', model: auftragVorlagen, rows: 8 },
   { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
 ]
@@ -198,6 +205,14 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Aufträge: gleichzeitige Läufe (Basis)</span>
           <input v-model.number="auftragParallel" type="number" min="1" max="8" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
           <span class="text-[11px] text-slate-400">Wird nach Claude-Auslastung gedrosselt: ab 60 % des 5-Stunden-Fensters Basis − 1, ab 85 % ein Lauf, ab 95 % Pause.</span>
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Aufträge: Codex-Sandbox</span>
+          <select v-model="codexSandbox" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2">
+            <option value="danger-full-access">ohne Isolierung (NUC: bwrap nicht verfügbar)</option>
+            <option value="workspace-write">workspace-write / read-only (bwrap muss funktionieren)</option>
+          </select>
+          <span class="text-[11px] text-slate-400">Schutz bleibt der eigene Worktree mit Branch je Auftrag.</span>
         </label>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Werkstatt: „aktiv“ = Commit oder Pause in den letzten … Tagen</span>

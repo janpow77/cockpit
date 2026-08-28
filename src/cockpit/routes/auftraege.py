@@ -218,7 +218,7 @@ async def starten(auftrag_id: str, _=Depends(require_auth), session: Session = D
         a = svc.aendern(session, a, status="geplant")
         raise HTTPException(status_code=409, detail=kap.get("pause_grund") or f"Kapazität erschöpft ({kap['laufend']}/{kap['parallel_max']}) – geplant, startet automatisch")
     cfg = wc.load(session)
-    a = await asyncio.to_thread(svc.starten, session, a, bins=dict(cfg.agent_bins))
+    a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox})
     crud_audit.write(session, action="auftrag.start", target=a.id, after={"status": a.status, "fehler": a.fehler})
     return svc.as_dict(a)
 
@@ -247,7 +247,7 @@ async def nachfrage(auftrag_id: str, req: Nachfrage, _=Depends(require_auth), se
     cfg = wc.load(session)
     text = req.text.strip()
     a = svc.aendern(session, a, text=f"{a.text}\n\n--- Nachfrage ---\n{text}")
-    a = await asyncio.to_thread(svc.starten, session, a, bins=dict(cfg.agent_bins), resume=True, nachfrage=text)
+    a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox}, resume=True, nachfrage=text)
     crud_audit.write(session, action="auftrag.nachfrage", target=a.id, after={"text": text[:300]})
     return svc.as_dict(a)
 
@@ -266,7 +266,7 @@ async def freigeben(auftrag_id: str, req: Freigabe | None = None, _=Depends(requ
     if kap["laufend"] >= kap["parallel_max"]:
         raise HTTPException(status_code=409, detail=kap.get("pause_grund") or f"Kapazität erschöpft ({kap['laufend']}/{kap['parallel_max']}) – bitte später freigeben")
     cfg = wc.load(session)
-    a = await asyncio.to_thread(svc.umsetzen, session, a, bins=dict(cfg.agent_bins), hinweis=(req.hinweis if req else None))
+    a = await asyncio.to_thread(svc.umsetzen, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox}, hinweis=(req.hinweis if req else None))
     crud_audit.write(session, action="auftrag.freigabe", target=a.id, after={"status": a.status, "hinweis": (req.hinweis if req else None)})
     return svc.as_dict(a)
 

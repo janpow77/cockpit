@@ -358,6 +358,8 @@ export interface WallConfig {
   vorschlaege: Record<string, unknown>
   auftrag_vorlagen: Record<string, unknown>[]
   auftrag_parallel: number
+  codex_sandbox: 'danger-full-access' | 'workspace-write'
+  flow_agent: Record<string, unknown>
   prod_hosts?: string[]
   push?: Record<string, unknown>
   ki_nutzung?: Record<string, unknown>
@@ -433,5 +435,15 @@ export interface Kapazitaet {
 
 export interface AuftraegeAntwort { auftraege: Auftrag[]; kapazitaet: Kapazitaet }
 export interface LogZeile { ts: string | null; art: 'text' | 'tool' | 'result' | 'system' | 'fehler'; text: string }
-export interface Projekt { host: string; pfad: string; name: string }
+export interface Projekt {
+  host: string
+  pfad: string
+  name: string
+  quelle: 'flow-agent' | 'werkstatt' | 'work_dirs'
+  ausfuehrbar: boolean
+  branch?: string | null
+  dirty?: boolean
+  technologien?: string[]
+  graphify_stand?: string | null
+}
 export interface Vorlage { id: string; titel: string; modus: AuftragModus; profil: AuftragProfil; prioritaet: number; text: string }

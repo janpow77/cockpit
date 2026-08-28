@@ -157,7 +157,7 @@ async def runde() -> None:
                 continue
             if a.agent == "gemini" and any(x.status == "laeuft" and x.agent == "gemini" for x in svc.liste(session)):
                 continue
-            a = await asyncio.to_thread(svc.starten, session, a, bins=dict(cfg.agent_bins))
+            a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox})
             log.info("Auftrag %s gestartet (%s, %s): %s", a.id, a.agent, a.profil, a.status)
             if a.status == "laeuft":
                 frei -= 1
