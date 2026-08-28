@@ -44,3 +44,29 @@ GITHUB_TOKEN=<gh-pat>                      # optional, ohne: GitHub-Endpoints le
 ADMIN_DB_PATH=/data/cockpit.db
 COCKPIT_PORT=7843
 ```
+
+## Aufträge (Kanban)
+
+Die Seite `/kanban` führt Agentenläufe als Karten (Auftragstext, Projekt, Agent, Profil,
+Priorität). Je Auftrag entsteht ein Git-Worktree `<projekt>/.cockpit-auftraege/wt-<id>` mit
+Branch `auftrag/<id>`; Spalten Eingang → Geplant → Läuft → Rückfrage/Freigabe → Fertig,
+Detailpanel mit Ergebnis, Kosten, Diff-Link, Protokoll und „Nachfrage“ (setzt die Sitzung fort).
+
+**Agenten:** Claude Code, Codex, Gemini (über die Antigravity-CLI `agy`); Programmpfade
+absolut in der Einstellung `agent_bins`.
+
+**Vorgehen je Auftrag** (`modus`): **nur berichten** (analysieren und einen Plan vorschlagen,
+immer nur lesend) · **Plan mit Freigabe** (Vorgabe: erst der Plan, die Karte landet in
+„Rückfrage / Freigabe“; „Umsetzen“ setzt dieselbe Sitzung mit dem Schreibprofil fort) ·
+**direkt umsetzen** (ohne Zwischenschritt).
+
+**Profile:** `lesen` (nur Lesen, git/gh/rg), `bearbeiten`, `bearbeiten_tests` (zusätzlich
+npm/pytest/ruff/git commit), `voll` – wirksam nur in der Umsetzungsphase; Absicherung bleibt
+der eigene Worktree samt Branch.
+
+**Vorlagen:** 31 vorgefertigte Aufträge (Repo prüfen, Tests ergänzen, Sicherheits-Audit, Doku,
+Barrierefreiheit …) mit hinterlegtem Modus; `{projekt}` wird ersetzt, eigene über `auftrag_vorlagen`.
+
+**Automatische Vorschläge:** „Vorschläge einholen“ wertet Git-Verlauf, GitHub (`gh`), die
+graphify-Analyse und den Code aus; daraus legt der Runner Karten „Vorschlag: …“ in den
+Eingang – wöchentlich je aktivem Projekt oder auf Abruf (Einstellung `vorschlaege`).
