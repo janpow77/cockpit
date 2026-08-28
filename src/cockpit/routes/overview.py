@@ -529,9 +529,10 @@ async def tmux_ausgabe(
     h = _tmux_host(session, host)
     from ..services.ssh_runner import run_on_host
 
-    cmd = f"tmux capture-pane -p -t {shlex.quote(ziel)} -S -{zeilen} 2>&1 | sed -e :a -e '/^\n*$/{{$d;N;ba' -e '}}'"
+    cmd = f"tmux capture-pane -p -t {shlex.quote(ziel)} -S -{zeilen} 2>&1"
     res = await asyncio.to_thread(run_on_host, h, cmd, timeout=15)
-    return {"text": (res.stdout or res.stderr or "")[-12000:], "ok": res.ok}
+    text = (res.stdout or res.stderr or "").rstrip("\n")
+    return {"text": text[-12000:], "ok": res.ok}
 
 
 @router.post("/tmux/senden")
