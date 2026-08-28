@@ -206,6 +206,12 @@ const tickerText = computed(() => {
   const teile: string[] = []
   for (const a of alerts.value.filter((x) => x.level !== 'info')) teile.push(`${a.level === 'krit' ? '⚠' : '△'} ${a.text}`)
   for (const k of (kira.value?.entries ?? []).slice(0, 3)) teile.push(`✦ Kira · ${kategorie(k.category)}: ${k.text.length > 110 ? k.text.slice(0, 109) + '…' : k.text}`)
+  const faMeldungen: string[] = []
+  const offline = flowAgent.value?.meldungen.hosts_offline ?? []
+  if (offline.length) faMeldungen.push(`${offline.join(', ')} offline`)
+  const ungesund = flowAgent.value?.frische.unhealthy ?? 0
+  if (ungesund > 0) faMeldungen.push(`${ungesund} ${ungesund === 1 ? 'Frischeprüfung kritisch' : 'Frischeprüfungen kritisch'}`)
+  if (faMeldungen.length) teile.push(`✦ flow-agent: ${faMeldungen.join(' · ')}`)
   for (const e of ev) teile.push(`${e.kind === 'commit' ? '⌥' : e.kind === 'deploy' ? '⇪' : '•'} ${stundeMinute(e.ts)} ${e.text}`)
   return teile.length ? teile.join('   ·   ') : 'Keine Ereignisse'
 })
@@ -305,6 +311,7 @@ const werkstattSumme = computed(() => {
   return `${aktiv} aktiv in 14 Tagen · ${pausen} ${pausen === 1 ? 'Pause' : 'Pausen'} · ${werkstattAlleRepos.value.length} Repos`
 })
 const kira = computed(() => overview.value?.kira ?? null)
+const flowAgent = computed(() => overview.value?.flow_agent ?? null)
 const ki = computed(() => overview.value?.ki_nutzung ?? null)
 /** Kurzform für die Kopfzeile: Claude-Wochenlimit in Prozent. */
 const kiKurz = computed(() => {
@@ -313,6 +320,18 @@ const kiKurz = computed(() => {
 })
 const KATEGORIE: Record<string, string> = { architecture: 'Architektur', solution: 'Lösung', problem: 'Problem', reference: 'Referenz', pattern: 'Muster', workflow: 'Ablauf', preference: 'Präferenz', feedback: 'Feedback' }
 function kategorie(k: string | null): string { return (k && KATEGORIE[k]) || k || '–' }
+function flowStatusKlasse(status: string): string {
+  if (status === 'healthy') return 'ok'
+  if (status === 'offline' || status === 'unhealthy') return 'krit'
+  return 'warn'
+}
+function flowAlter(sekunden: number | null): string {
+  if (sekunden == null) return 'Alter unbekannt'
+  if (sekunden < 60) return `vor ${Math.max(0, Math.floor(sekunden))} s`
+  if (sekunden < 3600) return `vor ${Math.floor(sekunden / 60)} min`
+  return `vor ${Math.floor(sekunden / 3600)} h`
+}
+function flowVersion(version: string | null): string { return version ? (version.startsWith('v') ? version : `v${version}`) : 'Version unbekannt' }
 function gpuLast(gpus: { util_pct: number }[]): number {
   return gpus.length ? Math.round(gpus.reduce((a, g) => a + g.util_pct, 0) / gpus.length) : 0
 }
@@ -371,6 +390,7 @@ async function demo(neu = false) {
         <span class="live" :title="`Alle ${REFRESH_MS / 1000} s aktualisiert · R = sofort`"><i :class="['punkt', error ? 'krit' : 'ok']" />{{ error ? 'GESTÖRT' : 'LIVE' }}<em>· {{ seitLoad }} s</em></span>
         <span class="mono uhr">{{ uhr }}</span>
         <RouterLink to="/chat" class="knopf klein">KI-Konsole</RouterLink>
+        <RouterLink to="/kanban" class="knopf klein ghost">Aufträge</RouterLink>
         <RouterLink to="/ki" class="knopf klein ghost" :title="kiKurz">KI-Nutzung{{ kiKurz ? ` · ${kiKurz}` : '' }}</RouterLink>
         <RouterLink to="/kompakt" class="knopf klein ghost" title="Handy-Ansicht">Kompakt</RouterLink>
         <RouterLink to="/" class="knopf klein ghost">Admin</RouterLink>
@@ -605,7 +625,23 @@ async function demo(neu = false) {
         <div v-if="!kira.entries.length" class="dim">{{ kira.note || 'Noch keine Wissenseinträge.' }}</div>
       </div>
 
-      <div class="kachel github einblenden" style="--i: 10">
+      <div v-if="flowAgent" class="kachel flow-agent einblenden" style="--i: 10">
+        <h4><a v-if="flowAgent.url" :href="flowAgent.url" target="_blank" rel="noopener">flow-agent ↗</a><span v-else>flow-agent</span> <span class="dim">{{ flowAgent.ok ? `· Control Plane ok · ${flowVersion(flowAgent.version)} · ${flowAgent.hosts.length} Hosts` : `· ${flowAgent.note || 'nicht erreichbar'}` }}</span></h4>
+        <div class="flow-hosts">
+          <div v-for="h in flowAgent.hosts" :key="h.host" class="flow-hostzeile">
+            <i :class="['punkt', flowStatusKlasse(h.status)]" />
+            <div class="flow-name"><b>{{ h.host }}</b><span v-if="h.hostname && h.hostname !== h.host" class="mono dim">{{ h.hostname }}</span></div>
+            <span class="flow-metrik mono">{{ h.projekte }} Projekte · {{ h.container }} Container · {{ h.gpu }} GPU</span>
+            <div class="flow-chips"><span v-for="werkzeug in h.werkzeuge_fehlen.slice(0, 5)" :key="werkzeug" class="chip dim">{{ werkzeug }} fehlt</span><span v-if="h.tmux !== 'healthy'" class="chip dim">tmux: {{ h.tmux || '–' }}</span></div>
+            <span class="flow-alter mono" :class="{ warn: h.alter_s != null && h.alter_s > 300 }">{{ flowAlter(h.alter_s) }}</span>
+          </div>
+        </div>
+        <div class="flow-frische"><b>Frische:</b> {{ flowAgent.frische.healthy }} ok · {{ flowAgent.frische.degraded }} eingeschränkt · {{ flowAgent.frische.unhealthy }} kritisch</div>
+        <div v-for="(befund, index) in flowAgent.frische.befunde.slice(0, 5)" :key="`${befund.host}-${befund.label}-${index}`" class="flow-befund" :class="{ ungesund: befund.status === 'unhealthy' }">⚠ {{ befund.label }} · {{ befund.host }} — {{ befund.detail }}</div>
+        <div class="flow-aktionen mono" :class="{ offen: flowAgent.meldungen.pending_actions > 0 || flowAgent.meldungen.failed_actions_recent > 0 }"><template v-if="flowAgent.meldungen.pending_actions > 0 || flowAgent.meldungen.failed_actions_recent > 0">Aktionen: {{ flowAgent.meldungen.pending_actions }} {{ flowAgent.meldungen.pending_actions === 1 ? 'wartet' : 'warten' }} auf Freigabe · {{ flowAgent.meldungen.failed_actions_recent }} fehlgeschlagen</template><template v-else>Keine offenen Aktionen</template></div>
+      </div>
+
+      <div class="kachel github einblenden" style="--i: 11">
         <h4>GitHub <span class="dim">· {{ overview.github.enabled ? `alle ${overview.github.repos.length} Repositories · nach Aktivität · ${zahl(commitAnzahl)} Commits zuletzt` : 'kein Token' }}</span></h4>
         <div v-if="!overview.github.enabled" class="dim">GITHUB_TOKEN setzen, dann erscheinen hier alle Repos mit Aktivität.</div>
         <div v-else-if="overview.github.error" class="dim">{{ overview.github.error }}</div>
@@ -830,6 +866,10 @@ async function demo(neu = false) {
 .kira-zeile:last-child { border-bottom: 0; }
 .kira-zeile .mono { font-size: 11px; white-space: nowrap; }
 .k-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kachel.flow-agent { grid-column: span 2; }
+.flow-agent h4 a { color: var(--text-3); text-decoration: none; }.flow-agent h4 a:hover { color: var(--info); }
+.flow-hostzeile { display: grid; grid-template-columns: 12px minmax(110px, .7fr) minmax(220px, auto); gap: 5px 9px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--linie); font-size: 12.5px; }.flow-hostzeile > .punkt { margin: 0; }.flow-name { display: flex; align-items: baseline; gap: 7px; min-width: 0; }.flow-name .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }.flow-metrik { color: var(--text-2); font-size: 10px; text-align: right; white-space: nowrap; }.flow-chips { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; min-height: 3px; }.flow-chips .chip { font-size: 9px; padding: 0 6px; }.flow-alter { grid-column: 3; grid-row: 2; color: var(--text-3); font-size: 10px; text-align: right; }.flow-alter.warn { color: var(--warn); }
+.flow-frische { padding: 8px 0 5px; color: var(--text-2); font-size: 11.5px; }.flow-befund { padding: 4px 7px; margin-top: 3px; border-left: 2px solid var(--warn); background: var(--flaeche-2); color: var(--warn); font-size: 11px; }.flow-befund.ungesund { border-left-color: var(--krit); color: var(--krit); }.flow-aktionen { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--linie); color: var(--text-3); font-size: 10px; }.flow-aktionen.offen { color: var(--warn); }
 .liste-enter-active, .liste-leave-active, .liste-move { transition: all .55s cubic-bezier(.2,.7,.2,1); }
 .liste-enter-from { opacity: 0; transform: translateX(-10px); }
 .liste-leave-to { opacity: 0; transform: translateX(10px); }
@@ -846,8 +886,9 @@ async function demo(neu = false) {
   .leitstand { grid-template-columns: 1fr 1fr; }
   .kachel.sitzungen { grid-column: 1 / -1; }
   .kachel.projekte, .kachel.hosts { grid-row: auto; }
-  .kachel.kira { grid-column: auto; }
+  .kachel.kira, .kachel.flow-agent { grid-column: auto; }
   .wand-kopf { grid-template-columns: 1fr; }
   .kopf-rechts { justify-content: flex-start; }
 }
+@media (max-width: 700px) { .flow-hostzeile { grid-template-columns: 12px 1fr; }.flow-metrik, .flow-alter { grid-column: 2; grid-row: auto; text-align: left; }.flow-chips { grid-column: 2; } }
 </style>
