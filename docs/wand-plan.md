@@ -618,3 +618,15 @@ und als `~/.flow-agent-enroll.token` (0600) auf janpow-ai abgelegt. Dort laufen 
 gleichzeitig: Benutzerdienst (`~/.config/flow-agent/agent.key`, ohne Rolle) und Systemdienst
 (`/etc/flow-agent`, Rolle gpu-server, Benutzer flow-agent) – die Enrollment rotiert die Credential,
 der jeweils andere Dienst verliert danach den Zugang; Entscheidung des Nutzers.
+
+## 21. Leitinstanz (Phase F, v0.4.23)
+
+Einstellung `leitinstanz` = {url, benutzer_secret, passwort_secret}. Ist `url` gesetzt (NUC und
+janpow-ai → `http://100.99.159.80:7843`), reicht `LeitinstanzMiddleware` (main.py) jede Anfrage
+unter `/admin/api/auftraege` an die Leitinstanz durch: zuerst lokale Anmeldung prüfen
+(`auth.lookup_session`), dann Anmeldung an der Leitinstanz mit den Vault-Werten
+(`leitinstanz_benutzer`, `leitinstanz_passwort`; Token 50 min gecacht, bei 401 einmal erneuert),
+Antwort unverändert zurück. Runner und Telegram-Dialog ruhen auf Satelliten
+(`runde()`/`dialog_loop` prüfen `leitinstanz.url`). Damit gibt es Aufträge, Kanban-Board, PRs
+und den Telegram-Dialog genau einmal; die Wand, Werkstatt, LLM-Konsole und Hosts bleiben je
+Instanz lokal. Die Leitinstanz selbst hat `url` leer.
