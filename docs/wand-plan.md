@@ -434,3 +434,14 @@ der Planlauf lieferte den Plan ohne Lesezugriff, die Umsetzung „nichts geände
 des Nutzers; `workspace-write` dort, wo bwrap läuft). Nie `--dangerously-bypass-approvals-and-sandbox`;
 Schutz bleibt Worktree + Branch je Auftrag. Beim `exec resume` gehen Sandbox und Freigabe nur
 als `-c sandbox_mode=… -c approval_policy=never` (keine `-s`/`--approve-for-me`-Flags).
+
+**flow-agent-Kachel (v0.4.7):** `flow_agent.zustand()` fasst `/api/v1/health` (ohne Auth),
+`/agents`, `/freshness`, `/notifications/summary` und `/operations/status` zusammen (Cache
+60–120 s): Control Plane + Version, Hosts mit Status/Alter/Projekte/Container/GPU, tmux-Zustand
+und fehlende Werkzeuge, Frische-Zähler mit nicht-grünen Befunden (max. 8), offene/
+fehlgeschlagene Aktionen. Handlungsbedarf: Host offline/unhealthy → kritisch; Check unhealthy,
+fehlgeschlagene Aktionen, Control Plane weg → Warnung; wartende Aktionen → Info. Befund vom
+28.08.: „degraded“ auf 4 Hosts kommt aus tmux-Bewertung und fehlenden Werkzeugen (NUC: restic,
+uv, caddy; EVO: restic, rclone, nvidia-smi, node, npm, gh; Hetzner: nvidia-smi, uv; janpow-ai:
+uv, caddy), einziger nicht-grüner Check „Wissensbasis-Harvest“ (Endpunkt verlangt Anmeldung,
+HTTP 401); die Host-Agenten liefern kein graphify-Feld (`/graphify/status` leer).

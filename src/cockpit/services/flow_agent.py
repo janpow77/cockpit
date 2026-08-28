@@ -23,12 +23,12 @@ _cache: dict[str, tuple[float, object]] = {}
 _lock = threading.Lock()
 
 
-def _get(url: str, token: str, pfad: str, timeout: int = 12) -> object | None:
+def _get(url: str, token: str, pfad: str, timeout: int = 12, ttl: int = CACHE_TTL_S) -> object | None:
     key = f"{url}{pfad}"
     now = time.time()
     with _lock:
         c = _cache.get(key)
-    if c and now - c[0] < CACHE_TTL_S:
+    if c and now - c[0] < ttl:
         return c[1]
     req = urllib.request.Request(f"{url.rstrip('/')}{pfad}", headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "User-Agent": "cockpit/1"})
     try:
@@ -136,3 +136,100 @@ def projekt_kontext(projekt: dict | None, graph: dict | None, findings: list[dic
             zeilen.append(f"Hinweis flow-agent: {str(f.get('message'))[:200]}")
     zeilen.append("Berücksichtige diese Punkte in den Vorschlägen (z. B. uncommittete Arbeit sichern, veralteten graphify-Stand erneuern).")
     return "\n".join(zeilen)
+
+
+# ---------------------------------------------------------------------------
+# Zustand für die Wand-Kachel
+# ---------------------------------------------------------------------------
+
+
+def _get_ohne_auth(url: str, pfad: str, timeout: int = 8) -> object | None:
+    req = urllib.request.Request(f"{url.rstrip('/')}{pfad}", headers={"Accept": "application/json", "User-Agent": "cockpit/1"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError) as exc:
+        log.warning("flow-agent %s: %s", pfad, str(exc)[:120])
+        return None
+
+
+def zustand(url: str, token: str | None, zuordnung: dict[str, str] | None = None) -> dict:
+    """Control Plane, Host-Agenten, Frische-Checks, Meldungen und fehlende Werkzeuge – für die Wand (Fehler → ok=False, nie Ausnahme)."""
+    zuordnung = zuordnung or {}
+    health = _get_ohne_auth(url, "/api/v1/health")
+    if not token:
+        return zustand_aus(url, health, None, None, None, None, zuordnung, note="kein Lese-Schlüssel im Vault")
+    # Wand-Lauf alle 90 s: kurzer Cache, damit Alter und Zustand der Hosts aktuell bleiben
+    return zustand_aus(
+        url, health, _get(url, token, "/api/v1/agents", ttl=60), _get(url, token, "/api/v1/freshness", ttl=60),
+        _get(url, token, "/api/v1/notifications/summary", ttl=60), _get(url, token, "/api/v1/operations/status", ttl=120), zuordnung,
+    )
+
+
+def zustand_aus(url: str, health: object, agents: object, freshness: object, meldungen: object, operations: object,
+                zuordnung: dict[str, str], note: str | None = None) -> dict:
+    """Rohantworten → Kachel-Daten (rein, testbar)."""
+    ok = isinstance(health, dict) and health.get("status") == "ok"
+    out: dict = {
+        "ok": ok, "note": note if note else (None if ok else "Control Plane nicht erreichbar"), "url": url,
+        "version": (health or {}).get("version") if isinstance(health, dict) else None,
+        "hosts": [], "frische": {"status": "unknown", "healthy": 0, "degraded": 0, "unhealthy": 0, "befunde": []},
+        "meldungen": {"hosts_offline": [], "hosts_degraded": [], "pending_actions": 0, "failed_actions_recent": 0},
+        "stand": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+    werkzeuge: dict[str, list[str]] = {}
+    tmux: dict[str, str | None] = {}
+    for a in operations if isinstance(operations, list) else []:
+        if not isinstance(a, dict):
+            continue
+        hn = str(a.get("hostname") or "")
+        werkzeuge[hn] = [str(t.get("name")) for t in (a.get("tools") or []) if isinstance(t, dict) and t.get("installed") is False]
+        tmux[hn] = (a.get("tmux") or {}).get("status") if isinstance(a.get("tmux"), dict) else None
+    for a in agents if isinstance(agents, list) else []:
+        if not isinstance(a, dict):
+            continue
+        hn = str(a.get("hostname") or a.get("agent_id") or "")
+        out["hosts"].append({
+            "host": _host_id(hn, zuordnung), "hostname": hn, "status": str(a.get("status") or "unknown"),
+            "alter_s": a.get("age_seconds"), "projekte": int(a.get("project_count") or 0), "container": int(a.get("container_count") or 0),
+            "gpu": int(a.get("gpu_count") or 0), "tmux": tmux.get(hn), "werkzeuge_fehlen": werkzeuge.get(hn, []),
+        })
+    out["hosts"].sort(key=lambda h: ({"offline": 0, "unhealthy": 0, "degraded": 1, "unknown": 2, "healthy": 3}.get(h["status"], 4), h["host"]))
+    if isinstance(freshness, dict):
+        f = out["frische"]
+        f.update({"status": str(freshness.get("status") or "unknown"), "healthy": int(freshness.get("healthy_count") or 0),
+                  "degraded": int(freshness.get("degraded_count") or 0), "unhealthy": int(freshness.get("unhealthy_count") or 0)})
+        for b in freshness.get("findings") or []:
+            c = b.get("check") if isinstance(b, dict) else None
+            if not isinstance(c, dict) or c.get("status") == "healthy":
+                continue
+            f["befunde"].append({"host": _host_id(str(b.get("hostname") or b.get("agent_id") or ""), zuordnung), "label": str(c.get("label") or c.get("id") or ""),
+                                 "status": str(c.get("status") or "unknown"), "detail": str(c.get("detail") or "")[:220]})
+        f["befunde"] = sorted(f["befunde"], key=lambda x: {"unhealthy": 0, "degraded": 1, "unknown": 2}.get(x["status"], 3))[:8]
+    if isinstance(meldungen, dict):
+        m = out["meldungen"]
+        m.update({"hosts_offline": [_host_id(str(x), zuordnung) for x in (meldungen.get("hosts_offline") or [])],
+                  "hosts_degraded": [_host_id(str(x), zuordnung) for x in (meldungen.get("hosts_degraded") or [])],
+                  "pending_actions": int(meldungen.get("pending_actions") or 0), "failed_actions_recent": int(meldungen.get("failed_actions_recent") or 0)})
+    return out
+
+
+def alarme(z: dict) -> list[dict]:
+    """Handlungsbedarf aus dem flow-agent-Zustand (rein, testbar): Control Plane weg, Host offline, Check unhealthy, Aktionen fehlgeschlagen."""
+    out: list[dict] = []
+    url = z.get("url")
+    if not z.get("ok"):
+        out.append({"level": "warn", "text": f"flow-agent: {z.get('note') or 'nicht erreichbar'}", "host": None, "hint": None, "url": url})
+        return out
+    for h in z.get("hosts") or []:
+        if h.get("status") in ("offline", "unhealthy"):
+            out.append({"level": "krit", "text": f"flow-agent: Host {h['host']} {h['status']}", "host": h["host"], "hint": f"zuletzt vor {h.get('alter_s')} s" if h.get("alter_s") is not None else None, "url": url})
+    for b in (z.get("frische") or {}).get("befunde") or []:
+        if b.get("status") == "unhealthy":
+            out.append({"level": "warn", "text": f"flow-agent: {b['label']} auf {b['host']}", "host": b["host"], "hint": b.get("detail"), "url": url})
+    m = z.get("meldungen") or {}
+    if m.get("failed_actions_recent"):
+        out.append({"level": "warn", "text": f"flow-agent: {m['failed_actions_recent']} Aktion(en) fehlgeschlagen", "host": None, "hint": None, "url": url})
+    if m.get("pending_actions"):
+        out.append({"level": "info", "text": f"flow-agent: {m['pending_actions']} Aktion(en) warten auf Freigabe", "host": None, "hint": None, "url": url})
+    return out

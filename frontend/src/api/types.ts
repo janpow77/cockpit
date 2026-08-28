@@ -293,6 +293,18 @@ export interface GithubCommit { repo: string; sha: string; message: string; auth
 
 export interface WallEvent { ts: string; kind: 'audit' | 'deploy' | 'commit'; text: string }
 
+export interface FlowAgentHost {
+  host: string; hostname: string; status: 'healthy' | 'degraded' | 'offline' | 'unhealthy' | 'unknown' | string
+  alter_s: number | null; projekte: number; container: number; gpu: number; tmux: string | null; werkzeuge_fehlen: string[]
+}
+export interface FlowAgentBefund { host: string; label: string; status: string; detail: string }
+export interface FlowAgentStand {
+  ok: boolean; note: string | null; url: string | null; version: string | null; stand: string | null
+  hosts: FlowAgentHost[]
+  frische: { status: string; healthy: number; degraded: number; unhealthy: number; befunde: FlowAgentBefund[] }
+  meldungen: { hosts_offline: string[]; hosts_degraded: string[]; pending_actions: number; failed_actions_recent: number }
+}
+
 export interface Overview {
   generated_at: string
   hosts: WallHost[]
@@ -311,6 +323,7 @@ export interface Overview {
   dienste: WallDienst[]
   werkstatt: WerkstattHost[]
   kira: KiraStand
+  flow_agent: FlowAgentStand
   ki_nutzung?: KiNutzung
 }
 

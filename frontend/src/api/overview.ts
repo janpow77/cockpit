@@ -86,6 +86,18 @@ function mockOverview(): Overview {
       { id: '1', category: 'architecture', project: 'regulierung', text: 'Demo-Modus: in-process httpx.ASGITransport fährt die eigene API, Vorgang.ist_demo markiert Demo-Daten', tags: ['demo', 'kpang'], created_at: NOW },
       { id: '2', category: 'solution', project: 'regulierung', text: 'Append-only-Trigger beim Demo-Löschen in der Transaktion pausieren (ADR-004)', tags: ['trigger'], created_at: NOW },
     ] },
+    flow_agent: {
+      ok: true, note: null, url: 'https://agent.flowaudit.de', version: '0.2.0', stand: NOW,
+      hosts: [
+        { host: 'nuc', hostname: 'nuc', status: 'healthy', alter_s: 8, projekte: 70, container: 53, gpu: 1, tmux: 'healthy', werkzeuge_fehlen: [] },
+        { host: 'ccx23', hostname: 'ccx23', status: 'degraded', alter_s: 420, projekte: 18, container: 31, gpu: 0, tmux: 'degraded', werkzeuge_fehlen: ['graphify', 'gemini'] },
+        { host: 'evo', hostname: 'evo-workstation', status: 'healthy', alter_s: 52, projekte: 12, container: 3, gpu: 2, tmux: 'healthy', werkzeuge_fehlen: ['gh'] },
+      ],
+      frische: { status: 'degraded', healthy: 20, degraded: 1, unhealthy: 1, befunde: [
+        { host: 'ccx23', label: 'Projektinventar', status: 'degraded', detail: 'Letzte vollständige Erfassung vor 7 Minuten' },
+      ] },
+      meldungen: { hosts_offline: [], hosts_degraded: ['ccx23'], pending_actions: 2, failed_actions_recent: 1 },
+    },
   }
 }
 
