@@ -31,6 +31,7 @@ from ..crud import traffic as crud_traffic
 from ..db import get_session
 from ..models import HostRow
 from ..services import ai_router_client, docker_inspect, github_client, host_stats
+from ..services import flow_agent as fa
 from ..services import ki_nutzung as kn
 from ..services import wall_config as wc
 from ..services import wall_extras as wx
@@ -378,11 +379,20 @@ async def build_overview(session: Session) -> dict:
     ki_task = (
         asyncio.to_thread(kn.abfragen, ki_host, cfg.ki_nutzung)
         if ki_host is not None and ki_host.name in erreichbar
-        else asyncio.sleep(0, result={"ok": False, "hinweis": "KI-Host nicht erreichbar", "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}})
+        else asyncio.sleep(0, result={"ok": False, "hinweis": "LLM-Host nicht erreichbar", "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}})
     )
-    dienste_res, kira_out, ki_out, *werkstatt_res = await asyncio.gather(
-        wx.dienste_pruefen([u for u in urls if u]), kira_task, ki_task, *werkstatt_tasks, return_exceptions=True
+    fa_cfg = cfg.flow_agent or {}
+    fa_task = asyncio.to_thread(
+        fa.zustand, str(fa_cfg.get("url") or "https://agent.flowaudit.de"),
+        _secret_value(session, str(fa_cfg.get("secret_key") or "flow_agent_read_key")),
+        fa_cfg.get("hosts") if isinstance(fa_cfg.get("hosts"), dict) else {},
     )
+    dienste_res, kira_out, ki_out, fa_out, *werkstatt_res = await asyncio.gather(
+        wx.dienste_pruefen([u for u in urls if u]), kira_task, ki_task, fa_task, *werkstatt_tasks, return_exceptions=True
+    )
+    if not isinstance(fa_out, dict):
+        log.warning("Wand: flow-agent fehlgeschlagen: %s", fa_out)
+        fa_out = {"ok": False, "note": str(fa_out)[:120], "url": fa_cfg.get("url"), "hosts": [], "frische": {"status": "unknown", "healthy": 0, "degraded": 0, "unhealthy": 0, "befunde": []}, "meldungen": {"hosts_offline": [], "hosts_degraded": [], "pending_actions": 0, "failed_actions_recent": 0}, "version": None, "stand": None}
     if not isinstance(ki_out, dict):
         log.warning("Wand: KI-Nutzung fehlgeschlagen: %s", ki_out)
         ki_out = {"ok": False, "hinweis": str(ki_out)[:120], "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}}
@@ -444,7 +454,7 @@ async def build_overview(session: Session) -> dict:
         hosts_out, projects_out, backups_out, dienste_out, ai_router_out, github_out, werkstatt_out,
         prod_hosts=cfg.prod_hosts,
     )
-    alerts = sorted(alerts + kn.alarme(ki_out, float(cfg.ki_nutzung.get("warn_pct") or 85)), key=lambda a: {"krit": 0, "warn": 1, "info": 2}.get(a["level"], 9))
+    alerts = sorted(alerts + kn.alarme(ki_out, float(cfg.ki_nutzung.get("warn_pct") or 85)) + fa.alarme(fa_out), key=lambda a: {"krit": 0, "warn": 1, "info": 2}.get(a["level"], 9))
 
     return {
         "generated_at": _iso_now(),
@@ -455,6 +465,7 @@ async def build_overview(session: Session) -> dict:
         "werkstatt": werkstatt_out,
         "kira": kira_out,
         "ki_nutzung": ki_out,
+        "flow_agent": fa_out,
         "hero": {
             **cfg.hero,
             "project_state": hero_proj,

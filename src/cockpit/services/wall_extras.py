@@ -427,7 +427,7 @@ def handlungsbedarf(
             add("warn", f"{d.get('host')} antwortet langsam ({d['ms']} ms)", url=d.get("url"))
 
     if ai_router is not None and not ai_router.get("ok"):
-        add("warn", "ai-router nicht erreichbar – KI-Konsole ohne Modelle")
+        add("warn", "ai-router nicht erreichbar – LLM-Konsole ohne Modelle")
     if github and github.get("enabled") and github.get("error"):
         add("warn", f"GitHub: {github['error']}")
 

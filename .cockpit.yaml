@@ -1,0 +1,7 @@
+# Qualitätstor des Cockpit-Kanbans: Prüfbefehle laufen nach jeder Umsetzung im Worktree (services/auftraege.py, pruefbefehle_aus).
+basis: master
+pruefung:
+  - PYTHONPATH=src python3 -m pytest -q
+  - ruff check src tests
+  - cd frontend && npm run type-check && npm run build
+merge: pr   # das Cockpit mergt nie – nur PR

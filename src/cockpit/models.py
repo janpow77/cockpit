@@ -137,6 +137,59 @@ class SessionRow(Base):
     ip = Column(String, nullable=True)
 
 
+class AuftragRow(Base):
+    """Kanban-Auftrag: ein Agentenlauf (Claude/Codex/Gemini) in einem Worktree (services/auftraege.py)."""
+
+    __tablename__ = "cockpit_auftraege"
+
+    id = Column(String, primary_key=True)
+    titel = Column(String, nullable=False)
+    text = Column(Text, nullable=False)
+    host = Column(String, nullable=False)
+    projekt = Column(String, nullable=False)
+    projekt_name = Column(String, nullable=False, default="")
+    agent = Column(String, nullable=False, default="claude")
+    modus = Column(String, nullable=False, default="umsetzen")  # bericht | plan_freigabe | umsetzen
+    freigegeben = Column(String, nullable=True)  # Zeitpunkt der Freigabe (Modus plan_freigabe)
+    profil = Column(String, nullable=False, default="bearbeiten")
+    prioritaet = Column(Integer, nullable=False, default=3)
+    zeitfenster = Column(String, nullable=False, default="sofort")
+    status = Column(String, nullable=False, default="eingang")
+    reihenfolge = Column(Integer, nullable=False, default=0)
+    branch = Column(String, nullable=True)
+    worktree = Column(String, nullable=True)
+    session_id = Column(String, nullable=True)
+    gestartet = Column(String, nullable=True)
+    beendet = Column(String, nullable=True)
+    dauer_s = Column(Integer, nullable=True)
+    ergebnis = Column(Text, nullable=True)
+    fehler = Column(Text, nullable=True)
+    kosten_usd = Column(Float, nullable=True)
+    tokens_in = Column(Integer, nullable=True)
+    tokens_out = Column(Integer, nullable=True)
+    turns = Column(Integer, nullable=True)
+    letzte_zeile = Column(String, nullable=True)
+    diff_url = Column(String, nullable=True)
+    pruefung = Column(Text, nullable=True)  # JSON: [{befehl, ok, dauer_s, auszug}] – Qualitätstor im Worktree
+    pruefung_ok = Column(Integer, nullable=True)  # 1 = alle Prüfbefehle grün, 0 = mindestens einer rot
+    pr_url = Column(String, nullable=True)
+    pr_checks = Column(String, nullable=True)  # Kurzstand der GitHub-Checks (gh pr checks)
+    erstellt = Column(String, nullable=False)
+    aktualisiert = Column(String, nullable=False)
+
+
+class TelegramNachrichtRow(Base):
+    """Telegram-Nachricht des Cockpits → Auftrag (Antworten per Reply landen beim richtigen Auftrag)."""
+
+    __tablename__ = "cockpit_telegram"
+
+    message_id = Column(Integer, primary_key=True)
+    chat_id = Column(String, primary_key=True)
+    auftrag_id = Column(String, nullable=False)
+    art = Column(String, nullable=False)
+    erstellt = Column(String, nullable=False)
+
+
 class WallSampleRow(Base):
     """Verlauf der Wand: ein Wert je Kennzahl und Lauf (services/verlauf.py)."""
 

@@ -2,7 +2,7 @@
 import { RouterLink } from 'vue-router'
 import {
   LayoutDashboard, Server, AppWindow, Github, Database, KeyRound, History, Settings, Plane,
-  Activity, Rocket, Radar, MessageSquare, Plug, Gauge } from 'lucide-vue-next'
+  Activity, Rocket, Radar, MessageSquare, Plug, KanbanSquare } from 'lucide-vue-next'
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -15,8 +15,8 @@ const items = [
   { to: '/secrets', label: 'Secrets', icon: KeyRound },
   { to: '/audit', label: 'Audit', icon: History },
   { to: '/wall', label: 'Wand', icon: Radar },
-  { to: '/chat', label: 'KI-Konsole', icon: MessageSquare },
-  { to: '/ki', label: 'KI-Nutzung', icon: Gauge },
+  { to: '/chat', label: 'LLM-Konsole', icon: MessageSquare },
+  { to: '/kanban', label: 'Aufträge', icon: KanbanSquare },
   { to: '/mcp', label: 'MCP-Server', icon: Plug },
   { to: '/settings', label: 'Einstellungen', icon: Settings },
 ]
@@ -54,7 +54,7 @@ const items = [
     </nav>
 
     <div class="px-5 py-3 border-t border-slate-200/70 dark:border-slate-800/70 text-xs text-slate-500 dark:text-slate-500">
-      <p>v0.3.24 · Wand, KI-Konsole, MCP</p>
+      <p>v0.3.24 · Wand, LLM-Konsole, MCP</p>
     </div>
   </aside>
 </template>

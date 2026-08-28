@@ -111,6 +111,8 @@ DEFAULT_KIRA: dict[str, Any] = {
 
 # Push-Alarme per Telegram (Bot-Token und Chat-ID im Vault). Nachts nur Kritisches.
 DEFAULT_PUSH: dict[str, Any] = {
+    # Telegram-Dialog (Schaltflächen, Antworten per Reply, Kommandos) – nur auf der Instanz mit aktivem Push
+    "dialog": {"aktiv": True, "erlaubte_user_ids": [], "kuerzen": True},
     "aktiv": True,
     "kanal": "telegram",
     "token_secret": "telegram_bot_token",
@@ -130,6 +132,22 @@ DEFAULT_KI_NUTZUNG: dict[str, Any] = {
     "claude_projekte": "/home/janpow/.claude/projects",
     "codex_sessions": "/home/janpow/.codex/sessions",
     "warn_pct": 85,
+}
+
+# Aufträge (Kanban): Agenten-Programme auf dem Arbeitsplatz-Host, Parallelität, eigene Vorlagen
+DEFAULT_AGENT_BINS: dict[str, str] = {
+    "claude": "/home/janpow/.local/bin/claude",
+    "codex": "/home/janpow/bin/codex",
+    "gemini": "/home/janpow/.npm-global/bin/gemini",
+}
+
+# Wöchentliche Vorschlagsläufe (Kanban): Sonntag 01:00 je aktivem Projekt, Ergebnis → Karten im Eingang
+DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": True, "wochentag": 6, "stunde": 1, "agent": "claude"}
+
+# flow-agent (agent.flowaudit.de): Projektinventar/graphify je Host, Lese-Schlüssel im Vault; hosts = flow-agent-Hostname → Cockpit-Host
+DEFAULT_FLOW_AGENT: dict[str, Any] = {
+    "url": "https://agent.flowaudit.de", "secret_key": "flow_agent_read_key",
+    "hosts": {"janpow-NUC15JNLU7X4": "nuc", "cockpit-nbg1-1": "ccx23", "evo2": "evo", "MacBook-Air.local": "macbook", "janpow-ai": "janpow-ai"},
 }
 
 DEFAULT_DEMO: dict[str, Any] = {
@@ -171,7 +189,7 @@ DEFAULT_CHAT_MODELS: list[dict[str, str]] = [
 ]
 
 DEFAULT_CHAT_SYSTEM = (
-    "Du bist die KI-Konsole des flowaudit-Cockpits von Jan Riener (Prüfbehörde EFRE Hessen, "
+    "Du bist die LLM-Konsole des flowaudit-Cockpits von Jan Riener (Prüfbehörde EFRE Hessen, "
     "Entwickler von HPP, Checklisten-Designer, flowinvoice u. a.). Antworte sachlich und auf Deutsch mit echten "
     "Umlauten – so knapp wie möglich: kurze Fragen in zwei bis vier Sätzen ohne Überschriften, Listen nur bei "
     "Aufzählungen. Stütze dich auf den mitgelieferten Kira-Kontext und zitiere ihn als [n]; "
@@ -210,6 +228,15 @@ class WallConfig:
     prod_hosts: list[str] = field(default_factory=lambda: list(DEFAULT_PROD_HOSTS))
     push: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_PUSH))
     ki_nutzung: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KI_NUTZUNG))
+    agent_bins: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_AGENT_BINS))
+    vorschlaege: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_VORSCHLAEGE))
+    flow_agent: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_FLOW_AGENT))
+    auftrag_vorlagen: list[dict[str, Any]] = field(default_factory=list)
+    auftrag_parallel: int = 3
+    codex_sandbox: str = "danger-full-access"  # bubblewrap auf dem NUC nicht nutzbar; "workspace-write" wo es geht
+    agent_hosts: list[str] = field(default_factory=lambda: ["nuc"])  # Hosts, auf denen claude/codex/agy angemeldet sind
+    auftrag_max_dauer_min: int = 90  # danach gilt ein Lauf als unterbrochen (Fortsetzen möglich)
+    auftrag_aufraeumen_tage: int = 14  # Worktrees fertiger/abgebrochener Aufträge nach so vielen Tagen entfernen
     werkstatt_aktiv_tage: int = 14
     verlauf_tage: int = 30
     chat_max_tokens: int = 900
@@ -225,6 +252,8 @@ class WallConfig:
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
             "push": self.push, "ki_nutzung": self.ki_nutzung, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
+            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege, "flow_agent": self.flow_agent, "codex_sandbox": self.codex_sandbox, "agent_hosts": self.agent_hosts,
+            "auftrag_max_dauer_min": self.auftrag_max_dauer_min, "auftrag_aufraeumen_tage": self.auftrag_aufraeumen_tage,
             "verlauf_tage": self.verlauf_tage, "chat_max_tokens": self.chat_max_tokens,
         }
 
@@ -258,10 +287,16 @@ def load(session: Session) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent"):
         if isinstance(raw.get(name), dict):
             setattr(cfg, name, raw[name])
-    for name, lo, hi in (("werkstatt_aktiv_tage", 1, 365), ("verlauf_tage", 1, 365), ("chat_max_tokens", 100, 8000)):
+    if isinstance(raw.get("auftrag_vorlagen"), list):
+        cfg.auftrag_vorlagen = raw["auftrag_vorlagen"]
+    if raw.get("codex_sandbox") in ("danger-full-access", "workspace-write"):
+        cfg.codex_sandbox = str(raw["codex_sandbox"])
+    if isinstance(raw.get("agent_hosts"), list):
+        cfg.agent_hosts = [str(h) for h in raw["agent_hosts"] if h]
+    for name, lo, hi in (("werkstatt_aktiv_tage", 1, 365), ("verlauf_tage", 1, 365), ("chat_max_tokens", 100, 8000), ("auftrag_parallel", 1, 8), ("auftrag_max_dauer_min", 5, 1440), ("auftrag_aufraeumen_tage", 1, 365)):
         if isinstance(raw.get(name), int) and lo <= raw[name] <= hi:
             setattr(cfg, name, raw[name])
     if isinstance(raw.get("backup_dir"), str) and raw["backup_dir"]:
@@ -281,10 +316,16 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent"):
         if isinstance(patch.get(name), dict):
             raw[name] = patch[name]
-    for name in ("werkstatt_aktiv_tage", "verlauf_tage", "chat_max_tokens"):
+    if isinstance(patch.get("auftrag_vorlagen"), list):
+        raw["auftrag_vorlagen"] = patch["auftrag_vorlagen"]
+    if patch.get("codex_sandbox") in ("danger-full-access", "workspace-write"):
+        raw["codex_sandbox"] = patch["codex_sandbox"]
+    if isinstance(patch.get("agent_hosts"), list):
+        raw["agent_hosts"] = [str(h) for h in patch["agent_hosts"] if h]
+    for name in ("werkstatt_aktiv_tage", "verlauf_tage", "chat_max_tokens", "auftrag_parallel", "auftrag_max_dauer_min", "auftrag_aufraeumen_tage"):
         if isinstance(patch.get(name), int):
             raw[name] = patch[name]
     for name in ("backup_dir", "chat_system"):

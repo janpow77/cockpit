@@ -81,11 +81,23 @@ function mockOverview(): Overview {
     ki_nutzung: { ok: true, host: 'nuc',
       claude: { verfuegbar: true, plan: 'max', limits: { five_hour: { label: '5 Stunden', prozent: 16, reset: NOW }, seven_day: { label: '7 Tage', prozent: 62, reset: NOW } }, heute: { out: 301339, kontext: 194995828 }, tage: [{ tag: '2026-08-22', out: 204492, kontext: 1 }, { tag: '2026-08-23', out: 51388, kontext: 1 }, { tag: '2026-08-24', out: 147617, kontext: 1 }, { tag: '2026-08-25', out: 1471180, kontext: 1 }, { tag: '2026-08-26', out: 610550, kontext: 1 }, { tag: '2026-08-27', out: 1776199, kontext: 1 }, { tag: '2026-08-28', out: 301339, kontext: 1 }] },
       codex: { verfuegbar: true, plan: 'prolite', limits: { primary: { label: '7 Tage', prozent: 1, reset: NOW } }, heute: { out: 9930, kontext: 852286, sitzungen: 1 }, tage: [] },
-      gemini: { verfuegbar: false, hinweis: 'Gemini CLI legt keine Nutzungsdaten ab' } },
+      gemini: { verfuegbar: false, hinweis: 'Antigravity (agy) über das Google-Abo – Kontingent nur in agy (/usage) einsehbar' } },
     kira: { ok: true, total: 1284, note: null, host: 'nuc', entries: [
       { id: '1', category: 'architecture', project: 'regulierung', text: 'Demo-Modus: in-process httpx.ASGITransport fährt die eigene API, Vorgang.ist_demo markiert Demo-Daten', tags: ['demo', 'kpang'], created_at: NOW },
       { id: '2', category: 'solution', project: 'regulierung', text: 'Append-only-Trigger beim Demo-Löschen in der Transaktion pausieren (ADR-004)', tags: ['trigger'], created_at: NOW },
     ] },
+    flow_agent: {
+      ok: true, note: null, url: 'https://agent.flowaudit.de', version: '0.2.0', stand: NOW,
+      hosts: [
+        { host: 'nuc', hostname: 'nuc', status: 'healthy', alter_s: 8, projekte: 70, container: 53, gpu: 1, tmux: 'healthy', werkzeuge_fehlen: [] },
+        { host: 'ccx23', hostname: 'ccx23', status: 'degraded', alter_s: 420, projekte: 18, container: 31, gpu: 0, tmux: 'degraded', werkzeuge_fehlen: ['graphify', 'gemini'] },
+        { host: 'evo', hostname: 'evo-workstation', status: 'healthy', alter_s: 52, projekte: 12, container: 3, gpu: 2, tmux: 'healthy', werkzeuge_fehlen: ['gh'] },
+      ],
+      frische: { status: 'degraded', healthy: 20, degraded: 1, unhealthy: 1, befunde: [
+        { host: 'ccx23', label: 'Projektinventar', status: 'degraded', detail: 'Letzte vollständige Erfassung vor 7 Minuten' },
+      ] },
+      meldungen: { hosts_offline: [], hosts_degraded: ['ccx23'], pending_actions: 2, failed_actions_recent: 1 },
+    },
   }
 }
 
