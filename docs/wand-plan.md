@@ -506,3 +506,5 @@ Eintrag entfernt (`/ki` leitet auf `/kanban`), die Anzeige lebt als einklappbare
 LLM-Aufträge, LLM-Host); Projektname „KI-Pilotprogramm“ bleibt. Bezeichner, Routen (`/chat`,
 `/ki`) und Dateinamen unverändert. Außerdem: Karte beim Spaltenwechsel nicht mehr doppelt
 (Dedup nach id, keine Leave-Animation über Spalten hinweg).
+Halbkreis-Anzeigen der LLM-Nutzung: der Wertbogen (`bogen()`) nutzte ab 50 % das
+Large-Arc-Flag – der Bogen überspannt aber nie mehr als 180°, Flag daher immer 0 (v0.4.13).
