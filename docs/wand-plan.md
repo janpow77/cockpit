@@ -307,3 +307,8 @@ DejaVu im Image): Kopf mit Instanz und Zeit, je Punkt eine Zeile mit Farbbalken,
 grün, Verlauf 24 h der betroffenen Kennzahlen (Platte/RAM/Last je Host, Antwortzeit je
 Dienst, sonst Alarmzahlen), Fußzeile mit Zusammenfassung und Wand-Adresse; Kurztext als
 HTML-Caption. Ohne Bild (Pillow/Schrift fehlt, Telegram lehnt ab) geht reiner Text raus.
+
+**Sonden-Fallstricke (v0.3.18/19):** Ein fehlender tmux-Server liefert Exit 1 – daher `|| true`;
+auf macOS läuft die Sonde in zsh, das bei leeren Globs (`/sys/class/drm/card*`) den Befehl
+abbricht – daher `setopt nonomatch` am Anfang und die GPU-Schleife nur bei vorhandenem
+`/sys/class/drm`. Beides erzeugte sonst den Fehlalarm „Kennzahlen nicht abrufbar“.
