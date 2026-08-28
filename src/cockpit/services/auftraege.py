@@ -26,8 +26,17 @@ from .ssh_runner import run_on_host
 
 log = logging.getLogger(__name__)
 
-STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "fertig", "fehler", "abgebrochen")
+STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "freigabe", "fertig", "fehler", "abgebrochen")
 AGENTEN = ("claude", "codex", "gemini")
+# Modus: nur berichten/planen · Plan zeigen und erst nach Freigabe umsetzen · direkt umsetzen
+MODI = ("bericht", "plan_freigabe", "umsetzen")
+# Antigravity CLI (agy, Google-Abo): Berechtigungen im Druckmodus nur pauschal – Schreibprofile im Sandkasten
+PROFILE_AGY: dict[str, str] = {
+    "lesen": "--sandbox",
+    "bearbeiten": "--sandbox --dangerously-skip-permissions",
+    "bearbeiten_tests": "--sandbox --dangerously-skip-permissions",
+    "voll": "--sandbox --dangerously-skip-permissions",
+}
 # Profile je Agent (nie Bypass-Flags):
 PROFILE_CODEX: dict[str, str] = {
     "lesen": "-s read-only",
@@ -75,6 +84,7 @@ def neue_id() -> str:
 def as_dict(a: AuftragRow) -> dict:
     return {
         "id": a.id, "titel": a.titel, "text": a.text, "host": a.host, "projekt": a.projekt, "agent": a.agent,
+        "modus": a.modus, "freigegeben": a.freigegeben,
         "projekt_name": a.projekt_name, "profil": a.profil, "prioritaet": a.prioritaet,
         "zeitfenster": a.zeitfenster, "status": a.status, "reihenfolge": a.reihenfolge,
         "branch": a.branch, "worktree": a.worktree, "session_id": a.session_id,
@@ -163,22 +173,81 @@ def _lauf_pfade(a: AuftragRow) -> dict[str, str]:
     }
 
 
+def phase(a: AuftragRow) -> str:
+    """'plan' = nur lesen und berichten/planen; 'umsetzung' = Dateien ändern erlaubt (rein, testbar)."""
+    modus = getattr(a, "modus", "umsetzen") or "umsetzen"
+    if modus == "umsetzen":
+        return "umsetzung"
+    if modus == "plan_freigabe" and getattr(a, "freigegeben", None):
+        return "umsetzung"
+    return "plan"
+
+
+def effektives_profil(a: AuftragRow) -> str:
+    """Berichts-/Planphase läuft immer im Leseprofil; die Umsetzung mit dem Profil der Karte."""
+    return "lesen" if phase(a) == "plan" else a.profil
+
+
+PLAN_SUFFIX = {
+    "bericht": (
+        "\n\n[Modus: nur Bericht] Ändere KEINE Dateien und führe keine schreibenden Befehle aus. "
+        "Analysiere, berichte und schlage einen konkreten Umsetzungsplan vor: nummerierte Schritte, betroffene Dateien (Datei:Zeile), Risiken, nötige Tests, geschätzter Umfang."
+    ),
+    "plan_freigabe": (
+        "\n\n[Modus: Plan mit Freigabe] Ändere jetzt noch KEINE Dateien. Erstelle zuerst einen Umsetzungsplan: nummerierte Schritte, betroffene Dateien (Datei:Zeile), "
+        "Risiken, nötige Tests, geschätzter Umfang. Ich prüfe den Plan und gebe ihn frei – erst danach wird in derselben Sitzung umgesetzt."
+    ),
+}
+UMSETZUNG_TEXT = (
+    "Freigegeben. Setze den Plan jetzt vollständig um – in derselben Reihenfolge, mit Tests/Lint/Build nach Konvention des Repos und kleinen, sprechenden Commits. "
+    "{hinweis}Berichte am Ende: was geändert wurde, was offen blieb, welche Tests liefen."
+)
+
+
+def prompt_fuer(a: AuftragRow, *, resume: bool = False, nachfrage: str | None = None) -> str:
+    """Auftragstext für den Lauf: Nachfrage bei Fortsetzung, sonst Text plus Modus-Zusatz in der Planphase (rein, testbar)."""
+    if resume and nachfrage:
+        return nachfrage
+    text = a.text
+    if phase(a) == "plan":
+        text += PLAN_SUFFIX.get(getattr(a, "modus", "") or "", PLAN_SUFFIX["bericht"])
+    return text
+
+
+def umsetzungstext(hinweis: str | None = None) -> str:
+    h = (hinweis or "").strip()
+    return UMSETZUNG_TEXT.format(hinweis=(f"Hinweis: {h} " if h else ""))
+
+
+def status_nach_erfolg(a: AuftragRow, ergebnis: str | None) -> str:
+    """Nach erfolgreichem Lauf: Plan wartet auf Freigabe, Frage → Rückfrage, sonst fertig (rein, testbar)."""
+    if (getattr(a, "modus", "") or "") == "plan_freigabe" and not getattr(a, "freigegeben", None):
+        return "freigabe"
+    return "rueckfrage" if ist_rueckfrage(ergebnis) else "fertig"
+
+
 def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool, pfade: dict[str, str]) -> str:
     """Der eigentliche Agentenaufruf im Worktree (rein, testbar). Ausgabe als JSON-Zeilen ins Protokoll."""
     prompt = f'"$(cat {pfade["prompt"]})"'
+    profil = effektives_profil(a)
     if a.agent == "codex":
         bin_ = bins.get("codex", "codex")
-        flags = PROFILE_CODEX.get(a.profil, PROFILE_CODEX["bearbeiten"])
+        flags = PROFILE_CODEX.get(profil, PROFILE_CODEX["bearbeiten"])
         if resume and a.session_id:
             return f"{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json {flags} --skip-git-repo-check"
         return f"{bin_} exec {prompt} --json {flags} --skip-git-repo-check"
     if a.agent == "gemini":
         bin_ = bins.get("gemini", "gemini")
-        flags = PROFILE_GEMINI.get(a.profil, PROFILE_GEMINI["bearbeiten"])
+        if bin_.rstrip("/").rsplit("/", 1)[-1] == "agy":
+            # Antigravity CLI (Google-Abo): agy -p … --output-format stream-json, Fortsetzung über --conversation <id>
+            flags = PROFILE_AGY.get(profil, PROFILE_AGY["bearbeiten"])
+            resume_flag = f"--conversation {shlex.quote(a.session_id)}" if resume and a.session_id else ""
+            return f"{bin_} -p {prompt} --output-format stream-json {flags} {resume_flag}".strip()
+        flags = PROFILE_GEMINI.get(profil, PROFILE_GEMINI["bearbeiten"])
         resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
         return f"{bin_} -p {prompt} -o stream-json {flags} {resume_flag}".strip()
     bin_ = bins.get("claude", "claude")
-    flags = PROFILE.get(a.profil, PROFILE["bearbeiten"])
+    flags = PROFILE.get(profil, PROFILE["bearbeiten"])
     resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
     return f"{bin_} -p {prompt} {flags} {resume_flag} --output-format stream-json --verbose --max-turns {MAX_TURNS}".replace("  ", " ")
 
@@ -187,7 +256,7 @@ def start_befehl(a: AuftragRow, *, bins: dict[str, str] | None = None, resume: b
     """Shell-Befehl fuer den Start auf dem Host (rein, testbar): Worktree anlegen, Agent im Hintergrund."""
     p = _lauf_pfade(a)
     branch = a.branch or f"auftrag/{a.id}"
-    text = nachfrage if (resume and nachfrage) else a.text
+    text = prompt_fuer(a, resume=resume, nachfrage=nachfrage)
     lauf = agent_befehl(a, bins=bins or {}, text=text, resume=resume, pfade=p)
     wt = shlex.quote(p["worktree"])
     lauf_hinten = f"{lauf} > {p['log']} 2> {p['stderr']}; echo $? > {p['done']}"
@@ -365,8 +434,8 @@ def _ergebnis_gemini(roh: str) -> dict | None:
         except ValueError:
             continue
         typ = str(d.get("type") or d.get("event") or "")
-        if typ in ("init", "session") and d.get("session_id"):
-            sid = d.get("session_id")
+        if d.get("conversation_id") or (typ in ("init", "session") and d.get("session_id")):
+            sid = d.get("conversation_id") or d.get("session_id")
         z = _gemini_zeile(d)
         if z and z["art"] == "text":
             text = z["text"]
@@ -577,5 +646,13 @@ def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None
             felder["diff_url"] = diff_url(github_url, "master", a.branch or f"auftrag/{a.id}")
     except Exception as exc:  # noqa: BLE001
         log.warning("Auftrag %s Abschluss: %s", a.id, exc)
-    felder["status"] = "rueckfrage" if ist_rueckfrage(felder.get("ergebnis")) else "fertig"
+    felder["status"] = status_nach_erfolg(a, felder.get("ergebnis"))
+    if felder["status"] == "freigabe":
+        felder["letzte_zeile"] = "Plan liegt vor – Freigabe im Kanban"
     return aendern(session, a, **felder)
+
+
+def umsetzen(session: Session, a: AuftragRow, *, bins: dict[str, str], hinweis: str | None = None) -> AuftragRow:
+    """Freigabe eines Plans: Sitzung fortsetzen, jetzt mit Schreibprofil."""
+    a = aendern(session, a, freigegeben=_iso(), text=f"{a.text}\n\n--- Freigabe ---\n{umsetzungstext(hinweis)}")
+    return starten(session, a, bins=bins, resume=True, nachfrage=umsetzungstext(hinweis))

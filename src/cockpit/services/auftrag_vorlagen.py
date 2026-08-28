@@ -12,6 +12,7 @@ VORLAGEN: list[dict] = [
         "id": "repo-pruefen",
         "titel": "Repo prüfen: {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 3,
         "text": (
             "Prüfe dieses Repository gründlich und erstelle einen Befundbericht (Deutsch, echte Umlaute, sachlich).\n"
@@ -28,6 +29,7 @@ VORLAGEN: list[dict] = [
         "id": "gui-verbessern",
         "titel": "Oberfläche verbessern: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 3,
         "text": (
             "Verbessere die Benutzeroberfläche dieses Projekts, ohne das Verhalten zu ändern. Reihenfolge:\n"
@@ -42,6 +44,7 @@ VORLAGEN: list[dict] = [
         "id": "tests-ergaenzen",
         "titel": "Tests ergänzen: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 3,
         "text": (
             "Erhöhe die Testabdeckung dort, wo es am meisten bringt: Kernlogik, Grenzfälle, Fehlerpfade. "
@@ -53,6 +56,7 @@ VORLAGEN: list[dict] = [
         "id": "sicherheit",
         "titel": "Sicherheits-Audit: {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 2,
         "text": (
             "Führe ein Sicherheits-Audit durch (OWASP Top 10, Secrets, Auth/Session, Injection in Shell/SQL/HTML, SSRF, Pfad-Traversal, unsichere Defaults, Abhängigkeiten mit bekannten Lücken). "
@@ -63,6 +67,7 @@ VORLAGEN: list[dict] = [
         "id": "doku",
         "titel": "Dokumentation aktualisieren: {projekt}",
         "profil": "bearbeiten",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Bringe README, CLAUDE.md/ARCHITEKTUR.md und Docstrings auf den Stand des Codes: Befehle, Ports, Umgebungsvariablen, Architektur, bekannte Fallstricke. "
@@ -73,6 +78,7 @@ VORLAGEN: list[dict] = [
         "id": "abhaengigkeiten",
         "titel": "Abhängigkeiten aktualisieren: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Aktualisiere die Abhängigkeiten vorsichtig: zuerst Patch- und Minor-Versionen, Major nur mit Begründung. "
@@ -83,6 +89,7 @@ VORLAGEN: list[dict] = [
         "id": "performance",
         "titel": "Performance prüfen: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Finde die drei größten Leistungsbremsen (N+1-Abfragen, fehlende Indizes, synchrone Aufrufe im Async-Pfad, unnötige Re-Renders, große Bundles). "
@@ -93,6 +100,7 @@ VORLAGEN: list[dict] = [
         "id": "fehler-beheben",
         "titel": "Fehler beheben: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 2,
         "text": (
             "Behebe folgenden Fehler: <hier beschreiben – Symptom, Schritte, erwartetes Verhalten>.\n"
@@ -103,6 +111,7 @@ VORLAGEN: list[dict] = [
         "id": "vorschlaege",
         "titel": "Vorschläge einholen: {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 3,
         "text": (
             "Analysiere dieses Repository und mache mir konkrete Vorschläge, was ich als Nächstes ändern sollte. Quellen:\n"
@@ -118,6 +127,7 @@ VORLAGEN: list[dict] = [
         "id": "pr-review",
         "titel": "Offene Pull Requests prüfen: {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 2,
         "text": (
             "Prüfe alle offenen Pull Requests (`gh pr list`, `gh pr diff <nr>`, `gh pr checks <nr>`). Je PR: Zweck in einem Satz, Risiken (Verhalten, Sicherheit, Migrationen, Tests), Zustand der Checks, Empfehlung (mergen / nacharbeiten / schließen) mit Begründung. "
@@ -128,6 +138,7 @@ VORLAGEN: list[dict] = [
         "id": "issues-triage",
         "titel": "Issues sichten: {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 3,
         "text": (
             "Sichte die offenen GitHub-Issues (`gh issue list --limit 100`, `gh issue view <nr>`). Je Issue: reproduzierbar? Ursache im Code (Datei:Zeile) vermutet? Aufwand (S/M/L), Nutzen, Vorschlag zur Umsetzung. "
@@ -138,6 +149,7 @@ VORLAGEN: list[dict] = [
         "id": "refactoring",
         "titel": "Aufräumen und entflechten: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Verhaltenserhaltendes Refactoring: doppelten Code zusammenführen, tote Pfade und unbenutzte Exporte entfernen, überlange Funktionen (> 80 Zeilen) sinnvoll teilen, Namen vereinheitlichen. "
@@ -148,6 +160,7 @@ VORLAGEN: list[dict] = [
         "id": "barrierefreiheit",
         "titel": "Barrierefreiheit prüfen: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Prüfe die Oberfläche gegen WCAG 2.2 AA (Tastaturbedienung, sichtbarer Fokus, Kontrast ≥ 4,5:1, Beschriftungen von Formularfeldern und Schaltflächen, ARIA nur wo nötig, Fehlermeldungen zugeordnet, Dialoge mit Fokusfalle und Escape, `prefers-reduced-motion`). "
@@ -158,6 +171,7 @@ VORLAGEN: list[dict] = [
         "id": "fehlerbehandlung",
         "titel": "Fehlerbehandlung und Protokollierung: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 3,
         "text": (
             "Prüfe Fehlerbehandlung und Logging: nackte `except:`, verschluckte Ausnahmen, fehlende Timeouts bei Netz-/Subprozess-Aufrufen, Fehler ohne Kontext (welcher Datensatz, welcher Host), Log-Ausgaben mit Secrets. "
@@ -168,6 +182,7 @@ VORLAGEN: list[dict] = [
         "id": "todo-aufraeumen",
         "titel": "TODO/FIXME abarbeiten: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Sammle alle TODO/FIXME/XXX/HACK-Markierungen (`rg -n 'TODO|FIXME|XXX|HACK'`). Je Markierung: erledigen, wenn klar und klein (mit Test); sonst in einen Bericht mit Aufwandsschätzung und Vorschlag übernehmen und die Markierung mit Datum und Verweis präzisieren. "
@@ -178,6 +193,7 @@ VORLAGEN: list[dict] = [
         "id": "ci-pruefen",
         "titel": "CI und flackernde Tests: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 3,
         "text": (
             "Prüfe die CI (`gh run list --limit 30`, `gh run view <id> --log-failed`): welche Läufe scheitern, welche Tests flackern (mal rot, mal grün)? Finde die Ursache (Zeit, Reihenfolge, Netz, gemeinsamer Zustand) und behebe sie – keine `retry`- oder `skip`-Pflaster. "
@@ -188,6 +204,7 @@ VORLAGEN: list[dict] = [
         "id": "release-vorbereiten",
         "titel": "Release vorbereiten: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 2,
         "text": (
             "Bereite ein Release vor: CHANGELOG aus `git log` seit dem letzten Tag (nach Nutzen gruppiert: Neu / Verbessert / Behoben / Sicherheit; Deutsch mit echten Umlauten), Version nach der Konvention des Repos anheben (package.json, pyproject, compose-Tag), Migrationen und Konfigurationsänderungen im Abschnitt »Beim Update beachten« auflisten. "
@@ -198,6 +215,7 @@ VORLAGEN: list[dict] = [
         "id": "datenschutz",
         "titel": "Datenschutz prüfen (DSGVO): {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 2,
         "text": (
             "Prüfe die Verarbeitung personenbezogener Daten: Welche Felder sind personenbezogen (Name, E-Mail, IP, Kennzeichen, Standort)? Wo werden sie gespeichert, protokolliert, an Dritte übertragen (APIs, LLM-Gateways, Telemetrie)? Gibt es Löschkonzept, Aufbewahrungsfristen, Zugriffsbeschränkung, Verschlüsselung, Audit-Log? "
@@ -208,6 +226,7 @@ VORLAGEN: list[dict] = [
         "id": "container-haerten",
         "titel": "Container und Deployment härten: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 3,
         "text": (
             "Prüfe Dockerfile, compose und Deploy-Skripte: unprivilegierter Nutzer, feste Basis-Image-Versionen, kleine Images (Multi-Stage), keine Secrets im Image oder in ENV-Defaults, Healthchecks, Ressourcenlimits, read-only wo möglich, gepinnte Abhängigkeiten, `.dockerignore`. "
@@ -218,6 +237,7 @@ VORLAGEN: list[dict] = [
         "id": "api-doku",
         "titel": "API dokumentieren: {projekt}",
         "profil": "bearbeiten",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Bringe die API-Dokumentation auf Stand: OpenAPI-Beschreibungen (summary/description/Beispiele) je Endpunkt, Fehlercodes, Auth-Anforderungen; ein kurzes `docs/api.md` mit typischen Aufrufen (curl). "
@@ -228,6 +248,7 @@ VORLAGEN: list[dict] = [
         "id": "migrationen-pruefen",
         "titel": "Datenbank-Migrationen prüfen: {projekt}",
         "profil": "lesen",
+        "modus": "bericht",
         "prioritaet": 3,
         "text": (
             "Prüfe Schema und Migrationen: Modelle gegen Migrationen (Drift?), fehlende Indizes für häufige Abfragen, fehlende Fremdschlüssel/Constraints, nicht rückwärtskompatible Migrationen, lange Sperren bei großen Tabellen, `downgrade` vorhanden und sinnvoll? "
@@ -235,9 +256,109 @@ VORLAGEN: list[dict] = [
         ),
     },
     {
+        "id": "icons-vereinheitlichen",
+        "titel": "Icons vereinheitlichen: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 4,
+        "text": (
+            "Vereinheitliche die Icons der Oberfläche: ein Icon-Satz (z. B. lucide) statt Mischung aus Emoji, Unicode-Symbolen und mehreren Bibliotheken; gleiche Größe je Kontext (Schaltfläche, Menü, Tabelle), gleiche Strichstärke, gleiche Farbe wie der Text, `aria-hidden` bei rein dekorativen Icons und beschriftete Schaltflächen ohne Text. "
+            "Erstelle zuerst eine Tabelle aller verwendeten Icons (Datei, Icon, Bedeutung) und lege eine Zuordnung Bedeutung → Icon fest (gleiche Bedeutung = gleiches Icon überall). Dann umsetzen, Type-Check/Lint/Build grün, Commit."
+        ),
+    },
+    {
+        "id": "uebersetzen",
+        "titel": "Übersetzen / Sprache vereinheitlichen: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 4,
+        "text": (
+            "Bringe alle nutzersichtbaren Texte in eine Sprache: <Zielsprache, Vorgabe Deutsch> – Oberfläche, Fehlermeldungen, E-Mails/PDF-Texte, Platzhalter, Tooltips, Datums- und Zahlenformate (de-DE: DD.MM.JJJJ, 1.234,56). "
+            "Englische Reste, Denglisch und ASCII-Umlaute (ae/oe/ue) beseitigen; Fachbegriffe einheitlich (Glossar anlegen: Begriff → Übersetzung). Gibt es ein i18n-System, dessen Struktur nutzen und fehlende Schlüssel ergänzen; sonst Texte direkt korrigieren. Bezeichner im Code bleiben Englisch. Commit je Bereich."
+        ),
+    },
+    {
+        "id": "design-vereinheitlichen",
+        "titel": "Farben, Abstände, Typografie vereinheitlichen: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 4,
+        "text": (
+            "Vereinheitliche das Erscheinungsbild: eine Farbpalette (Primär, Akzent, Neutral, Status-Farben) als Design-Tokens/Tailwind-Konfiguration statt verstreuter Hex-Werte; einheitliche Abstände (Skala), Schriftgrößen und Rundungen; gleiche Komponenten für gleiche Zwecke (Schaltflächen, Karten, Chips, Tabellen). "
+            "Zuerst Bestandsaufnahme (welche Werte kommen wie oft vor), dann Zuordnung auf Tokens, dann Ersetzung. Kein neues Design – nur Konsistenz. Build grün, Commit je Schritt."
+        ),
+    },
+    {
+        "id": "zustaende",
+        "titel": "Leer-, Lade- und Fehlerzustände: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 3,
+        "text": (
+            "Prüfe jede Seite und Liste auf die drei Zustände: leer (verständlicher Hinweis + nächste Aktion), laden (Skeleton/Spinner ohne Layout-Sprung) und Fehler (was ist passiert, was kann ich tun, erneut versuchen). "
+            "Ergänze fehlende Zustände mit den vorhandenen Komponenten des Repos, deutsche Texte mit echten Umlauten. Build grün, Commit."
+        ),
+    },
+    {
+        "id": "tabellen-export",
+        "titel": "Tabellen: Sortierung, Filter, Export: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 3,
+        "text": (
+            "Bringe alle Tabellen auf einen Stand: sortierbare Spalten, Filter/Suche wo sinnvoll, Seitenumbruch bei > 50 Zeilen, Zahlen rechtsbündig mit de-DE-Format, Datum DD.MM.JJJJ, und je Tabelle ein Export als XLSX (und CSV) mit denselben Spalten und Filtern wie in der Ansicht. "
+            "Vorhandene Export-Hilfen des Repos wiederverwenden, nicht neu erfinden. Kein toFixed(). Tests für den Export, Build grün, Commit."
+        ),
+    },
+    {
+        "id": "formulare",
+        "titel": "Formulare und Validierung vereinheitlichen: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 4,
+        "text": (
+            "Vereinheitliche Formulare: Beschriftungen über dem Feld, Pflichtfelder markiert, Validierung beim Verlassen des Feldes und beim Absenden mit Fehlermeldung direkt am Feld (deutsch, konkret: was fehlt, welches Format), Speichern-Schaltfläche mit Ladezustand, keine Doppel-Absendung, Abbrechen ohne Datenverlust-Nachfrage. "
+            "Gleiche Komponenten für gleiche Feldtypen (Datum, Betrag, Auswahl). Build grün, Commit."
+        ),
+    },
+    {
+        "id": "mobil",
+        "titel": "Mobile Ansicht prüfen: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 4,
+        "text": (
+            "Prüfe alle Seiten bei 390 px und 768 px Breite: keine horizontale Scrollleiste, Tabellen mit eigenem Scrollbereich oder Kartenansicht, Navigation erreichbar, Schaltflächen ≥ 44 px, Formulare bedienbar, Diagramme skaliert. "
+            "Behebe mit den vorhandenen Responsive-Mitteln (Tailwind-Breakpoints, Grid). Build grün, Commit je Seite oder Bereich."
+        ),
+    },
+    {
+        "id": "benennung",
+        "titel": "Benennung und Begriffe vereinheitlichen: {projekt}",
+        "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
+        "prioritaet": 4,
+        "text": (
+            "Vereinheitliche Begriffe in Oberfläche, API und Doku: dieselbe Sache heißt überall gleich (z. B. »Vorgang« statt mal »Fall«, mal »Akte«), Menüpunkte und Seitentitel stimmen überein, Schaltflächen benennen die Aktion (»Speichern«, nicht »OK«). "
+            "Erstelle ein Glossar (Begriff, Bedeutung, Fundstellen), stimme es mit der Fachsprache des Repos (CLAUDE.md, Doku) ab und setze es um. Bezeichner im Code nur umbenennen, wenn Tests es absichern. Commit je Begriff-Gruppe."
+        ),
+    },
+    {
+        "id": "datenqualitaet",
+        "titel": "Datenqualität prüfen: {projekt}",
+        "profil": "lesen",
+        "modus": "bericht",
+        "prioritaet": 3,
+        "text": (
+            "Prüfe die Datenhaltung auf Qualitätsprobleme: Pflichtfelder ohne Constraint, Duplikate, verwaiste Datensätze, inkonsistente Einheiten/Formate (Netto/Brutto, EUR/kWh vs. ct/kWh, Datumsformate), fehlende Plausibilitätsprüfungen beim Import. "
+            "Liefere je Befund: Tabelle/Feld, Beispiel, Auswirkung, Vorschlag (Constraint, Migration, Validierung, Bereinigungsskript). Keine Änderungen."
+        ),
+    },
+    {
         "id": "umlaute-sprache",
         "titel": "Sprache und Umlaute prüfen: {projekt}",
         "profil": "bearbeiten_tests",
+        "modus": "plan_freigabe",
         "prioritaet": 4,
         "text": (
             "Prüfe alle nutzersichtbaren Texte (UI, PDFs, Fehlermeldungen, DB-Werte): echte Umlaute (ä ö ü ß) statt ae/oe/ue, Behördensprache (Begünstigte, Behörde, Förderung, VerwK = Verwaltungskontrolle, Feststellungen), einheitliche Datumsformate DD.MM.JJJJ. "
@@ -252,5 +373,9 @@ def vorlagen(extra: list[dict] | None = None) -> list[dict]:
     out = {v["id"]: dict(v) for v in VORLAGEN}
     for v in extra or []:
         if isinstance(v, dict) and v.get("id") and v.get("text"):
-            out[str(v["id"])] = {"id": str(v["id"]), "titel": str(v.get("titel") or v["id"]), "profil": str(v.get("profil") or "bearbeiten"), "prioritaet": int(v.get("prioritaet") or 3), "text": str(v["text"])}
+            out[str(v["id"])] = {
+                "id": str(v["id"]), "titel": str(v.get("titel") or v["id"]), "profil": str(v.get("profil") or "bearbeiten"),
+                "modus": str(v.get("modus") or ("bericht" if v.get("profil") == "lesen" else "plan_freigabe")),
+                "prioritaet": int(v.get("prioritaet") or 3), "text": str(v["text"]),
+            }
     return list(out.values())

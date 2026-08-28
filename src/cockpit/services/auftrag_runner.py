@@ -59,8 +59,9 @@ async def _pushen(session: Session, a, cfg: wc.WallConfig) -> None:
     chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
     if not token or not chat_id:
         return
-    symbol = {"fertig": "✅", "rueckfrage": "❓", "fehler": "🔴", "abgebrochen": "⏹"}.get(a.status, "•")
-    zeilen = [f"{symbol} Auftrag {a.status}: {a.titel}", f"{a.agent} · {a.projekt_name} auf {a.host}"]
+    symbol = {"fertig": "✅", "rueckfrage": "❓", "freigabe": "📋", "fehler": "🔴", "abgebrochen": "⏹"}.get(a.status, "•")
+    label = {"freigabe": "Plan liegt vor – Freigabe im Kanban", "rueckfrage": "Rückfrage"}.get(a.status, a.status)
+    zeilen = [f"{symbol} Auftrag {label}: {a.titel}", f"{a.agent} · {a.projekt_name} auf {a.host}"]
     if a.dauer_s:
         zeilen.append(f"Dauer {a.dauer_s // 60} min {a.dauer_s % 60} s" + (f" · {a.kosten_usd:.2f} $" if a.kosten_usd else ""))
     if a.status == "fehler" and a.fehler:
@@ -101,7 +102,7 @@ def vorschlagslaeufe_planen(session: Session, cfg: wc.WallConfig, stand: dict | 
             if (pfad, titel) in vorhanden:
                 continue
             svc.anlegen(session, titel=titel, text=vorlage["text"], host=w["host"], projekt=pfad, projekt_name=str(repo.get("name")),
-                        agent=str(v.get("agent") or "claude"), profil="lesen", prioritaet=4, zeitfenster="nachts", status="geplant")
+                        agent=str(v.get("agent") or "claude"), modus="bericht", profil="lesen", prioritaet=4, zeitfenster="nachts", status="geplant")
             n += 1
     if n:
         log.info("%d Vorschlagsläufe für %s eingeplant", n, woche)

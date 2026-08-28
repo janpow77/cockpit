@@ -389,3 +389,29 @@ Parser). Gemini CLI 0.46 auf dem NUC: `IneligibleTierError` – Code Assist für
 wird vom CLI nicht mehr bedient; Abhilfe: API-Schlüssel in `~/.gemini/.env` oder
 Antigravity-Anmeldung. Zwei Startbefehl-Fehler behoben: `&` löste die ganze `&&`-Kette in
 den Hintergrund (jetzt Untershell), neues git legt `.git/info` nicht an (jetzt `mkdir -p`).
+
+**v0.4.2 – Vorgehen je Auftrag und Freigabe:** Feld `modus` – **bericht** (nur analysieren
+und einen Plan vorschlagen, läuft immer lesend), **plan_freigabe** (Vorgabe: der Agent
+erstellt zuerst einen Plan, die Karte landet mit Status `freigabe` in „Rückfrage /
+Freigabe“; „Umsetzen“ (`POST /{id}/umsetzen`, optionaler Hinweis) setzt dieselbe Sitzung mit
+dem Schreibprofil der Karte fort; „Nur Bericht behalten“ → fertig), **umsetzen** (direkt).
+Das Profil gilt nur für die Umsetzung (`effektives_profil`); Plan-/Berichtsphase bekommt
+den Zusatz aus `PLAN_SUFFIX`, die Umsetzung den Text `umsetzungstext()`. Vorschlagsläufe
+laufen als `bericht`. Migration 005 (`modus`, `freigegeben`).
+
+**Vorlagen (31):** zusätzlich Standardaufgaben – Icons vereinheitlichen, Übersetzen/Sprache,
+Farben/Abstände/Typografie (Design-Tokens), Leer-/Lade-/Fehlerzustände, Tabellen (Sortierung,
+Filter, XLSX-Export, DD.MM.JJJJ), Formulare/Validierung, Mobile Ansicht, Benennung/Glossar,
+Datenqualität. Jede Vorlage bringt ihren Modus mit (Audits → bericht, Änderungen →
+plan_freigabe).
+
+**Gemini/Antigravity:** Seit 18.06.2026 bedient die Gemini CLI keine Einzelkonten mehr
+(Google AI Pro/Ultra/Free → `IneligibleTierError`); das Abo läuft nur noch über Antigravity
+(IDE `antigravity` 1.107 ist auf dem NUC, die CLI `agy` nicht). Ein Gemini-API-Schlüssel
+wird dagegen nach Tokens abgerechnet (AI Studio, Free-Tier mit Datennutzung). Der Cockpit-
+Agent „Gemini“ unterstützt beides: `agent_bins.gemini` auf `~/.local/bin/agy` zeigen →
+`agy -p … --output-format stream-json --sandbox [--dangerously-skip-permissions für
+Schreibprofile, da der Druckmodus keine Regel-Freigaben kennt]`, Fortsetzung
+`--conversation <id>`; sonst klassisch `gemini -p … -o stream-json`. agy-Pfad ist
+vorbereitet, aber ungetestet (Installation `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+und Google-Anmeldung sind Nutzeraktionen).

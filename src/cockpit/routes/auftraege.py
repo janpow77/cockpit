@@ -38,6 +38,7 @@ router = APIRouter(prefix="/admin/api/auftraege", tags=["auftraege"])
 Profil = Literal["lesen", "bearbeiten", "bearbeiten_tests", "voll"]
 Zeitfenster = Literal["sofort", "nachts", "nach_reset"]
 Agent = Literal["claude", "codex", "gemini"]
+Modus = Literal["bericht", "plan_freigabe", "umsetzen"]
 
 
 class AuftragNeu(BaseModel):
@@ -46,6 +47,7 @@ class AuftragNeu(BaseModel):
     host: str = Field(min_length=1, max_length=64)
     projekt: str = Field(min_length=2, max_length=400)
     agent: Agent = "claude"
+    modus: Modus = "plan_freigabe"
     profil: Profil = "bearbeiten"
     prioritaet: int = Field(default=3, ge=1, le=5)
     zeitfenster: Zeitfenster = "sofort"
@@ -61,10 +63,15 @@ class AuftragPatch(BaseModel):
     profil: Profil | None = None
     zeitfenster: Zeitfenster | None = None
     agent: Agent | None = None
+    modus: Modus | None = None
 
 
 class Nachfrage(BaseModel):
     text: str = Field(min_length=2, max_length=6000)
+
+
+class Freigabe(BaseModel):
+    hinweis: str | None = Field(default=None, max_length=4000)
 
 
 def _projekt_name(pfad: str) -> str:
@@ -125,7 +132,7 @@ async def vorschlaege_einholen(req: VorschlaegeAnfrage, _=Depends(require_auth),
         raise HTTPException(status_code=404, detail="Vorlage »vorschlaege« fehlt")
     name = _projekt_name(req.projekt)
     a = svc.anlegen(session, titel=vorlage["titel"].replace("{projekt}", name), text=vorlage["text"], host=req.host, projekt=req.projekt.rstrip("/"),
-                    projekt_name=name, agent=req.agent, profil="lesen", prioritaet=2, zeitfenster="sofort", status="geplant")
+                    projekt_name=name, agent=req.agent, modus="bericht", profil="lesen", prioritaet=2, zeitfenster="sofort", status="geplant")
     crud_audit.write(session, action="auftrag.vorschlaege", target=a.id, after={"projekt": a.projekt, "agent": a.agent})
     return svc.as_dict(a)
 
@@ -134,7 +141,7 @@ async def vorschlaege_einholen(req: VorschlaegeAnfrage, _=Depends(require_auth),
 async def anlegen(req: AuftragNeu, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     a = svc.anlegen(
         session, titel=req.titel.strip(), text=req.text.strip(), host=req.host, projekt=req.projekt.rstrip("/"),
-        projekt_name=_projekt_name(req.projekt), agent=req.agent, profil=req.profil, prioritaet=req.prioritaet,
+        projekt_name=_projekt_name(req.projekt), agent=req.agent, modus=req.modus, profil=req.profil, prioritaet=req.prioritaet,
         zeitfenster=req.zeitfenster, status=req.status,
     )
     crud_audit.write(session, action="auftrag.anlegen", target=a.id, after={"titel": a.titel, "projekt": a.projekt, "profil": a.profil})
@@ -150,8 +157,8 @@ async def aendern(auftrag_id: str, req: AuftragPatch, _=Depends(require_auth), s
     if "status" in felder:
         if a.status == "laeuft":
             raise HTTPException(status_code=409, detail="Laufender Auftrag – zuerst stoppen")
-        if felder["status"] in ("eingang", "geplant") and a.status in ("fertig", "fehler", "abgebrochen", "rueckfrage"):
-            felder.update({"beendet": None, "fehler": None})
+        if felder["status"] in ("eingang", "geplant") and a.status in ("fertig", "fehler", "abgebrochen", "rueckfrage", "freigabe"):
+            felder.update({"beendet": None, "fehler": None, "freigegeben": None})
     if "text" in felder:
         felder["text"] = felder["text"].strip()
     a = svc.aendern(session, a, **felder)
@@ -201,6 +208,25 @@ async def nachfrage(auftrag_id: str, req: Nachfrage, _=Depends(require_auth), se
     a = svc.aendern(session, a, text=f"{a.text}\n\n--- Nachfrage ---\n{text}")
     a = await asyncio.to_thread(svc.starten, session, a, bins=dict(cfg.agent_bins), resume=True, nachfrage=text)
     crud_audit.write(session, action="auftrag.nachfrage", target=a.id, after={"text": text[:300]})
+    return svc.as_dict(a)
+
+
+@router.post("/{auftrag_id}/umsetzen")
+async def freigeben(auftrag_id: str, req: Freigabe | None = None, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Plan freigeben: dieselbe Sitzung setzt jetzt um (Schreibprofil der Karte)."""
+    a = svc.holen(session, auftrag_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
+    if a.status != "freigabe":
+        raise HTTPException(status_code=409, detail="Kein Plan zur Freigabe (Status ist nicht »Freigabe«)")
+    if not a.session_id:
+        raise HTTPException(status_code=409, detail="Keine Sitzung zum Fortsetzen")
+    kap = runner.kapazitaet(session)
+    if kap["laufend"] >= kap["parallel_max"]:
+        raise HTTPException(status_code=409, detail=kap.get("pause_grund") or f"Kapazität erschöpft ({kap['laufend']}/{kap['parallel_max']}) – bitte später freigeben")
+    cfg = wc.load(session)
+    a = await asyncio.to_thread(svc.umsetzen, session, a, bins=dict(cfg.agent_bins), hinweis=(req.hinweis if req else None))
+    crud_audit.write(session, action="auftrag.freigabe", target=a.id, after={"status": a.status, "hinweis": (req.hinweis if req else None)})
     return svc.as_dict(a)
 
 

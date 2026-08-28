@@ -13,7 +13,7 @@ from cockpit.services import auftrag_vorlagen
 def _auftrag(**kw):
     basis = dict(id="a_test1", titel="T", text="Prüfe das Repo", host="nuc", projekt="/home/janpow/Projekte/x",
                  projekt_name="x", agent="claude", profil="bearbeiten", prioritaet=3, zeitfenster="sofort",
-                 status="geplant", reihenfolge=10, branch=None, worktree=None, session_id=None)
+                 status="geplant", reihenfolge=10, branch=None, worktree=None, session_id=None, modus="umsetzen", freigegeben=None)
     basis.update(kw)
     return SimpleNamespace(**basis)
 
@@ -143,3 +143,49 @@ def test_vorlagen_vollstaendig():
     for v in auftrag_vorlagen.vorlagen():
         assert v["profil"] in svc.PROFILE and 1 <= v["prioritaet"] <= 5 and "{projekt}" in v["titel"]
         assert "ae" not in v["text"].replace("Cache", "").replace("aeu", "") or True
+
+
+def test_modus_phase_profil_und_prompt():
+    b = _auftrag(modus="bericht", profil="bearbeiten_tests")
+    assert svc.phase(b) == "plan" and svc.effektives_profil(b) == "lesen"
+    assert "[Modus: nur Bericht]" in svc.prompt_fuer(b)
+    pf = _auftrag(modus="plan_freigabe", profil="bearbeiten_tests")
+    assert svc.phase(pf) == "plan" and svc.effektives_profil(pf) == "lesen"
+    assert "[Modus: Plan mit Freigabe]" in svc.prompt_fuer(pf)
+    assert svc.status_nach_erfolg(pf, "Plan: 1. …") == "freigabe"
+    pf.freigegeben = "2026-08-28T10:00:00Z"
+    assert svc.phase(pf) == "umsetzung" and svc.effektives_profil(pf) == "bearbeiten_tests"
+    assert svc.status_nach_erfolg(pf, "Alles umgesetzt.") == "fertig"
+    assert svc.prompt_fuer(pf, resume=True, nachfrage=svc.umsetzungstext("nur Schritt 1–3")).startswith("Freigegeben.")
+    u = _auftrag(modus="umsetzen", profil="lesen")
+    assert svc.effektives_profil(u) == "lesen"  # Wahl der Karte wird respektiert
+    assert "[Modus" not in svc.prompt_fuer(u)
+
+
+def test_startbefehl_folgt_der_phase():
+    pf = _auftrag(modus="plan_freigabe", profil="bearbeiten_tests")
+    cmd = svc.start_befehl(pf, bins={})
+    assert "--permission-mode dontAsk" in cmd and "Plan mit Freigabe" in cmd
+    pf.freigegeben = "2026-08-28T10:00:00Z"
+    pf.session_id = "sess-1"
+    cmd2 = svc.start_befehl(pf, bins={}, resume=True, nachfrage=svc.umsetzungstext())
+    assert "--permission-mode acceptEdits" in cmd2 and "--resume sess-1" in cmd2 and "Freigegeben." in cmd2
+
+
+def test_agy_befehl():
+    p = svc._lauf_pfade(_auftrag())
+    a = _auftrag(agent="gemini", profil="bearbeiten_tests", modus="umsetzen", session_id="conv-1")
+    cmd = svc.agent_befehl(a, bins={"gemini": "/home/janpow/.local/bin/agy"}, text="x", resume=True, pfade=p)
+    assert cmd.startswith("/home/janpow/.local/bin/agy -p ") and "--output-format stream-json" in cmd
+    assert "--sandbox" in cmd and "--conversation conv-1" in cmd
+    lese = svc.agent_befehl(_auftrag(agent="gemini", modus="bericht"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
+    assert "--dangerously-skip-permissions" not in lese
+
+
+def test_vorlagen_haben_modus():
+    for v in auftrag_vorlagen.vorlagen():
+        assert v["modus"] in svc.MODI
+        assert (v["profil"] == "lesen") == (v["modus"] == "bericht")
+    ids = {v["id"] for v in auftrag_vorlagen.vorlagen()}
+    for erwartet in ("icons-vereinheitlichen", "uebersetzen", "design-vereinheitlichen", "tabellen-export", "formulare", "mobil", "benennung", "zustaende", "datenqualitaet"):
+        assert erwartet in ids

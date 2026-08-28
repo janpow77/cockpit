@@ -149,6 +149,8 @@ class AuftragRow(Base):
     projekt = Column(String, nullable=False)
     projekt_name = Column(String, nullable=False, default="")
     agent = Column(String, nullable=False, default="claude")
+    modus = Column(String, nullable=False, default="umsetzen")  # bericht | plan_freigabe | umsetzen
+    freigegeben = Column(String, nullable=True)  # Zeitpunkt der Freigabe (Modus plan_freigabe)
     profil = Column(String, nullable=False, default="bearbeiten")
     prioritaet = Column(Integer, nullable=False, default=3)
     zeitfenster = Column(String, nullable=False, default="sofort")
