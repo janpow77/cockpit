@@ -52,6 +52,8 @@ const panel = ref<'neu' | 'vorschlaege' | 'detail' | null>(null)
 const ausgewaehltId = ref<string | null>(null)
 const busy = ref(false)
 const runnerBusy = ref(false)
+const mutationLaeuft = ref(0)
+const tastaturStatus = ref('')
 const branchLoeschenBestaetigen = ref(false)
 const bearbeitenAktiv = ref(false)
 const nachfrageText = ref('')
@@ -73,6 +75,8 @@ const editForm = reactive({ titel: '', text: '', agent: 'claude' as AuftragAgent
 
 let uhrTimer: number | undefined
 let logTimer: number | undefined
+let logGeneration = 0
+let ladeId = 0
 
 function spalteVon(status: AuftragStatus): SpaltenStatus {
   if (status === 'freigabe' || status === 'unterbrochen') return 'rueckfrage'
@@ -106,8 +110,11 @@ const neuProjekt = computed(() => projektAuswahl(neuForm.projektKey))
 const vorschlaegeProjekt = computed(() => projektAuswahl(vorschlaegeForm.projektKey))
 
 async function laden() {
+  if (mutationLaeuft.value > 0) return
+  const aktuelleLadeId = ++ladeId
   try {
     const neu = await listeAuftraege()
+    if (aktuelleLadeId !== ladeId || mutationLaeuft.value > 0) return
     const bisher = new Map(eindeutigeAuftraege.value.map((auftrag) => [auftrag.id, auftrag]))
     const zusammengefuehrt = deduplizieren(neu.auftraege).map((auftrag) => {
       const lokal = bisher.get(auftrag.id)
@@ -119,8 +126,16 @@ async function laden() {
     fehler.value = null
     if (ausgewaehltId.value && !ausgewaehlt.value) schliessen()
   } catch (err) {
+    if (aktuelleLadeId !== ladeId || mutationLaeuft.value > 0) return
     fehler.value = extractError(err)
   }
+}
+
+async function mutieren<T>(aktion: () => Promise<T>): Promise<T> {
+  mutationLaeuft.value += 1
+  ladeId += 1
+  try { return await aktion() }
+  finally { mutationLaeuft.value = Math.max(0, mutationLaeuft.value - 1) }
 }
 
 async function projekteLaden() {
@@ -223,7 +238,7 @@ async function speichern() {
   if (!a || !editForm.titel.trim() || !editForm.text.trim()) { toast.warning('Titel und Auftragstext sind Pflicht.'); return }
   busy.value = true
   try {
-    lokalAktualisieren(await aendern(a.id, { titel: editForm.titel.trim(), text: editForm.text.trim(), agent: editForm.agent, modus: editForm.modus, profil: editForm.modus === 'bericht' ? 'lesen' : editForm.profil, prioritaet: editForm.prioritaet, zeitfenster: editForm.zeitfenster }))
+    lokalAktualisieren(await mutieren(() => aendern(a.id, { titel: editForm.titel.trim(), text: editForm.text.trim(), agent: editForm.agent, modus: editForm.modus, profil: editForm.modus === 'bericht' ? 'lesen' : editForm.profil, prioritaet: editForm.prioritaet, zeitfenster: editForm.zeitfenster })))
     bearbeitenAktiv.value = false; toast.success('Auftrag gespeichert')
   } catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
 }
@@ -233,8 +248,11 @@ async function neuAnlegen(planen: boolean) {
   if (!neuForm.titel.trim() || !neuForm.text.trim() || !projekt) { toast.warning('Titel, Projekt und Auftragstext sind Pflicht.'); return }
   busy.value = true
   try {
-    let auftrag = await anlegen({ titel: neuForm.titel.trim(), text: neuForm.text.trim(), host: projekt.host, projekt: projekt.pfad, agent: neuForm.agent, modus: neuForm.modus, profil: neuForm.modus === 'bericht' ? 'lesen' : neuForm.profil, prioritaet: neuForm.prioritaet, zeitfenster: neuForm.zeitfenster })
-    if (planen) auftrag = await aendern(auftrag.id, { status: 'geplant' })
+    const auftrag = await mutieren(async () => {
+      let angelegt = await anlegen({ titel: neuForm.titel.trim(), text: neuForm.text.trim(), host: projekt.host, projekt: projekt.pfad, agent: neuForm.agent, modus: neuForm.modus, profil: neuForm.modus === 'bericht' ? 'lesen' : neuForm.profil, prioritaet: neuForm.prioritaet, zeitfenster: neuForm.zeitfenster })
+      if (planen) angelegt = await aendern(angelegt.id, { status: 'geplant' })
+      return angelegt
+    })
     lokalAktualisieren(auftrag)
     toast.success(planen ? 'Auftrag ist geplant' : 'Auftrag liegt im Eingang')
     Object.assign(neuForm, { vorlageId: '', titel: '', text: '', agent: 'auto', modus: 'plan_freigabe', profil: 'bearbeiten_tests', prioritaet: 3, zeitfenster: 'sofort' })
@@ -247,7 +265,7 @@ async function analyseStarten() {
   if (!projekt) { toast.warning('Bitte ein Projekt auswählen.'); return }
   busy.value = true
   try {
-    await vorschlaegeEinholen({ host: projekt.host, projekt: projekt.pfad, agent: vorschlaegeForm.agent })
+    await mutieren(() => vorschlaegeEinholen({ host: projekt.host, projekt: projekt.pfad, agent: vorschlaegeForm.agent }))
     await laden()
     schliessen()
     toast.success(`Analyse für ${projekt.name} eingeplant – Vorschläge erscheinen im Eingang.`)
@@ -265,7 +283,7 @@ async function umsetzenAktion() {
   if (!id) return
   busy.value = true
   try {
-    lokalAktualisieren(await umsetzen(id, umsetzungHinweis.value))
+    lokalAktualisieren(await mutieren(() => umsetzen(id, umsetzungHinweis.value)))
     umsetzungHinweis.value = ''
     toast.success('Plan freigegeben – Umsetzung gestartet')
   } catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
@@ -274,7 +292,7 @@ async function auftragAktion(fn: (id: string) => Promise<Auftrag>, meldung: stri
   const id = ausgewaehltId.value
   if (!id) return
   busy.value = true
-  try { lokalAktualisieren(await fn(id)); toast.success(meldung) } catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
+  try { lokalAktualisieren(await mutieren(() => fn(id))); toast.success(meldung) } catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
 }
 
 async function aufraeumenAktion(branchLoeschen: boolean) {
@@ -283,7 +301,7 @@ async function aufraeumenAktion(branchLoeschen: boolean) {
   if (branchLoeschen && !branchLoeschenBestaetigen.value) { branchLoeschenBestaetigen.value = true; return }
   busy.value = true
   try {
-    lokalAktualisieren(await aufraeumen(id, branchLoeschen))
+    lokalAktualisieren(await mutieren(() => aufraeumen(id, branchLoeschen)))
     branchLoeschenBestaetigen.value = false
     toast.success(branchLoeschen ? 'Worktree und Branch aufgeräumt' : 'Worktree aufgeräumt')
   } catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
@@ -293,7 +311,7 @@ async function runnerUmschalten() {
   if (!antwort.value) return
   runnerBusy.value = true
   try {
-    const kapazitaet = await runnerSchalten(!antwort.value.kapazitaet.angehalten)
+    const kapazitaet = await mutieren(() => runnerSchalten(!antwort.value!.kapazitaet.angehalten))
     antwort.value = { ...antwort.value, kapazitaet }
     toast.success(kapazitaet.angehalten ? 'Runner angehalten' : 'Runner fortgesetzt')
   } catch (err) { toast.error(extractError(err)) } finally { runnerBusy.value = false }
@@ -304,7 +322,7 @@ async function nachfrageSenden() {
   const text = nachfrageText.value.trim()
   if (!a || !text) { toast.warning('Bitte eine Antwort oder Nachfrage eingeben.'); return }
   busy.value = true
-  try { lokalAktualisieren(await nachfragen(a.id, text)); nachfrageText.value = ''; toast.success('Nachricht an die Sitzung gesendet') }
+  try { lokalAktualisieren(await mutieren(() => nachfragen(a.id, text))); nachfrageText.value = ''; toast.success('Nachricht an die Sitzung gesendet') }
   catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
 }
 
@@ -313,7 +331,7 @@ async function loeschenAktion() {
   if (!a || !window.confirm(`Auftrag „${a.titel}“ wirklich löschen?`)) return
   busy.value = true
   try {
-    await loeschen(a.id)
+    await mutieren(() => loeschen(a.id))
     if (antwort.value) antwort.value.auftraege = antwort.value.auftraege.filter((eintrag) => eintrag.id !== a.id)
     schliessen(); toast.success('Auftrag gelöscht')
   } catch (err) { toast.error(extractError(err)) } finally { busy.value = false }
@@ -324,16 +342,32 @@ watch(() => `${ausgewaehltId.value ?? ''}:${ausgewaehlt.value?.status ?? ''}`, (
   logs.value = []
   if (!ausgewaehltId.value) return
   void logsLaden(true)
-  if (ausgewaehlt.value?.status === 'laeuft') logTimer = window.setInterval(() => { void logsLaden(false) }, 5000)
+  if (ausgewaehlt.value?.status === 'laeuft') logPollingStarten()
 })
 
-function logPollingStoppen() { if (logTimer) { window.clearInterval(logTimer); logTimer = undefined } }
+function logPollingStarten() {
+  const generation = ++logGeneration
+  const run = async () => {
+    await logsLaden(false)
+    if (generation !== logGeneration || ausgewaehlt.value?.status !== 'laeuft') return
+    logTimer = window.setTimeout(() => { void run() }, 5000)
+  }
+  logTimer = window.setTimeout(() => { void run() }, 5000)
+}
+function logPollingStoppen() {
+  logGeneration += 1
+  if (logTimer) window.clearTimeout(logTimer)
+  logTimer = undefined
+}
 async function logsLaden(fehlerZeigen: boolean) {
   const id = ausgewaehltId.value
   if (!id) return
   try {
-    logs.value = (await logLesen(id, 80)).zeilen
+    const ergebnis = await logLesen(id, 80)
+    if (ausgewaehltId.value !== id) return
+    logs.value = ergebnis.zeilen
     await nextTick()
+    if (ausgewaehltId.value !== id) return
     if (logElement.value) logElement.value.scrollTop = logElement.value.scrollHeight
   } catch (err) { if (fehlerZeigen) toast.error(extractError(err)) }
 }
@@ -365,36 +399,70 @@ function dragStart(event: DragEvent, auftrag: Auftrag) {
   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
 function dragEnd() { gezogenId.value = null; dropSpalte.value = null; window.setTimeout(() => { verschoben.value = false }, 50) }
-function darfAblegen(ziel: SpaltenStatus): boolean {
-  const quelle = antwort.value?.auftraege.find((a) => a.id === gezogenId.value)
-  if (!quelle) return false
+function darfVerschieben(quelle: Auftrag, ziel: SpaltenStatus): boolean {
   const start = spalteVon(quelle.status)
   return start === ziel || ((start === 'eingang' || start === 'geplant') && (ziel === 'eingang' || ziel === 'geplant'))
+}
+function darfAblegen(ziel: SpaltenStatus): boolean {
+  const quelle = antwort.value?.auftraege.find((a) => a.id === gezogenId.value)
+  return quelle ? darfVerschieben(quelle, ziel) : false
 }
 function dragOver(event: DragEvent, ziel: SpaltenStatus) {
   if (!darfAblegen(ziel)) return
   event.preventDefault(); dropSpalte.value = ziel
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
 }
+async function karteVerschieben(id: string, ziel: SpaltenStatus, position: number): Promise<number | null> {
+  if (!antwort.value) return null
+  const quelle = antwort.value.auftraege.find((a) => a.id === id)
+  if (!quelle || !darfVerschieben(quelle, ziel)) return null
+  const bisher = spalteVon(quelle.status)
+  const zielListe = spaltenInhalt.value[ziel].filter((a) => a.id !== id)
+  const neuePosition = Math.max(0, Math.min(position, zielListe.length))
+  zielListe.splice(neuePosition, 0, quelle)
+  const patches = zielListe.map((a, index) => ({ a, patch: { reihenfolge: index + 1, ...(a.id === id && bisher !== ziel ? { status: ziel as AuftragStatus } : {}) } }))
+  if (bisher !== ziel) quelle.status = ziel as AuftragStatus
+  zielListe.forEach((a, index) => { a.reihenfolge = index + 1 })
+  try {
+    await mutieren(() => Promise.all(patches.map(({ a, patch }) => aendern(a.id, patch))))
+    await laden()
+    return neuePosition + 1
+  } catch (err) {
+    toast.error(extractError(err))
+    await laden()
+    return null
+  }
+}
+async function karteTastatur(event: KeyboardEvent, auftrag: Auftrag) {
+  if (event.target !== event.currentTarget || !event.ctrlKey || event.metaKey || event.altKey) return
+  const spalte = spalteVon(auftrag.status)
+  const liste = spaltenInhalt.value[spalte]
+  const index = liste.findIndex((eintrag) => eintrag.id === auftrag.id)
+  let ziel: SpaltenStatus | null = null
+  let position = index
+  if (event.key === 'ArrowLeft' && spalte === 'geplant') ziel = 'eingang'
+  else if (event.key === 'ArrowRight' && spalte === 'eingang') ziel = 'geplant'
+  else if (event.key === 'ArrowUp' && index > 0) { ziel = spalte; position = index - 1 }
+  else if (event.key === 'ArrowDown' && index >= 0 && index < liste.length - 1) { ziel = spalte; position = index + 1 }
+  if (!ziel) return
+  if (ziel !== spalte) position = Math.min(index, spaltenInhalt.value[ziel].length)
+  event.preventDefault()
+  event.stopPropagation()
+  const neuePosition = await karteVerschieben(auftrag.id, ziel, position)
+  if (neuePosition != null) {
+    const spaltenTitel = SPALTEN.find((eintrag) => eintrag.id === ziel)?.titel ?? ziel
+    tastaturStatus.value = `Karte nach ${spaltenTitel}, Position ${neuePosition}`
+  }
+}
 async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
   event.preventDefault()
   if (!darfAblegen(ziel) || !gezogenId.value || !antwort.value) return
   const id = gezogenId.value
   if (vorId === id) { dragEnd(); return }
-  const quelle = antwort.value.auftraege.find((a) => a.id === id)
-  if (!quelle) return
-  const bisher = spalteVon(quelle.status)
   const zielListe = spaltenInhalt.value[ziel].filter((a) => a.id !== id)
   const position = vorId ? Math.max(0, zielListe.findIndex((a) => a.id === vorId)) : zielListe.length
-  zielListe.splice(position, 0, quelle)
-  const patches = zielListe.map((a, index) => ({ a, patch: { reihenfolge: index + 1, ...(a.id === id && bisher !== ziel ? { status: ziel as AuftragStatus } : {}) } }))
-  if (bisher !== ziel) quelle.status = ziel
-  zielListe.forEach((a, index) => { a.reihenfolge = index + 1 })
   verschoben.value = true; gezogenId.value = null; dropSpalte.value = null
-  try {
-    await Promise.all(patches.map(({ a, patch }) => aendern(a.id, patch)))
-    await laden()
-  } catch (err) { toast.error(extractError(err)); await laden() }
+  await karteVerschieben(id, ziel, position)
 }
 </script>
 
@@ -422,11 +490,13 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
       <div id="ki-nutzung-inhalt"><KiNutzungPanel :offen="kiDetailsOffen" /></div>
     </section>
 
+    <p class="sr-only" aria-live="polite" aria-atomic="true">{{ tastaturStatus }}</p>
+
     <main class="board" aria-label="Kanban-Board">
       <section v-for="spalte in SPALTEN" :key="spalte.id" class="spalte" :class="{ ziel: dropSpalte === spalte.id }" @dragover="dragOver($event, spalte.id)" @dragleave.self="dropSpalte = null" @drop="drop($event, spalte.id)">
         <header class="spalten-kopf"><h2>{{ spalte.titel }}</h2><span class="mono">{{ spaltenInhalt[spalte.id].length }}</span></header>
         <TransitionGroup name="karten" tag="div" class="karten" :css="false">
-          <article v-for="auftrag in spaltenInhalt[spalte.id]" :key="auftrag.id" class="auftrag" :class="[`status-${auftrag.status}`, { gezogen: gezogenId === auftrag.id }]" draggable="true" tabindex="0" @dragstart="dragStart($event, auftrag)" @dragend="dragEnd" @dragover="dragOver($event, spalte.id)" @drop.stop="drop($event, spalte.id, auftrag.id)" @click="detailOeffnen(auftrag)" @keydown.enter="detailOeffnen(auftrag)">
+          <article v-for="auftrag in spaltenInhalt[spalte.id]" :key="auftrag.id" class="auftrag" :class="[`status-${auftrag.status}`, { gezogen: gezogenId === auftrag.id }]" draggable="true" tabindex="0" @dragstart="dragStart($event, auftrag)" @dragend="dragEnd" @dragover="dragOver($event, spalte.id)" @drop.stop="drop($event, spalte.id, auftrag.id)" @click="detailOeffnen(auftrag)" @keydown="karteTastatur($event, auftrag)" @keydown.enter="detailOeffnen(auftrag)">
             <div class="karten-titel"><GripVertical :size="15" class="griff" aria-hidden="true" /><h3>{{ auftrag.titel }}</h3><span v-if="auftrag.titel.startsWith('Vorschlag: ')" class="vorschlag-marke"><Lightbulb :size="10" /> Vorschlag</span><span v-if="auftrag.status === 'freigabe'" class="status-marke freigabe">Plan liegt vor</span><span v-else-if="auftrag.status === 'unterbrochen'" class="status-marke unterbrochen">Unterbrochen</span><span v-else-if="auftrag.status === 'fehler'" class="status-marke rot">Fehler</span><span v-else-if="auftrag.status === 'abgebrochen'" class="status-marke grau">Abgebrochen</span></div>
             <p class="projekt mono">{{ auftrag.projekt_name }} · {{ auftrag.host }}</p>
             <div class="chips"><span :class="['agent-chip', `agent-${auftrag.agent}`]" :title="auftrag.agent_auto && auftrag.agent_grund ? auftrag.agent_grund : undefined">{{ agentChipLabel(auftrag) }}</span><span class="modus-chip">{{ MODUS_LABELS[auftrag.modus] }}</span><span>{{ PROFIL_LABELS[auftrag.profil] }}</span><span>P{{ auftrag.prioritaet }}</span><span>{{ ZEIT_LABELS[auftrag.zeitfenster] }}</span></div>

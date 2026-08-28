@@ -25,6 +25,7 @@ export const useConfirmStore = defineStore('confirm', () => {
   const open = ref(false)
 
   function ask(req: ConfirmRequest): Promise<boolean> {
+    if (pending.value) pending.value.resolve(false)
     return new Promise(resolve => {
       pending.value = { ...req, resolve }
       open.value = true

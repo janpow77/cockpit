@@ -19,6 +19,7 @@ import { listHosts } from '../../api/hosts'
 import { listApps } from '../../api/apps'
 import { useToastStore } from '../../stores/toast'
 import { useConfirmStore } from '../../stores/confirm'
+import { usePollStore } from '../../stores/poll'
 import { extractError } from '../../api/client'
 import { relativeTime, statusVariant } from '../../utils/format'
 import type {
@@ -31,6 +32,7 @@ import type {
 
 const toast = useToastStore()
 const confirm = useConfirmStore()
+const poll = usePollStore()
 
 const loading = ref(true)
 const sources = ref<TrafficSource[]>([])
@@ -51,7 +53,7 @@ const seriesLoading = ref(false)
 const filterAppId = ref<string>('')
 const filterHostId = ref<string>('')
 const bucket = ref<TrafficBucketSize>('5m')
-const window = ref<string>('6h')
+const zeitfenster = ref<string>('6h')
 
 const requestsSeries = computed(() => series.value?.points.map((p) => p.requests) ?? [])
 const errorSeries = computed(
@@ -85,7 +87,7 @@ async function loadSeries() {
       app_id: filterAppId.value || undefined,
       host_id: filterHostId.value || undefined,
       bucket: bucket.value,
-      window: window.value,
+      window: zeitfenster.value,
     })
   } catch (err) {
     toast.error(extractError(err))
@@ -143,18 +145,15 @@ async function triggerCollect() {
   }
 }
 
-// Auto-Refresh Series alle 30 s
-let timer: ReturnType<typeof setInterval> | null = null
 onMounted(async () => {
   await loadCore()
-  await loadSeries()
-  timer = setInterval(loadSeries, 30_000)
+  poll.start('traffic-series', loadSeries, 30_000)
 })
 onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
+  poll.stop('traffic-series')
 })
 
-watch([filterAppId, filterHostId, bucket, window], loadSeries)
+watch([filterAppId, filterHostId, bucket, zeitfenster], loadSeries)
 
 // Server-Name-Map-Editor: rudimentaer.
 const newServerName = ref('')
@@ -231,7 +230,7 @@ function removeServerMap(idx: number) {
         <label class="flex items-center gap-1.5">
           <span class="text-slate-500">Fenster:</span>
           <select
-            v-model="window"
+            v-model="zeitfenster"
             class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
           >
             <option value="30m">30 min</option>

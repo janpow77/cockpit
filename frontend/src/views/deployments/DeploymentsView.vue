@@ -35,10 +35,10 @@ function shortDigest(d: string | null): string {
   return d.length > 19 ? d.slice(0, 19) + '…' : d
 }
 
-function statusVariant(s: string): 'success' | 'warning' | 'error' | 'slate' {
-  if (s === 'ok') return 'success'
-  if (s === 'started') return 'warning'
-  if (s === 'failed') return 'error'
+function statusVariant(s: string): 'green' | 'amber' | 'red' | 'slate' {
+  if (s === 'ok') return 'green'
+  if (s === 'started' || s === 'laufend') return 'amber'
+  if (s === 'failed') return 'red'
   return 'slate'
 }
 
@@ -97,10 +97,10 @@ function sourceVariant(s: string): 'slate' | 'sky' | 'amber' {
                 <span v-else class="text-slate-400">—</span>
               </td>
               <td class="py-2 pr-4">
-                <Badge :variant="sourceVariant(d.source) as any">{{ d.source }}</Badge>
+                <Badge :variant="sourceVariant(d.source)">{{ d.source }}</Badge>
               </td>
               <td class="py-2 pr-4">
-                <Badge :variant="statusVariant(d.status) as any" dot>{{ d.status }}</Badge>
+                <Badge :variant="statusVariant(d.status)" dot>{{ d.status }}</Badge>
                 <p v-if="d.notes" class="text-xs text-slate-500 mt-1 max-w-xs">{{ d.notes }}</p>
               </td>
               <td class="py-2 pr-4 text-xs text-slate-500 tabular-nums">
