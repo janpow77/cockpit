@@ -75,13 +75,20 @@ function spalteVon(status: AuftragStatus): SpaltenStatus {
   return status === 'fehler' || status === 'abgebrochen' ? 'fertig' : status
 }
 
+function deduplizieren(liste: Auftrag[]): Auftrag[] {
+  const nachId = new Map<string, Auftrag>()
+  for (const auftrag of liste) nachId.set(auftrag.id, auftrag)
+  return [...nachId.values()]
+}
+
+const eindeutigeAuftraege = computed(() => deduplizieren(antwort.value?.auftraege ?? []))
 const spaltenInhalt = computed<Record<SpaltenStatus, Auftrag[]>>(() => {
   const result: Record<SpaltenStatus, Auftrag[]> = { eingang: [], geplant: [], laeuft: [], rueckfrage: [], fertig: [] }
-  for (const auftrag of antwort.value?.auftraege ?? []) result[spalteVon(auftrag.status)].push(auftrag)
+  for (const auftrag of eindeutigeAuftraege.value) result[spalteVon(auftrag.status)].push(auftrag)
   for (const liste of Object.values(result)) liste.sort((a, b) => a.reihenfolge - b.reihenfolge || a.erstellt.localeCompare(b.erstellt))
   return result
 })
-const ausgewaehlt = computed(() => antwort.value?.auftraege.find((a) => a.id === ausgewaehltId.value) ?? null)
+const ausgewaehlt = computed(() => eindeutigeAuftraege.value.find((a) => a.id === ausgewaehltId.value) ?? null)
 const projektGruppen = computed(() => {
   const gruppen = new Map<string, Projekt[]>()
   for (const projekt of projektListe.value) {
@@ -96,7 +103,15 @@ const vorschlaegeProjekt = computed(() => projektAuswahl(vorschlaegeForm.projekt
 
 async function laden() {
   try {
-    antwort.value = await listeAuftraege()
+    const neu = await listeAuftraege()
+    const bisher = new Map(eindeutigeAuftraege.value.map((auftrag) => [auftrag.id, auftrag]))
+    const zusammengefuehrt = deduplizieren(neu.auftraege).map((auftrag) => {
+      const lokal = bisher.get(auftrag.id)
+      if (!lokal) return auftrag
+      Object.assign(lokal, auftrag)
+      return lokal
+    })
+    antwort.value = { ...neu, auftraege: zusammengefuehrt }
     fehler.value = null
     if (ausgewaehltId.value && !ausgewaehlt.value) schliessen()
   } catch (err) {
@@ -190,9 +205,9 @@ function editieren() {
 
 function lokalAktualisieren(auftrag: Auftrag) {
   if (!antwort.value) return
-  const index = antwort.value.auftraege.findIndex((a) => a.id === auftrag.id)
-  if (index >= 0) antwort.value.auftraege.splice(index, 1, auftrag)
-  else antwort.value.auftraege.push(auftrag)
+  const nachId = new Map(deduplizieren(antwort.value.auftraege).map((eintrag) => [eintrag.id, eintrag]))
+  nachId.set(auftrag.id, auftrag)
+  antwort.value.auftraege = [...nachId.values()]
 }
 
 async function speichern() {
@@ -376,7 +391,7 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
     <main class="board" aria-label="Kanban-Board">
       <section v-for="spalte in SPALTEN" :key="spalte.id" class="spalte" :class="{ ziel: dropSpalte === spalte.id }" @dragover="dragOver($event, spalte.id)" @dragleave.self="dropSpalte = null" @drop="drop($event, spalte.id)">
         <header class="spalten-kopf"><h2>{{ spalte.titel }}</h2><span class="mono">{{ spaltenInhalt[spalte.id].length }}</span></header>
-        <TransitionGroup name="karten" tag="div" class="karten">
+        <TransitionGroup name="karten" tag="div" class="karten" :css="false">
           <article v-for="auftrag in spaltenInhalt[spalte.id]" :key="auftrag.id" class="auftrag" :class="[`status-${auftrag.status}`, { gezogen: gezogenId === auftrag.id }]" draggable="true" tabindex="0" @dragstart="dragStart($event, auftrag)" @dragend="dragEnd" @dragover="dragOver($event, spalte.id)" @drop.stop="drop($event, spalte.id, auftrag.id)" @click="detailOeffnen(auftrag)" @keydown.enter="detailOeffnen(auftrag)">
             <div class="karten-titel"><GripVertical :size="15" class="griff" aria-hidden="true" /><h3>{{ auftrag.titel }}</h3><span v-if="auftrag.titel.startsWith('Vorschlag: ')" class="vorschlag-marke"><Lightbulb :size="10" /> Vorschlag</span><span v-if="auftrag.status === 'freigabe'" class="status-marke freigabe">Plan liegt vor</span><span v-else-if="auftrag.status === 'fehler'" class="status-marke rot">Fehler</span><span v-else-if="auftrag.status === 'abgebrochen'" class="status-marke grau">Abgebrochen</span></div>
             <p class="projekt mono">{{ auftrag.projekt_name }} · {{ auftrag.host }}</p>
