@@ -322,7 +322,7 @@ export interface KiDienst {
   tage?: { tag: string; out: number; kontext: number; sitzungen?: number }[]
 }
 export interface KiNutzung { ok: boolean; hinweis?: string | null; host?: string; claude: KiDienst; codex: KiDienst; gemini: KiDienst }
-export interface TmuxSitzung { name: string; attached: boolean; created: number | null; windows: { name: string; active: boolean; cmd: string }[] }
+export interface TmuxSitzung { name: string; attached: boolean; created: number | null; windows: { name: string; index?: string; active: boolean; cmd: string }[] }
 export interface VerlaufAntwort { hours: number; series: Record<string, [string, number][]> }
 export interface WallAlert { level: 'krit' | 'warn' | 'info'; text: string; host: string | null; hint: string | null; url: string | null }
 export interface WallDienst {

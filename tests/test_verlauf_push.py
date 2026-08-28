@@ -49,14 +49,14 @@ def test_ruhezeit_ueber_mitternacht():
 def test_parse_tmux_und_gpu():
     out = _parse(
         "load 1 1 1\ncpus 8\ngpu 100 164 2048\n"
-        "tmuxw\tclaude\tbash\t1\tnode\t1\t1755325988\n"
-        "tmuxw\tprojekte\taudit-main\t0\tbash\t0\t1755325988\n"
-        "tmuxw\tprojekte\tflowinvoice\t1\tnode\t0\t1755325988\n"
+        "tmuxw\tclaude\tbash\t1\tnode\t1\t1755325988\t0\n"
+        "tmuxw\tprojekte\taudit-main\t0\tbash\t0\t1755325988\t0\n"
+        "tmuxw\tprojekte\tflowinvoice\t1\tnode\t0\t1755325988\t3\n"
     )
     assert out["gpus"] == [{"util_pct": 100, "mem_used_mb": 164, "mem_total_mb": 2048}]
     namen = {s["name"]: s for s in out["tmux"]}
     assert namen["claude"]["attached"] is True and len(namen["projekte"]["windows"]) == 2
-    assert namen["projekte"]["windows"][1] == {"name": "flowinvoice", "active": True, "cmd": "node"}
+    assert namen["projekte"]["windows"][1] == {"name": "flowinvoice", "index": "3", "active": True, "cmd": "node"}
 
 
 def test_werkstatt_aktiv_kennzeichen():
