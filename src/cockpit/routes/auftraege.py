@@ -216,7 +216,7 @@ async def protokoll(auftrag_id: str, zeilen: int = 80, _=Depends(require_auth), 
         return {"zeilen": [{"ts": None, "art": "fehler", "text": f"Host {a.host} nicht erreichbar"}]}
     zeilen = max(10, min(400, zeilen))
     try:
-        res = await asyncio.to_thread(run_on_host, host, svc.stand_befehl(a, zeilen * 3), 25)
+        res = await asyncio.to_thread(run_on_host, host, svc.stand_befehl(a, zeilen * 3), timeout=25)
     except Exception as exc:  # noqa: BLE001
         return {"zeilen": [{"ts": None, "art": "fehler", "text": str(exc)[:200]}]}
     roh = res.stdout or ""
