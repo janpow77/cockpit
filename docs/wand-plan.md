@@ -501,3 +501,8 @@ erscheint die Karte für einen Poll-Zyklus in zwei Spalten (Anzeige, kein Datenf
 Eintrag entfernt (`/ki` leitet auf `/kanban`), die Anzeige lebt als einklappbarer Bereich
 (`components/kanban/KiNutzungPanel.vue`) unter der Kapazitätsleiste des Kanbans; Zustand in
 `localStorage`.
+
+**v0.4.13 – Wording:** In allen sichtbaren Texten „LLM“ statt „KI“ (LLM-Konsole, LLM-Nutzung,
+LLM-Aufträge, LLM-Host); Projektname „KI-Pilotprogramm“ bleibt. Bezeichner, Routen (`/chat`,
+`/ki`) und Dateinamen unverändert. Außerdem: Karte beim Spaltenwechsel nicht mehr doppelt
+(Dedup nach id, keine Leave-Animation über Spalten hinweg).
