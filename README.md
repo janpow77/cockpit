@@ -1,22 +1,22 @@
 # cockpit
 
-Zentrales Verwaltungs-Tool fuer Multi-App-Multi-Host-Setup
+Zentrales Verwaltungs-Tool für Multi-App-Multi-Host-Setup
 (Workshop, audit_designer, llm-router, flowinvoice, hpp, qaaudit, ...).
 
-## Domaenen (Phase 1)
+## Domänen (Phase 1)
 
 1. **Apps** — Container-Status pro Host (NUC/CCX23/evo), Logs, Restart
 2. **Hosts** — Tailscale-Health, SSH-Reachability
 3. **GitHub** — Repos, PRs, CI-Runs (via GITHUB_TOKEN)
 4. **Backups** — Job-Liste, On-Demand-Run, Restore-Test
-5. **Secrets / Vault** — verschluesselt at-rest (Fernet), jede Reveal im Audit
+5. **Secrets / Vault** — verschlüsselt at-rest (Fernet), jede Reveal im Audit
 
 ## Stack
 
 - FastAPI + SQLAlchemy + SQLite (`/data/cockpit.db`)
 - Vue 3 SPA unter `/admin/` (vite + tailwind 4 + pinia)
 - Bearer-Token-Auth (Single-Admin)
-- paramiko fuer SSH-Befehle, lokale subprocess auf CCX23
+- paramiko für SSH-Befehle, lokale subprocess auf CCX23
 - Docker Compose Standalone-Deploy
 
 ## Deploy

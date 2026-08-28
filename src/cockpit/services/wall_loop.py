@@ -58,14 +58,21 @@ async def _alarme_pushen(stand: dict, cfg: wc.WallConfig) -> None:
     session = factory()
     try:
         alt: list[str] = wc.read_setting(session, "alerts_state", []) or []
-        hinzu, weg = push.vergleich(alt, stand.get("alerts") or [], min_level=str(pcfg.get("min_level") or "warn"))
+        zaehler: dict[str, int] = wc.read_setting(session, "alerts_zaehler", {}) or {}
+        min_level = str(pcfg.get("min_level") or "warn")
+        laeufe = int(pcfg.get("bestaetigung_laeufe") or 2)
+        hinzu, weg, gemeldet_neu, zaehler_neu = push.bestaetigen(alt, zaehler, stand.get("alerts") or [], min_level=min_level, laeufe=laeufe)
         if not hinzu and not weg:
+            if zaehler_neu != zaehler:
+                wc.write_setting(session, "alerts_zaehler", zaehler_neu)
             return
         tz = ZoneInfo(str(pcfg.get("zeitzone") or "Europe/Berlin"))
         ruhe = push.in_ruhezeit(datetime.now(tz), pcfg.get("ruhe_von"), pcfg.get("ruhe_bis"))
         if ruhe:
+            # nachts nur Kritisches; zurückgehaltene Alarme bleiben „bestätigt“ und gehen morgens raus
             hinzu = [a for a in hinzu if a.get("level") == "krit"]
             weg = []
+            gemeldet_neu = [k for k in alt if k not in weg] + [push.schluessel(a) for a in hinzu]
         if hinzu or weg:
             token = _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
             chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
@@ -78,9 +85,9 @@ async def _alarme_pushen(stand: dict, cfg: wc.WallConfig) -> None:
             else:
                 log.warning("Push aktiv, aber telegram_bot_token/chat_id fehlen im Vault")
                 return
-        # Stand nur nach erfolgreichem Versand (oder ohne Aenderung) fortschreiben
-        relevant = [push.schluessel(a) for a in stand.get("alerts") or [] if push._RANG.get(a.get("level"), 9) <= push._RANG.get(str(pcfg.get("min_level") or "warn"), 1)]
-        wc.write_setting(session, "alerts_state", relevant)
+        # Stand nur nach erfolgreichem Versand fortschreiben
+        wc.write_setting(session, "alerts_state", gemeldet_neu)
+        wc.write_setting(session, "alerts_zaehler", zaehler_neu)
     finally:
         session.close()
 

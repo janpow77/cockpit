@@ -29,7 +29,7 @@ async function submit() {
           <Plane :size="22" />
         </div>
         <h1 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">flowaudit Cockpit</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Wand, Anwendungen, Repositories und KI-Konsole – ein Zugang.</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Wand, Anwendungen, Repositories und LLM-Konsole – ein Zugang.</p>
       </div>
 
       <form
@@ -75,7 +75,7 @@ async function submit() {
           <Spinner v-if="auth.loading" :size="16" />
           <span>{{ auth.loading ? 'Anmeldung läuft …' : 'Anmelden' }}</span>
         </button>
-        <p class="mt-4 text-[11px] text-slate-400 flex items-center gap-1.5"><Radar :size="12" /> Nach der Anmeldung: Wand unter /admin/wall, KI-Konsole unter /admin/chat. Zugriff nur über Tailscale.</p>
+        <p class="mt-4 text-[11px] text-slate-400 flex items-center gap-1.5"><Radar :size="12" /> Nach der Anmeldung: Wand unter /admin/wall, LLM-Konsole unter /admin/chat. Zugriff nur über Tailscale.</p>
       </form>
     </div>
   </div>

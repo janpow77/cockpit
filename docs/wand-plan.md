@@ -335,3 +335,196 @@ Terminalzeilen (`tmux capture-pane`), darunter „Arbeitspaket“ – Text wird 
 zweiten Klick, Audit-Eintrag `wall.tmux_senden`). Ziel-Form `sitzung:fenster`, Text ≤ 2000
 Zeichen; Self-Hosts über Loopback-SSH. KI-Sonde nutzt denselben Loopback (die Dateien
 liegen beim Nutzer, nicht im Container).
+
+## 17. Aufträge – Kanban für Agentenläufe (v0.4.0, 28.08.2026)
+
+Seite `/kanban` („Aufträge“ in der Seitenleiste, Link in der Wand-Kopfzeile). Jede Karte ist
+ein Auftrag: Titel, Auftragstext, Projektverzeichnis auf einem Host (aus der Werkstatt),
+**Agent** (Claude Code · Codex · Gemini), Profil, Priorität 1–5, Zeitfenster
+(sofort · nachts 22–7 · nach Wochen-Reset). Spalten Eingang → Geplant → Läuft → Rückfrage
+→ Fertig; Eingang↔Geplant per Drag & Drop. Detailpanel mit Ergebnis, Kosten/Tokens, Branch,
+Diff-Link (GitHub compare) und Live-Protokoll; „Nachfrage“ setzt die Sitzung fort
+(`--resume` / `codex exec resume` / `gemini -r`).
+
+**Lauf:** Der Runner (`services/auftrag_runner.py`, alle 20 s) legt auf dem Host einen
+Git-Worktree `<projekt>/.cockpit-auftraege/wt-<id>` mit Branch `auftrag/<id>` an (Verzeichnis
+in `.git/info/exclude`) und startet dort den Agenten per `nohup` mit JSON-Protokoll
+(`lauf.jsonl`, `stderr.txt`, `done.txt`, `pid.txt`). Befehle (`services/auftraege.py`):
+Claude `claude -p "$(cat auftrag.txt)" <Profil> --output-format stream-json --verbose
+--max-turns 80` (ohne `--bare`: läuft über die Max-Anmeldung, zählt aufs 5-Stunden-Fenster);
+Codex `codex exec --json -s read-only|workspace-write [--approve-for-me]
+--skip-git-repo-check`; Gemini `gemini -p … -o stream-json --approval-mode
+default|auto_edit|yolo --skip-trust`. Programme absolut (`agent_bins`, weil `bash -lc`
+über SSH `~/bin`/`~/.npm-global/bin` nicht kennt). Profile: `lesen` (nur Lesen, git/gh/rg,
+graphify-MCP), `bearbeiten` (acceptEdits), `bearbeiten_tests` (+ npm/pytest/ruff/git commit),
+`voll` (Classifier). Nie `--dangerously-skip-permissions`. Am Ende: Commit auf dem Branch,
+Ergebnis/Kosten/Session aus dem letzten `result`-Ereignis, Rückfrage-Erkennung (Frage am
+Schluss), Push per Telegram (fertig/Rückfrage/Fehler).
+
+**Kontingent:** `parallel_max` aus der KI-Nutzung – Basis `auftrag_parallel` (3); ≥ 60 %
+5-Stunden-Fenster → Basis−1, ≥ 85 % → 1, ≥ 95 % oder Woche ≥ 98 % → 0 (Pause mit Grund);
+Gemini nur ein Lauf gleichzeitig. Geplante Aufträge starten nach Priorität/Reihenfolge, sobald
+Kapazität und Zeitfenster passen.
+
+**Vorlagen** (`services/auftrag_vorlagen.py`, 22 Stück, `{projekt}` wird ersetzt): Repo
+prüfen, Oberfläche verbessern, Tests ergänzen, Sicherheits-Audit, Doku, Abhängigkeiten,
+Performance, Fehler beheben, Sprache/Umlaute, **Vorschläge einholen**, PRs prüfen, Issues
+sichten, Aufräumen/entflechten, Barrierefreiheit, Fehlerbehandlung/Logging, TODO/FIXME,
+CI/flackernde Tests, Release vorbereiten, Datenschutz (DSGVO), Container härten, API-Doku,
+Migrationen prüfen. Eigene Vorlagen über Einstellung `auftrag_vorlagen` (gleiche id ersetzt).
+Quellen der Recherche: wshobson/commands, qdhenry/Claude-Command-Suite, awesome-copilot.
+
+**Vorschläge (automatisch):** Vorlage „Vorschläge einholen“ liest Git-Verlauf, GitHub
+(`gh`: Issues, PRs, CI, Dependabot), die graphify-Analyse von flow-agent
+(`graphify-out/<Datum>/GRAPH_REPORT.md`, MCP auf 127.0.0.1:8765) und den Code und endet mit
+einem JSON-Block; der Runner legt daraus Karten „Vorschlag: …“ in den Eingang (Dubletten
+nach Titel je Projekt vermieden, Profil/Priorität aus dem Vorschlag). Wöchentlich
+automatisch je aktivem Werkstatt-Projekt (Einstellung `vorschlaege`: aktiv, wochentag 6 =
+Sonntag, stunde 1, agent; Zeitfenster nachts) oder auf Abruf über „Vorschläge einholen“
+(`POST /admin/api/auftraege/vorschlaege`).
+
+**Prüfstand 28.08.:** Probeläufe im Scratch-Repo – Claude (`lesen`, 2 Turns, Ergebnis/
+Session/Kosten geparst), Codex (`thread.started`/`item.completed`/`turn.completed` wie im
+Parser). Gemini CLI 0.46 auf dem NUC: `IneligibleTierError` – Code Assist für Einzelnutzer
+wird vom CLI nicht mehr bedient; Abhilfe: API-Schlüssel in `~/.gemini/.env` oder
+Antigravity-Anmeldung. Zwei Startbefehl-Fehler behoben: `&` löste die ganze `&&`-Kette in
+den Hintergrund (jetzt Untershell), neues git legt `.git/info` nicht an (jetzt `mkdir -p`).
+
+**v0.4.2 – Vorgehen je Auftrag und Freigabe:** Feld `modus` – **bericht** (nur analysieren
+und einen Plan vorschlagen, läuft immer lesend), **plan_freigabe** (Vorgabe: der Agent
+erstellt zuerst einen Plan, die Karte landet mit Status `freigabe` in „Rückfrage /
+Freigabe“; „Umsetzen“ (`POST /{id}/umsetzen`, optionaler Hinweis) setzt dieselbe Sitzung mit
+dem Schreibprofil der Karte fort; „Nur Bericht behalten“ → fertig), **umsetzen** (direkt).
+Das Profil gilt nur für die Umsetzung (`effektives_profil`); Plan-/Berichtsphase bekommt
+den Zusatz aus `PLAN_SUFFIX`, die Umsetzung den Text `umsetzungstext()`. Vorschlagsläufe
+laufen als `bericht`. Migration 005 (`modus`, `freigegeben`).
+
+**Vorlagen (31):** zusätzlich Standardaufgaben – Icons vereinheitlichen, Übersetzen/Sprache,
+Farben/Abstände/Typografie (Design-Tokens), Leer-/Lade-/Fehlerzustände, Tabellen (Sortierung,
+Filter, XLSX-Export, DD.MM.JJJJ), Formulare/Validierung, Mobile Ansicht, Benennung/Glossar,
+Datenqualität. Jede Vorlage bringt ihren Modus mit (Audits → bericht, Änderungen →
+plan_freigabe).
+
+**Gemini/Antigravity:** Seit 18.06.2026 bedient die Gemini CLI keine Einzelkonten mehr
+(Google AI Pro/Ultra/Free → `IneligibleTierError`); das Abo läuft nur noch über Antigravity
+(IDE `antigravity` 1.107 ist auf dem NUC, die CLI `agy` nicht). Ein Gemini-API-Schlüssel
+wird dagegen nach Tokens abgerechnet (AI Studio, Free-Tier mit Datennutzung). Der Cockpit-
+Agent „Gemini“ unterstützt beides: `agent_bins.gemini` auf `~/.local/bin/agy` zeigen →
+`agy -p … --output-format stream-json --sandbox [--dangerously-skip-permissions für
+Schreibprofile, da der Druckmodus keine Regel-Freigaben kennt]`, Fortsetzung
+`--conversation <id>`; sonst klassisch `gemini -p … -o stream-json`. agy-Pfad ist
+vorbereitet, aber ungetestet (Installation `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+und Google-Anmeldung sind Nutzeraktionen).
+
+**flow-agent als Datenquelle (v0.4.4):** `services/flow_agent.py` liest mit dem Lese-
+Schlüssel (Vault `flow_agent_read_key`, Einstellung `flow_agent` mit `url`, `secret_key`,
+`hosts` = flow-agent-Hostname → Cockpit-Host, z. B. `janpow-NUC15JNLU7X4 → nuc`,
+`cockpit-nbg1-1 → ccx23`, `evo2 → evo`, `MacBook-Air.local → macbook`) das Projektinventar
+`/api/v1/projects` (Git-Stand, dirty/ahead/behind, Technologien je Host – 110 Projekte auf
+5 Hosts) und `/api/v1/graphify/status`. Die Projektliste des Kanbans zeigt damit alle Repos
+aller Hosts (Quelle, Branch, uncommittete Änderungen, graphify-Stand); Hosts ohne SSH-Zugang
+des Cockpits sind als nicht ausführbar markiert. Vorschlagsläufe bekommen einen Kontextblock
+„Stand laut flow-agent“ (Git-Zustand, Technologien, graphify-Alter, Hinweise) an den
+Auftragstext gehängt. 5 min Cache, Fehler → leere Ergebnisse.
+
+**Codex-Sandbox (v0.4.5):** Codex' bubblewrap-Sandbox scheitert auf dem NUC
+(`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, auch für `read-only`) –
+der Planlauf lieferte den Plan ohne Lesezugriff, die Umsetzung „nichts geändert“. Einstellung
+`codex_sandbox` (Vorgabe `danger-full-access` = ohne Isolierung, wie in der `~/.codex/config.toml`
+des Nutzers; `workspace-write` dort, wo bwrap läuft). Nie `--dangerously-bypass-approvals-and-sandbox`;
+Schutz bleibt Worktree + Branch je Auftrag. Beim `exec resume` gehen Sandbox und Freigabe nur
+als `-c sandbox_mode=… -c approval_policy=never` (keine `-s`/`--approve-for-me`-Flags).
+
+**flow-agent-Kachel (v0.4.7):** `flow_agent.zustand()` fasst `/api/v1/health` (ohne Auth),
+`/agents`, `/freshness`, `/notifications/summary` und `/operations/status` zusammen (Cache
+60–120 s): Control Plane + Version, Hosts mit Status/Alter/Projekte/Container/GPU, tmux-Zustand
+und fehlende Werkzeuge, Frische-Zähler mit nicht-grünen Befunden (max. 8), offene/
+fehlgeschlagene Aktionen. Handlungsbedarf: Host offline/unhealthy → kritisch; Check unhealthy,
+fehlgeschlagene Aktionen, Control Plane weg → Warnung; wartende Aktionen → Info. Befund vom
+28.08.: „degraded“ auf 4 Hosts kommt aus tmux-Bewertung und fehlenden Werkzeugen (NUC: restic,
+uv, caddy; EVO: restic, rclone, nvidia-smi, node, npm, gh; Hetzner: nvidia-smi, uv; janpow-ai:
+uv, caddy), einziger nicht-grüner Check „Wissensbasis-Harvest“ (Endpunkt verlangt Anmeldung,
+HTTP 401); die Host-Agenten liefern kein graphify-Feld (`/graphify/status` leer).
+
+**Gemini über das Abo mit agy (v0.4.8, 28.08.2026):** Antigravity CLI 1.1.22 auf dem NUC
+installiert (`~/.local/bin/agy`, Anmeldung per Google-OAuth in einer tmux-Sitzung, Code aus
+dem Browser eingefügt). Headless: `agy -p … --output-format stream-json --mode plan|accept-edits`,
+Fortsetzung `--conversation <id>`; Ereignisse `event: init` (conversation_id, permission_mode),
+`step_update` (step_type tool mit tool_name/tool_info.parameters.CommandLine, agent_response mit
+usage), `result` (status SUCCESS|CANCELED, response, usage input/output/thinking/cache_read).
+Im Druckmodus kann agy keine Freigaben erfragen – ohne Regeln endet der Lauf mit
+`CANCELED` und leerer Antwort („no output produced — a tool required the … permission“).
+Deshalb `~/.gemini/antigravity-cli/settings.json` → `permissions.allow` mit 27 Regeln:
+Lesen (`read_file(/)`, `view_file(/)`, `list_dir(/)`, `grep_search(/)`, `find_by_name(/)`),
+Kommandos (`command(git)`, `command(rg)`, `command(cat)`, `command(sed)`, …,
+`command(gh (pr|issue|run|api|repo))`, `command(npm run (build|lint|test|type-check|format:check))`,
+`command(pytest)`, `command(ruff)`). `--sandbox` scheitert auf dem NUC („connecting to
+sandbox server … connection reset“) und bleibt weg. `agent_bins.gemini` zeigt auf beiden
+Instanzen auf agy. Gemini CLI 0.46 bleibt installiert, wird aber nicht mehr benutzt.
+
+**v0.4.9:** Erster Gemini-Lauf im Worktree endete mit `CANCELED` – agy setzte Kommandos
+außerhalb der Allow-Regeln ab (`pgrep`, `ps` …); im Druckmodus bricht dann der ganze Lauf ab.
+Daher agy-Profile mit `--dangerously-skip-permissions` (wie Codex ohne Sandbox auf dem NUC),
+der Ausführungsmodus (`--mode plan` bzw. `accept-edits`) begrenzt weiterhin Dateiänderungen;
+Schutz bleibt Worktree + Branch. Die Allow-Regeln in `settings.json` bleiben für interaktive
+agy-Nutzung erhalten.
+
+**v0.4.10:** Gemini-Testlauf: agy schrieb `calc.py`/`test_calc.py` in sein eigenes
+Scratch-Verzeichnis (`~/.gemini/antigravity-cli/scratch/`) statt in den Worktree (Branch blieb
+leer). Behoben mit `--add-dir <worktree>` und einer ersten Prompt-Zeile „Arbeitsverzeichnis
+(Git-Worktree, Branch …): <pfad> – alle Änderungen ausschließlich dort“ für alle Agenten beim
+Erststart.
+
+**Instanz janpow-ai (28.08.2026, v0.4.10):** `http://100.114.73.106:7843` (Tailscale-only,
+Host-Netz), Admin-Passwort in `/home/janpow/cockpit-instanz/.admin_pw` auf janpow-ai, Vault-
+Secrets vom Hetzner gespiegelt, `AI_ROUTER_URL=http://100.102.132.11:7849` (Router des NUC über
+Tailscale), `agent_bins.gemini` → agy. Ablauf: Image `docker save | ssh janpow-ai docker load`,
+`instanz_deploy.sh` per scp auf den Host und **dort** ausführen (das Skript arbeitet immer lokal –
+ein Aufruf auf dem NUC mit `janpow-ai` als Argument rollt auf den NUC aus). SSH von janpow-ai zu
+NUC (`janpow@`) und Hetzner (`deploy@`) funktioniert. Desktop-Verknüpfung
+`~/Schreibtisch/Cockpit.desktop` (xdg-open auf die Wand).
+
+**Prüfstand 28.08. (echte Aufgabe, v0.4.11–0.4.13):** Auftrag „README: Abschnitt Aufträge
+(Kanban) ergänzen“ auf dem Cockpit-Repo (Claude, Plan mit Freigabe): Plan in 75 s, Umsetzung
+in 129 s, Commit `c233939` auf `auftrag/a_323013db73` (25 Zeilen, sachlich, Umlaute korrekt).
+Befund: der `post-commit`-Hook des Nutzers (graphify) erzeugte im Worktree eine neue
+`ARCHITEKTUR.md`, die der Abschluss-Commit mitnahm → `abschluss_befehl` setzt
+`HOOK_ARTEFAKTE` (ARCHITEKTUR.md, ARCHITECTURE.md, graphify-out) vor dem Commit zurück,
+schließt sie aus und committet mit `core.hooksPath=/dev/null`; „Letzte Zeile“ zeigt nur bei
+eigenem Commit den Diff-Umfang (sonst „keine Änderungen im Branch“ statt des Stats des
+Vorgänger-Commits). Frontend-Test per Playwright (Token in `localStorage`
+`cockpit_admin_token`): Formular → „Sofort planen“ → Läuft → Fertig, Detailpanel mit Bericht
+(Codex, „Nur berichten“, vier Umlaut-Fundstellen in der README). Beobachtet: beim Spaltenwechsel
+erscheint die Karte für einen Poll-Zyklus in zwei Spalten (Anzeige, kein Datenfehler).
+
+**v0.4.12:** „KI-Nutzung“ ist kein eigener Tab mehr – Kopfzeilen-Link der Wand und Sidebar-
+Eintrag entfernt (`/ki` leitet auf `/kanban`), die Anzeige lebt als einklappbarer Bereich
+(`components/kanban/KiNutzungPanel.vue`) unter der Kapazitätsleiste des Kanbans; Zustand in
+`localStorage`.
+
+**v0.4.13 – Wording:** In allen sichtbaren Texten „LLM“ statt „KI“ (LLM-Konsole, LLM-Nutzung,
+LLM-Aufträge, LLM-Host); Projektname „KI-Pilotprogramm“ bleibt. Bezeichner, Routen (`/chat`,
+`/ki`) und Dateinamen unverändert. Außerdem: Karte beim Spaltenwechsel nicht mehr doppelt
+(Dedup nach id, keine Leave-Animation über Spalten hinweg).
+Halbkreis-Anzeigen der LLM-Nutzung: der Wertbogen (`bogen()`) nutzte ab 50 % das
+Large-Arc-Flag – der Bogen überspannt aber nie mehr als 180°, Flag daher immer 0 (v0.4.13).
+
+**v0.4.15 – Agenten-Hosts:** Ein Auftrag auf dem Hetzner-Host (`ccx23`,
+`/home/deploy/Projekte/regulierung`, Gemini) scheiterte mit `agy: No such file or directory` –
+die Agenten (claude, codex, agy) sind nur auf dem NUC installiert und angemeldet. Einstellung
+`agent_hosts` (Vorgabe `["nuc"]`): Projekte auf anderen Hosts erscheinen im Kanban mit Grund
+„keine Agenten auf diesem Host“ und sind nicht wählbar; Anlegen/Start/Vorschläge liefern 422
+mit Hinweis auf die Kopie des Projekts auf dem Agenten-Host; der Runner startet solche
+geplanten Aufträge nicht, sondern setzt sie mit klarem Fehlertext auf „Fehler“; wöchentliche
+Vorschlagsläufe nur für Agenten-Hosts. Wer Agenten auf einem weiteren Host anmeldet, trägt ihn
+in `agent_hosts` ein (und passt ggf. `agent_bins` an).
+
+**v0.4.16 – Push ohne Flattern:** Der Nutzer bekam per Telegram ständig „… antwortet nicht
+(ConnectTimeout)“ mit Entwarnung kurz darauf. Zwei Ursachen: (1) alle drei Instanzen pushten in
+denselben Chat – die janpow-ai-Instanz sieht `pilot/pdf/zvg/mcp.flowaudit.de` mit Timeouts
+(5–6 s Antwortzeiten aus ihrem Netz); (2) jeder Wand-Lauf meldete sofort. Abhilfe: Push nur noch
+auf dem Hetzner-Cockpit (`push.aktiv=false` auf NUC und janpow-ai, `push.instanz` benannt) und
+`push.bestaetigen()`: ein Alarm wird erst nach `bestaetigung_laeufe` (Vorgabe 2 ≈ 3 min)
+aufeinanderfolgenden Läufen gemeldet, die Entwarnung erst nach ebenso vielen Läufen ohne den
+Alarm; Zähler in Setting `alerts_zaehler`, gemeldete Schlüssel weiter in `alerts_state`.
+Ruhezeit: zurückgehaltene Warnungen gelten als bestätigt und gehen morgens gesammelt raus.
