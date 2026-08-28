@@ -30,11 +30,12 @@ STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "freigabe", "fertig", "f
 AGENTEN = ("claude", "codex", "gemini")
 # Modus: nur berichten/planen · Plan zeigen und erst nach Freigabe umsetzen · direkt umsetzen
 MODI = ("bericht", "plan_freigabe", "umsetzen")
-# Antigravity CLI (agy, Google-Abo): Berechtigungen im Druckmodus nur pauschal – Schreibprofile im Sandkasten
+# Antigravity CLI (agy 1.1.22, Google-Abo): --mode plan (nur lesen/planen) bzw. accept-edits (Dateiänderungen ohne Nachfrage),
+# Terminal-Sandbox immer an; nur "voll" darf alle Werkzeugfreigaben automatisch erteilen
 PROFILE_AGY: dict[str, str] = {
-    "lesen": "--sandbox",
-    "bearbeiten": "--sandbox --dangerously-skip-permissions",
-    "bearbeiten_tests": "--sandbox --dangerously-skip-permissions",
+    "lesen": "--mode plan --sandbox",
+    "bearbeiten": "--mode accept-edits --sandbox",
+    "bearbeiten_tests": "--mode accept-edits --sandbox",
     "voll": "--sandbox --dangerously-skip-permissions",
 }
 # Profile je Agent (nie Bypass-Flags):

@@ -186,9 +186,11 @@ def test_agy_befehl():
     a = _auftrag(agent="gemini", profil="bearbeiten_tests", modus="umsetzen", session_id="conv-1")
     cmd = svc.agent_befehl(a, bins={"gemini": "/home/janpow/.local/bin/agy"}, text="x", resume=True, pfade=p)
     assert cmd.startswith("/home/janpow/.local/bin/agy -p ") and "--output-format stream-json" in cmd
-    assert "--sandbox" in cmd and "--conversation conv-1" in cmd
+    assert "--sandbox" in cmd and "--conversation conv-1" in cmd and "--mode accept-edits" in cmd and "dangerously" not in cmd
     lese = svc.agent_befehl(_auftrag(agent="gemini", modus="bericht"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
-    assert "--dangerously-skip-permissions" not in lese
+    assert "--mode plan" in lese and "--dangerously-skip-permissions" not in lese
+    voll = svc.agent_befehl(_auftrag(agent="gemini", profil="voll"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
+    assert "--dangerously-skip-permissions" in voll and "--sandbox" in voll
 
 
 def test_vorlagen_haben_modus():
