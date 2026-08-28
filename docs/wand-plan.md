@@ -586,3 +586,35 @@ Abgewiesenes im Audit-Log (`telegram.abgewiesen`), jede Aktion als `auftrag.<akt
 Konsolen-Whitelist (Qwen, `think=false`, ≤ 160 Tokens, 40 s), sonst die ersten 400 Zeichen.
 Claude-Läufe mit `permission_denials` im Ergebnis werden zur Rückfrage „Berechtigung verweigert
 für …“ statt still „fertig“. Migration 007.
+
+## 20. Phase D, E-Vorbereitung, Telegram-Nachweis (v0.4.22, 28.08.2026)
+
+**Telegram-Rückkanal nachgewiesen:** Freigabe von `a_69534f04ee` per Schaltfläche (Audit
+`auftrag.freigeben`, actor `telegram:<user_id>`), Codex setzte die Sitzung fort, Umsetzung fertig
+(31 Kurzbeschreibungen, Prüfung grün: pytest 77, ruff, Frontend-Build). Befunde: die Quittung
+(`answerCallbackQuery`) kam zu spät („query is too old“) – jetzt wird sofort quittiert, dann
+gehandelt; die „fertig“-Nachricht blieb ohne Spur aus – Bot-API-Antworten mit `ok:false` und
+nicht gesendete Ereignisse werden jetzt protokolliert. PR-Checks-Abfrage übergab das Zeitlimit
+positional (behoben).
+
+**Phase D – Agentenwahl:** Agent `auto` (Vorgabe im Formular): `services/agent_wahl.py` bestimmt
+beim ersten Start aus Modus/Profil/Stichworten den Aufgabentyp (bericht · oberflaeche · umsetzung)
+und wählt nach Kontingent (Claude 5-h-Fenster ≥ 85 % → Codex; Codex-Woche ≥ 95 % → agy; Berichte
+→ Codex; Oberfläche/Sprache → agy; Umsetzung → Claude). Karte zeigt „automatisch → Codex“ mit
+Begründung (`agent_auto`, `agent_grund`, Migration 008). Codex/agy bekommen beim Erststart die
+ersten 4000 Zeichen der `CLAUDE.md` des Repos als Konventionen angehängt (Claude liest sie selbst).
+Vorschlagsläufe: Vorgabe-Agent Codex, höchstens `vorschlaege.max_je_woche` (8) je Woche.
+
+**Eigener Dialog-Bot:** `push.dialog.token_secret` (Vault-Schlüssel eines Cockpit-Bots von
+BotFather); leer = Push-Bot. So streiten sich Kira und Cockpit nie um `getUpdates`.
+
+**Phase E vorbereitet (Systemänderungen bleiben Handarbeit):** `deploy/nuc/apparmor-bwrap`
+(AppArmor-Profil, damit bubblewrap User-Namespaces öffnen darf → Codex `workspace-write`, agy
+`--sandbox`), `deploy/nuc/agent-benutzer.sh` (Benutzer `agent`, `/srv/agent/Projekte`, SSH-Schlüssel
+der Cockpits), `deploy/nuc/README.md` mit den Schritten.
+
+**flow-agent janpow-ai:** frisches Enrollment-Token (12 h) per `flowctl enrollment-create` erzeugt
+und als `~/.flow-agent-enroll.token` (0600) auf janpow-ai abgelegt. Dort laufen zwei Agenten
+gleichzeitig: Benutzerdienst (`~/.config/flow-agent/agent.key`, ohne Rolle) und Systemdienst
+(`/etc/flow-agent`, Rolle gpu-server, Benutzer flow-agent) – die Enrollment rotiert die Credential,
+der jeweils andere Dienst verliert danach den Zugang; Entscheidung des Nutzers.
