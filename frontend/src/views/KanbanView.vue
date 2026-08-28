@@ -404,7 +404,7 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
       <div class="titel"><span class="marke">flowaudit</span><span class="untertitel">Aufträge</span></div>
       <div class="kopf-mitte mono"><span v-if="fehler" class="fehler">{{ fehler }}</span><span v-else class="dim">LLM-Aufträge steuern und verfolgen</span></div>
       <nav class="kopf-rechts" aria-label="Seitennavigation">
-        <RouterLink to="/wall" class="knopf klein ghost">Zur Wand</RouterLink>
+        <RouterLink to="/wall" class="knopf klein ghost">Zum Cockpit</RouterLink>
         <RouterLink to="/chat" class="knopf klein ghost">LLM-Konsole</RouterLink>
         <button class="knopf klein ghost" type="button" @click="vorschlaegeOeffnen"><Lightbulb :size="14" /> Vorschläge einholen</button>
         <button class="knopf klein" type="button" @click="neuOeffnen">Neuer Auftrag</button>

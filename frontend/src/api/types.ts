@@ -222,7 +222,7 @@ export interface Deployment {
 }
 
 // ---------------------------------------------------------------------------
-// Wand (Overview) und LLM-Konsole
+// Cockpit (Overview) und LLM-Konsole
 // ---------------------------------------------------------------------------
 
 export interface HostStats {

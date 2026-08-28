@@ -27,7 +27,7 @@ function mockOverview(): Overview {
       { host: 'ccx23', name: 'flowinvoice', title: 'flowinvoice', sub: 'Belegprüfung mit Erkennung', containers: 8, running: 8, status: 'healthy', images: [], url: null, intern: [{ url: 'http://100.99.159.80:8020', service: 'frontend', port: 8020 }], tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
       { host: 'ccx23', name: 'auditworkshop', title: 'Workshop', sub: 'Seminar-Plattform', containers: 3, running: 3, status: 'healthy', images: [], url: 'https://workshop.flowaudit.de', tunnel: false, registered: true, app_id: 'a3', app_status: 'degraded', last_check_at: NOW, deploy: null },
       { host: 'ccx23', name: 'ai-router', title: 'ai-router', sub: 'LLM-Gateway · Spokes EVO/NUC', containers: 1, running: 1, status: 'healthy', images: [], url: null, tunnel: false, registered: true, app_id: 'a4', app_status: 'healthy', last_check_at: NOW, deploy: null },
-      { host: 'ccx23', name: 'cockpit', title: 'cockpit', sub: 'Diese Wand', containers: 1, running: 1, status: 'healthy', images: [], url: null, tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
+      { host: 'ccx23', name: 'cockpit', title: 'cockpit', sub: 'Dieses Cockpit', containers: 1, running: 1, status: 'healthy', images: [], url: null, tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
       { host: 'nuc', name: 'regulierung', title: 'HPP · Preismonitoring-Portal', sub: 'Entwicklung', containers: 5, running: 5, status: 'healthy', images: [], url: null, tunnel: false, registered: true, app_id: 'a5', app_status: 'healthy', last_check_at: NOW, deploy: null },
       { host: 'nuc', name: 'audit_designer', title: 'audit_designer', sub: '', containers: 6, running: 5, status: 'degraded', images: [], url: null, tunnel: false, registered: true, app_id: 'a6', app_status: 'degraded', last_check_at: NOW, deploy: null },
       { host: 'evo', name: 'ai-router', title: 'ai-router', sub: 'Spoke EVO', containers: 2, running: 2, status: 'healthy', images: [], url: null, tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
@@ -47,7 +47,7 @@ function mockOverview(): Overview {
       repos: [
         { full_name: 'janpow77/regulierung', name: 'regulierung', owner: 'janpow77', description: 'HPP', private: true, language: 'Python', pushed_at: NOW, default_branch: 'main', open_issues: 0, stars: 0, html_url: '#' },
         { full_name: 'janpow77/flow-agent', name: 'flow-agent', owner: 'janpow77', description: 'Agent', private: true, language: 'TypeScript', pushed_at: NOW, default_branch: 'main', open_issues: 2, stars: 0, html_url: '#' },
-        { full_name: 'janpow77/cockpit', name: 'cockpit', owner: 'janpow77', description: 'Diese Wand', private: true, language: 'Python', pushed_at: NOW, default_branch: 'main', open_issues: 0, stars: 0, html_url: '#' },
+        { full_name: 'janpow77/cockpit', name: 'cockpit', owner: 'janpow77', description: 'Dieses Cockpit', private: true, language: 'Python', pushed_at: NOW, default_branch: 'main', open_issues: 0, stars: 0, html_url: '#' },
       ],
       commits: [
         { repo: 'janpow77/regulierung', sha: '19ed003', message: 'docs(vorfuehrung): Folien zu IT-Bedarf, Datenschutz/AI Act und BSI-Grundschutz ergänzt', author: 'Jan', date: NOW, html_url: '#' },

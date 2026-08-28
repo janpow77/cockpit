@@ -578,7 +578,7 @@ async def push_test(_=Depends(require_auth), session: Session = Depends(get_sess
     chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
     if not token or not chat_id:
         raise HTTPException(status_code=409, detail="telegram_bot_token / telegram_chat_id fehlen im Vault")
-    instanz = str(pcfg.get("instanz") or next((h.name for h in crud_hosts.list_hosts(session) if h.is_self), "Wand"))
+    instanz = str(pcfg.get("instanz") or next((h.name for h in crud_hosts.list_hosts(session) if h.is_self), "Cockpit"))
     from ..services import wall_loop
 
     stand = wall_loop.letzter_stand() or {}

@@ -50,7 +50,7 @@ function tick() {
 }
 
 onMounted(() => {
-  // Schriften nur fuer die Wand (Google Fonts, mit Fallback-Stack im CSS)
+  // Schriften nur für das Cockpit (Google Fonts, mit Fallback-Stack im CSS)
   if (!document.getElementById('wall-fonts')) {
     const l = document.createElement('link')
     l.id = 'wall-fonts'
@@ -358,7 +358,7 @@ async function demo(neu = false) {
     demoMeldung.value = res.uebersprungen
       ? `${res.faelle.length} Demo-Fälle stehen bereits – Portal wird geöffnet …`
       : (res.ok ? `${res.faelle.length} Demo-Fälle aufgebaut (${demoSekunden.value} s) – Portal wird geöffnet …` : 'Aufbau mit Fehlern – Portal wird geöffnet …')
-    // Kein neues Fenster: das Portal ersetzt die Wand in diesem Tab (Zurück-Taste führt zur Wand)
+    // Kein neues Fenster: Das Portal ersetzt das Cockpit in diesem Tab (Zurück führt zum Cockpit).
     window.setTimeout(() => window.location.assign(url), 800)
   } catch (err) {
     demoMeldung.value = `Fehler: ${extractError(err)}`

@@ -620,7 +620,7 @@ onBeforeUnmount(() => abortController?.abort())
         </button>
         <RouterLink class="button ghost" to="/wall">
           <ArrowLeft :size="15" aria-hidden="true" />
-          Zur Wand
+          Zum Cockpit
         </RouterLink>
       </div>
 

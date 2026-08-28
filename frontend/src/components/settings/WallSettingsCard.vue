@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Einstellungen der Wand und der LLM-Konsole: Ausblendliste, Links, Hero, Sonden,
+ * Einstellungen des Cockpits und der LLM-Konsole: Ausblendliste, Links, Hero, Sonden,
  * Demo-Start, Sicherungspfad, Modell-Whitelist, Systemprompt, MCP-Server.
  * Listen als Zeilen, Zuordnungen als JSON mit Prüfung vor dem Speichern.
  */
@@ -140,7 +140,7 @@ async function save() {
   saving.value = true
   try {
     cfg.value = await patchWallConfig(patch)
-    toast.success('Wand-Einstellungen gespeichert')
+    toast.success('Cockpit-Einstellungen gespeichert')
   } catch (err) { toast.error(extractError(err)) }
   finally { saving.value = false }
 }
@@ -152,7 +152,7 @@ async function pushTesten() {
 
 const felder: { key: string; label: string; hint: string; model: typeof links; rows: number }[] = [
   { key: 'links', label: 'Öffentliche Adressen (Projekt → URL)', hint: 'Compose-Projekt oder Container-Präfix als Schlüssel', model: links, rows: 8 },
-  { key: 'labels', label: 'Anzeigenamen (Projekt → {title, sub})', hint: 'Sprechende Titel für die Wand', model: labels, rows: 8 },
+  { key: 'labels', label: 'Anzeigenamen (Projekt → {title, sub})', hint: 'Sprechende Titel für das Cockpit', model: labels, rows: 8 },
   { key: 'hero', label: 'Hero-Projekt', hint: 'project, title, sub, url, demo_path, probe', model: hero, rows: 8 },
   { key: 'probes', label: 'Sonden (JSON-Endpunkte mit Kennzahlen)', hint: 'id, label, url, secret_key, header, header_prefix, fields[{key,label}]', model: probes, rows: 12 },
   { key: 'demo', label: 'Demo-Start (HPP)', hint: 'login_url, aufbau_url, user_secret, password_secret – Werte liegen im Vault', model: demo, rows: 6 },
@@ -165,28 +165,28 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
   { key: 'flow_agent', label: 'flow-agent (Projektinventar aller Hosts)', hint: 'url, secret_key (Vault: Lese-Schlüssel), hosts = flow-agent-Hostname → Cockpit-Host', model: flowAgent, rows: 6 },
   { key: 'leitinstanz', label: 'Leitinstanz (Aufträge zentral)', hint: 'url leer = diese Instanz führt Aufträge selbst; sonst Weiterleitung von /admin/api/auftraege dorthin – Anmeldung über Vault (benutzer_secret, passwort_secret)', model: leitinstanz, rows: 5 },
   { key: 'auftrag_vorlagen', label: 'Aufträge: eigene Vorlagen', hint: '[{id, titel mit {projekt}, profil, prioritaet, text}] – gleiche id ersetzt die Vorgabe', model: auftragVorlagen, rows: 8 },
-  { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), bestaetigung_laeufe (Vorgabe 2: Alarm erst nach so vielen Wand-Läufen in Folge, Entwarnung ebenso), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
+  { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), bestaetigung_laeufe (Vorgabe 2: Alarm erst nach so vielen Cockpit-Läufen in Folge, Entwarnung ebenso), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
 ]
 </script>
 
 <template>
-  <Card title="Wand & LLM-Konsole" subtitle="Was auf der Wand erscheint, welche Modelle die Konsole anbietet, welche MCP-Server gezeigt werden">
+  <Card title="Cockpit & LLM-Konsole" subtitle="Was im Cockpit erscheint, welche Modelle die Konsole anbietet, welche MCP-Server gezeigt werden">
     <template #actions>
       <button class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50" :disabled="saving || loading" @click="save">
         <Save :size="14" /> Speichern
       </button>
     </template>
-    <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Wand-Einstellungen …</div>
+    <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Cockpit-Einstellungen …</div>
     <div v-else class="space-y-5">
-      <p class="text-xs text-slate-500 flex items-center gap-1.5"><Radar :size="12" /> Die Wand liegt unter <span class="font-mono">/admin/wall</span>, die Konsole unter <span class="font-mono">/admin/chat</span>, die MCP-Seite unter <span class="font-mono">/admin/mcp</span>. Secrets nur im Vault anlegen – hier stehen nur deren Schlüsselnamen.</p>
+      <p class="text-xs text-slate-500 flex items-center gap-1.5"><Radar :size="12" /> Das Cockpit liegt unter <span class="font-mono">/admin/wall</span>, die Konsole unter <span class="font-mono">/admin/chat</span>, die MCP-Seite unter <span class="font-mono">/admin/mcp</span>. Secrets nur im Vault anlegen – hier stehen nur deren Schlüsselnamen.</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Ausblenden (eine Angabe je Zeile, Teilstring)</span>
           <textarea v-model="hide" rows="6" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
-          <span class="text-[11px] text-slate-400">Projekte/Container mit diesen Namensteilen erscheinen nie auf der Wand.</span>
+          <span class="text-[11px] text-slate-400">Projekte/Container mit diesen Namensteilen erscheinen nie im Cockpit.</span>
         </label>
         <label class="block">
-          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Hosts auf der Wand (leer = alle)</span>
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Hosts im Cockpit (leer = alle)</span>
           <textarea v-model="hosts" rows="6" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
           <span class="text-[11px] text-slate-400">Hostnamen wie in der Host-Verwaltung, eine Angabe je Zeile.</span>
         </label>
@@ -233,7 +233,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Verlauf aufbewahren (Tage)</span>
           <input v-model.number="verlaufTage" type="number" min="1" max="365" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
-          <span class="text-[11px] text-slate-400">Kennzahlen je Lauf (alle 90 s) für die Verlaufslinien der Wand.</span>
+          <span class="text-[11px] text-slate-400">Kennzahlen je Lauf (alle 90 s) für die Verlaufslinien des Cockpits.</span>
         </label>
         <div class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Push-Kanal prüfen</span><br />
