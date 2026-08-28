@@ -257,7 +257,8 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
             # Antigravity CLI (Google-Abo): agy -p … --output-format stream-json, Fortsetzung über --conversation <id>
             flags = PROFILE_AGY.get(profil, PROFILE_AGY["bearbeiten"])
             resume_flag = f"--conversation {shlex.quote(a.session_id)}" if resume and a.session_id else ""
-            return f"{bin_} -p {prompt} --output-format stream-json {flags} {resume_flag}".strip()
+            # ohne --add-dir schreibt agy in sein eigenes Scratch-Verzeichnis statt in den Worktree
+            return f"{bin_} -p {prompt} --output-format stream-json {flags} --add-dir {shlex.quote(pfade['worktree'])} {resume_flag}".strip()
         flags = PROFILE_GEMINI.get(profil, PROFILE_GEMINI["bearbeiten"])
         resume_flag = f"--resume {shlex.quote(a.session_id)}" if resume and a.session_id else ""
         return f"{bin_} -p {prompt} -o stream-json {flags} {resume_flag}".strip()
@@ -272,6 +273,9 @@ def start_befehl(a: AuftragRow, *, bins: dict[str, str] | None = None, resume: b
     p = _lauf_pfade(a)
     branch = a.branch or f"auftrag/{a.id}"
     text = prompt_fuer(a, resume=resume, nachfrage=nachfrage)
+    if not resume:
+        # Arbeitsverzeichnis ausdrücklich nennen – Agenten arbeiten sonst gelegentlich im Hauptrepo oder in eigenen Scratch-Ordnern
+        text = f"Arbeitsverzeichnis (Git-Worktree, Branch {branch}): {p['worktree']}\nAlle Änderungen ausschließlich dort, nie außerhalb.\n\n{text}"
     lauf = agent_befehl(a, bins=bins or {}, text=text, resume=resume, pfade=p)
     wt = shlex.quote(p["worktree"])
     lauf_hinten = f"{lauf} > {p['log']} 2> {p['stderr']}; echo $? > {p['done']}"

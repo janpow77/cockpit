@@ -468,3 +468,9 @@ Daher agy-Profile mit `--dangerously-skip-permissions` (wie Codex ohne Sandbox a
 der Ausführungsmodus (`--mode plan` bzw. `accept-edits`) begrenzt weiterhin Dateiänderungen;
 Schutz bleibt Worktree + Branch. Die Allow-Regeln in `settings.json` bleiben für interaktive
 agy-Nutzung erhalten.
+
+**v0.4.10:** Gemini-Testlauf: agy schrieb `calc.py`/`test_calc.py` in sein eigenes
+Scratch-Verzeichnis (`~/.gemini/antigravity-cli/scratch/`) statt in den Worktree (Branch blieb
+leer). Behoben mit `--add-dir <worktree>` und einer ersten Prompt-Zeile „Arbeitsverzeichnis
+(Git-Worktree, Branch …): <pfad> – alle Änderungen ausschließlich dort“ für alle Agenten beim
+Erststart.

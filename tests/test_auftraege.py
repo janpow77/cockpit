@@ -48,6 +48,7 @@ def test_startbefehl_claude_ohne_bypass():
     # Start in Untershell, damit das & nicht die ganze &&-Kette in den Hintergrund schickt
     assert "( nohup bash -c " in cmd and "& echo $! > " in cmd and cmd.rstrip().endswith("echo gestartet")
     assert "mkdir -p .git/info" in cmd
+    assert "Arbeitsverzeichnis (Git-Worktree, Branch auftrag/a_test1)" in cmd
 
 
 def test_startbefehl_lesen_nur_lesewerkzeuge():
@@ -187,6 +188,7 @@ def test_agy_befehl():
     cmd = svc.agent_befehl(a, bins={"gemini": "/home/janpow/.local/bin/agy"}, text="x", resume=True, pfade=p)
     assert cmd.startswith("/home/janpow/.local/bin/agy -p ") and "--output-format stream-json" in cmd
     assert "--conversation conv-1" in cmd and "--mode accept-edits" in cmd and "--sandbox" not in cmd
+    assert "--add-dir /home/janpow/Projekte/x/.cockpit-auftraege/wt-a_test1" in cmd
     lese = svc.agent_befehl(_auftrag(agent="gemini", modus="bericht"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
     assert "--mode plan" in lese and "--mode accept-edits" not in lese
     voll = svc.agent_befehl(_auftrag(agent="gemini", profil="voll"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
