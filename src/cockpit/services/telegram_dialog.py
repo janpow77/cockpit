@@ -192,12 +192,14 @@ def _zugang(session: Session, cfg: wc.WallConfig) -> tuple[str | None, str | Non
 
 
 def _key(session: Session) -> str:
-    from ..config import get_settings
-
+    """HMAC-Schlüssel für Schaltflächen: der Vault-Schlüssel der Instanz, sonst ein einmal erzeugter Zufallswert in den Einstellungen."""
+    k = None
     try:
-        k = getattr(get_settings(), "vault_key", None) or getattr(get_settings(), "secret_key", None)
-    except Exception:  # noqa: BLE001
-        k = None
+        from ..config import load_config
+
+        k = getattr(load_config(), "vault_key", None)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Telegram-Dialog: Konfiguration nicht lesbar (%s) – Schlüssel aus den Einstellungen", exc)
     if not k:
         k = str(wc.read_setting(session, "telegram_hmac_key", "") or "")
         if not k:

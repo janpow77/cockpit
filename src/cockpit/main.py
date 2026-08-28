@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -44,6 +45,27 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(name)s  %(message)s",
 )
+
+
+class _TokenFilter(logging.Filter):
+    """Bot-Tokens (Telegram: bot<id>:<secret>) und Bearer-Werte nie in Logzeilen – httpx protokolliert volle URLs."""
+
+    MUSTER = re.compile(r"bot\d+:[A-Za-z0-9_-]{20,}")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001
+            return True
+        if self.MUSTER.search(msg):
+            record.msg = self.MUSTER.sub("bot<token>", msg)
+            record.args = ()
+        return True
+
+
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_TokenFilter())
+logging.getLogger("httpx").setLevel(logging.WARNING)  # Request-Zeilen mit vollständiger URL sind hier nur Rauschen
 log = logging.getLogger("cockpit")
 
 

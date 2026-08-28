@@ -364,6 +364,22 @@ async def pr_erstellen(auftrag_id: str, _=Depends(require_auth), session: Sessio
     return svc.as_dict(a)
 
 
+@router.post("/{auftrag_id}/telegram")
+async def telegram_erneut(auftrag_id: str, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Dialognachricht (Schaltflächen) für den aktuellen Status erneut per Telegram senden."""
+    from ..services import telegram_dialog
+
+    a = svc.holen(session, auftrag_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
+    cfg = wc.load(session)
+    ok = await telegram_dialog.ereignis_senden(session, a, cfg)
+    if not ok:
+        raise HTTPException(status_code=502, detail="Nachricht nicht gesendet (Push/Dialog aus, Bot oder Chat fehlt)")
+    crud_audit.write(session, action="auftrag.telegram", target=a.id, after={"status": a.status})
+    return {"gesendet": True, "status": a.status}
+
+
 @router.get("/{auftrag_id}/log")
 async def protokoll(auftrag_id: str, zeilen: int = 80, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     a = svc.holen(session, auftrag_id)
