@@ -40,7 +40,7 @@ router = APIRouter(prefix="/admin/api/auftraege", tags=["auftraege"])
 
 Profil = Literal["lesen", "bearbeiten", "bearbeiten_tests", "voll"]
 Zeitfenster = Literal["sofort", "nachts", "nach_reset"]
-Agent = Literal["claude", "codex", "gemini"]
+Agent = Literal["claude", "codex", "gemini", "auto"]
 Modus = Literal["bericht", "plan_freigabe", "umsetzen"]
 
 
@@ -242,7 +242,7 @@ async def starten(auftrag_id: str, _=Depends(require_auth), session: Session = D
         raise HTTPException(status_code=409, detail=kap.get("pause_grund") or f"Kapazität erschöpft ({kap['laufend']}/{kap['parallel_max']}) – geplant, startet automatisch")
     cfg = wc.load(session)
     _agent_host_pruefen(cfg, a.host)
-    a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox})
+    a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox}, auslastung=runner.auslastung_aktuell())
     crud_audit.write(session, action="auftrag.start", target=a.id, after={"status": a.status, "fehler": a.fehler})
     return svc.as_dict(a)
 

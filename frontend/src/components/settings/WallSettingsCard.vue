@@ -44,6 +44,7 @@ const auftragVorlagen = ref('')
 const auftragParallel = ref(3)
 const codexSandbox = ref<'danger-full-access' | 'workspace-write'>('danger-full-access')
 const flowAgent = ref('')
+const leitinstanz = ref('')
 const agentHosts = ref('')
 const fehler = ref<Record<string, string>>({})
 
@@ -81,6 +82,7 @@ async function load() {
     auftragParallel.value = c.auftrag_parallel ?? 3
     codexSandbox.value = c.codex_sandbox ?? 'danger-full-access'
     flowAgent.value = json(c.flow_agent ?? {})
+    leitinstanz.value = json(c.leitinstanz ?? {})
     agentHosts.value = zeilen(c.agent_hosts ?? ['nuc'])
   } catch (err) { toast.error(extractError(err)) }
   finally { loading.value = false }
@@ -133,6 +135,7 @@ async function save() {
   const vs = parse<Record<string, unknown>>('vorschlaege', vorschlaege.value, 'object'); if (vs) patch.vorschlaege = vs
   const av = parse<Record<string, unknown>[]>('auftrag_vorlagen', auftragVorlagen.value, 'array'); if (av) patch.auftrag_vorlagen = av
   const fl = parse<Record<string, unknown>>('flow_agent', flowAgent.value, 'object'); if (fl) patch.flow_agent = fl
+  const li = parse<Record<string, unknown>>('leitinstanz', leitinstanz.value, 'object'); if (li) patch.leitinstanz = li
   if (Object.keys(fehler.value).length) { toast.error('Bitte die markierten Felder korrigieren'); return }
   saving.value = true
   try {
@@ -160,6 +163,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
   { key: 'agent_bins', label: 'Aufträge: Agenten-Programme (claude, codex, gemini → absoluter Pfad auf dem Host)', hint: 'bash -lc über SSH kennt ~/bin und ~/.npm-global/bin nicht', model: agentBins, rows: 5 },
   { key: 'vorschlaege', label: 'Aufträge: wöchentliche Vorschlagsläufe', hint: 'aktiv, wochentag (0 = Montag … 6 = Sonntag), stunde, agent – je aktivem Werkstatt-Projekt, Ergebnis als Karten im Eingang', model: vorschlaege, rows: 5 },
   { key: 'flow_agent', label: 'flow-agent (Projektinventar aller Hosts)', hint: 'url, secret_key (Vault: Lese-Schlüssel), hosts = flow-agent-Hostname → Cockpit-Host', model: flowAgent, rows: 6 },
+  { key: 'leitinstanz', label: 'Leitinstanz (Aufträge zentral)', hint: 'url leer = diese Instanz führt Aufträge selbst; sonst Weiterleitung von /admin/api/auftraege dorthin – Anmeldung über Vault (benutzer_secret, passwort_secret)', model: leitinstanz, rows: 5 },
   { key: 'auftrag_vorlagen', label: 'Aufträge: eigene Vorlagen', hint: '[{id, titel mit {projekt}, profil, prioritaet, text}] – gleiche id ersetzt die Vorgabe', model: auftragVorlagen, rows: 8 },
   { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), bestaetigung_laeufe (Vorgabe 2: Alarm erst nach so vielen Wand-Läufen in Folge, Entwarnung ebenso), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
 ]

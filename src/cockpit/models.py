@@ -149,6 +149,8 @@ class AuftragRow(Base):
     projekt = Column(String, nullable=False)
     projekt_name = Column(String, nullable=False, default="")
     agent = Column(String, nullable=False, default="claude")
+    agent_auto = Column(Integer, nullable=True)  # 1 = Agent automatisch gewählt (Wunsch „auto“)
+    agent_grund = Column(String, nullable=True)  # Begründung der automatischen Wahl
     modus = Column(String, nullable=False, default="umsetzen")  # bericht | plan_freigabe | umsetzen
     freigegeben = Column(String, nullable=True)  # Zeitpunkt der Freigabe (Modus plan_freigabe)
     profil = Column(String, nullable=False, default="bearbeiten")

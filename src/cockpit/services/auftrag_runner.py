@@ -35,6 +35,12 @@ def _auslastung(stand: dict | None) -> dict:
     }
 
 
+def auslastung_aktuell() -> dict:
+    from . import wall_loop
+
+    return _auslastung(wall_loop.letzter_stand())
+
+
 def kapazitaet(session: Session, stand: dict | None = None) -> dict:
     from . import wall_loop
 
@@ -65,6 +71,7 @@ async def _pushen(session: Session, a, cfg: wc.WallConfig) -> None:
         try:
             if await telegram_dialog.ereignis_senden(session, a, cfg):
                 return
+            log.warning("Telegram-Dialog: Ereignis %s/%s nicht gesendet – klassischer Push", a.id, a.status)
         except Exception as exc:  # noqa: BLE001 - dann klassischer Push
             log.warning("Telegram-Dialog senden: %s", exc)
     token = _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
@@ -101,6 +108,7 @@ def vorschlagslaeufe_planen(session: Session, cfg: wc.WallConfig, stand: dict | 
     if vorlage is None:
         return 0
     vorhanden = {(a.projekt, a.titel) for a in svc.liste(session) if a.erstellt[:10] >= (jetzt.replace(hour=0, minute=0).isoformat()[:10])}
+    obergrenze = int(v.get("max_je_woche") or 8)
     n = 0
     for w in (stand or {}).get("werkstatt") or []:
         basis = cfg.work_dirs.get(w.get("host") or "")
@@ -113,8 +121,11 @@ def vorschlagslaeufe_planen(session: Session, cfg: wc.WallConfig, stand: dict | 
             titel = vorlage["titel"].replace("{projekt}", str(repo.get("name"))) + f" ({woche})"
             if (pfad, titel) in vorhanden:
                 continue
+            if n >= obergrenze:
+                log.info("Vorschlagsläufe: Obergrenze %d je Woche erreicht – %s übersprungen", obergrenze, repo.get("name"))
+                continue
             svc.anlegen(session, titel=titel, text=vorlage["text"], host=w["host"], projekt=pfad, projekt_name=str(repo.get("name")),
-                        agent=str(v.get("agent") or "claude"), modus="bericht", profil="lesen", prioritaet=4, zeitfenster="nachts", status="geplant")
+                        agent=str(v.get("agent") or "codex"), modus="bericht", profil="lesen", prioritaet=4, zeitfenster="nachts", status="geplant")
             n += 1
     if n:
         log.info("%d Vorschlagsläufe für %s eingeplant", n, woche)
@@ -133,6 +144,8 @@ async def runde() -> None:
     session = factory()
     try:
         cfg = wc.load(session)
+        if (cfg.leitinstanz or {}).get("url"):
+            return  # Aufträge laufen auf der Leitinstanz
         # 0. GitHub-Checks offener PRs nachziehen (alle 5 Runden ≈ 100 s)
         if _runden % 5 == 1:
             for a in [x for x in svc.liste(session) if x.pr_url and x.status == "fertig" and (x.pr_checks or "").find("rot") < 0]:
@@ -140,7 +153,7 @@ async def runde() -> None:
                 if host is None:
                     continue
                 try:
-                    res = await asyncio.to_thread(svc.run_on_host, host, svc.pr_checks_befehl(a), 40)
+                    res = await asyncio.to_thread(svc.run_on_host, host, svc.pr_checks_befehl(a), timeout=40)
                     kurz = svc.pr_checks_kurz(res.stdout or "")
                     if kurz != a.pr_checks:
                         svc.aendern(session, a, pr_checks=kurz)
@@ -204,8 +217,8 @@ async def runde() -> None:
                 continue
             if a.agent == "gemini" and any(x.status == "laeuft" and x.agent == "gemini" for x in svc.liste(session)):
                 continue
-            a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox})
-            log.info("Auftrag %s gestartet (%s, %s): %s", a.id, a.agent, a.profil, a.status)
+            a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox}, auslastung=_auslastung(stand))
+            log.info("Auftrag %s gestartet (%s%s, %s): %s", a.id, a.agent, " automatisch" if a.agent_auto else "", a.profil, a.status)
             if a.status == "laeuft":
                 frei -= 1
             else:

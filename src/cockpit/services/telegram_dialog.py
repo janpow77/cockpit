@@ -159,7 +159,10 @@ async def _api(token: str, method: str, **params) -> dict | None:
             log.warning("Telegram %s: HTTP %s %s", method, resp.status_code, resp.text[:160])
             return None
         d = resp.json()
-        return d.get("result") if d.get("ok") else None
+        if not d.get("ok"):
+            log.warning("Telegram %s: %s", method, str(d.get("description") or d)[:160])
+            return None
+        return d.get("result")
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("Telegram %s: %s", method, exc)
         return None
@@ -186,9 +189,11 @@ def _zugang(session: Session, cfg: wc.WallConfig) -> tuple[str | None, str | Non
     from ..routes.overview import _secret_value
 
     pcfg = cfg.push or {}
-    token = _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
+    dialog = pcfg.get("dialog") if isinstance(pcfg.get("dialog"), dict) else {}
+    # eigener Cockpit-Bot (Vault-Schlüssel in push.dialog.token_secret), sonst der Push-Bot
+    token = (_secret_value(session, str(dialog.get("token_secret"))) if dialog.get("token_secret") else None) or _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
     chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
-    return token, chat_id, (pcfg.get("dialog") if isinstance(pcfg.get("dialog"), dict) else {})
+    return token, chat_id, dialog
 
 
 def _key(session: Session) -> str:
@@ -230,7 +235,9 @@ async def ereignis_senden(session: Session, a, cfg: wc.WallConfig) -> bool:
     text = nachrichtentext(a, kurz, _kanban_url(cfg), pruefung_kurz(a) if a.status == "fertig" else None)
     mid = await senden(token, chat_id, text, tastatur(a.status, a.id, _key(session), pr_vorhanden=bool(a.pr_url)))
     if mid is None:
+        log.warning("Telegram-Dialog: Nachricht für %s (%s) nicht gesendet", a.id, a.status)
         return False
+    log.info("Telegram-Dialog: %s (%s) gesendet, message_id=%s", a.id, a.status, mid)
     session.add(TelegramNachrichtRow(message_id=mid, chat_id=str(chat_id), auftrag_id=a.id, art=a.status, erstellt=datetime.now(UTC).isoformat(timespec="seconds")))
     session.commit()
     return True
@@ -491,13 +498,15 @@ async def update_verarbeiten(session: Session, cfg: wc.WallConfig, update: dict,
         aktion, auftrag_id = geprueft
         a = svc.holen(session, auftrag_id)
         user = str((cq.get("from") or {}).get("id") or "?")
+        # Telegram erwartet die Quittung innerhalb weniger Sekunden – erst quittieren, dann handeln
+        await _api(token, "answerCallbackQuery", callback_query_id=cq.get("id"), text="Wird ausgeführt …")
         if a is None:
             antwort = "Auftrag existiert nicht mehr"
         else:
             antwort = await _aktion(session, cfg, aktion, a, token, chat_id, user)
-        await _api(token, "answerCallbackQuery", callback_query_id=cq.get("id"), text=antwort[:190])
         if aktion not in ("hinweis", "antworten", "plan") and msg.get("message_id"):
             await _tastatur_entfernen(token, chat_id, int(msg["message_id"]))
+        if aktion != "plan":
             await senden(token, chat_id, f"→ {antwort}")
         return
     msg = update.get("message")
@@ -518,7 +527,7 @@ async def dialog_loop(stop_event: asyncio.Event, *, pause_s: int = 3) -> None:
             cfg = wc.load(session)
             pcfg = cfg.push or {}
             token, chat_id, dialog = _zugang(session, cfg)
-            if not pcfg.get("aktiv") or not dialog.get("aktiv", True) or not token or not chat_id:
+            if (cfg.leitinstanz or {}).get("url") or not pcfg.get("aktiv") or not dialog.get("aktiv", True) or not token or not chat_id:
                 session.close()
                 try:
                     await asyncio.wait_for(stop_event.wait(), timeout=30)

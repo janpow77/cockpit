@@ -112,7 +112,7 @@ DEFAULT_KIRA: dict[str, Any] = {
 # Push-Alarme per Telegram (Bot-Token und Chat-ID im Vault). Nachts nur Kritisches.
 DEFAULT_PUSH: dict[str, Any] = {
     # Telegram-Dialog (Schaltflächen, Antworten per Reply, Kommandos) – nur auf der Instanz mit aktivem Push
-    "dialog": {"aktiv": True, "erlaubte_user_ids": [], "kuerzen": True},
+    "dialog": {"aktiv": True, "erlaubte_user_ids": [], "kuerzen": True, "token_secret": ""},  # token_secret leer = Push-Bot; sonst eigener Cockpit-Bot (Vault)
     "aktiv": True,
     "kanal": "telegram",
     "token_secret": "telegram_bot_token",
@@ -142,13 +142,16 @@ DEFAULT_AGENT_BINS: dict[str, str] = {
 }
 
 # Wöchentliche Vorschlagsläufe (Kanban): Sonntag 01:00 je aktivem Projekt, Ergebnis → Karten im Eingang
-DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": True, "wochentag": 6, "stunde": 1, "agent": "claude"}
+DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": True, "wochentag": 6, "stunde": 1, "agent": "codex", "max_je_woche": 8}
 
 # flow-agent (agent.flowaudit.de): Projektinventar/graphify je Host, Lese-Schlüssel im Vault; hosts = flow-agent-Hostname → Cockpit-Host
 DEFAULT_FLOW_AGENT: dict[str, Any] = {
     "url": "https://agent.flowaudit.de", "secret_key": "flow_agent_read_key",
     "hosts": {"janpow-NUC15JNLU7X4": "nuc", "cockpit-nbg1-1": "ccx23", "evo2": "evo", "MacBook-Air.local": "macbook", "janpow-ai": "janpow-ai"},
 }
+
+# Leitinstanz: url leer = diese Instanz führt Aufträge selbst; sonst werden /admin/api/auftraege dorthin durchgereicht
+DEFAULT_LEITINSTANZ: dict[str, Any] = {"url": "", "benutzer_secret": "leitinstanz_benutzer", "passwort_secret": "leitinstanz_passwort"}
 
 DEFAULT_DEMO: dict[str, Any] = {
     "login_url": "https://hpp.flowaudit.de/api/auth/login",
@@ -231,6 +234,7 @@ class WallConfig:
     agent_bins: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_AGENT_BINS))
     vorschlaege: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_VORSCHLAEGE))
     flow_agent: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_FLOW_AGENT))
+    leitinstanz: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_LEITINSTANZ))
     auftrag_vorlagen: list[dict[str, Any]] = field(default_factory=list)
     auftrag_parallel: int = 3
     codex_sandbox: str = "danger-full-access"  # bubblewrap auf dem NUC nicht nutzbar; "workspace-write" wo es geht
@@ -252,7 +256,7 @@ class WallConfig:
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
             "push": self.push, "ki_nutzung": self.ki_nutzung, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
-            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege, "flow_agent": self.flow_agent, "codex_sandbox": self.codex_sandbox, "agent_hosts": self.agent_hosts,
+            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege, "flow_agent": self.flow_agent, "leitinstanz": self.leitinstanz, "codex_sandbox": self.codex_sandbox, "agent_hosts": self.agent_hosts,
             "auftrag_max_dauer_min": self.auftrag_max_dauer_min, "auftrag_aufraeumen_tage": self.auftrag_aufraeumen_tage,
             "verlauf_tage": self.verlauf_tage, "chat_max_tokens": self.chat_max_tokens,
         }
@@ -287,7 +291,7 @@ def load(session: Session) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent", "leitinstanz"):
         if isinstance(raw.get(name), dict):
             setattr(cfg, name, raw[name])
     if isinstance(raw.get("auftrag_vorlagen"), list):
@@ -316,7 +320,7 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent", "leitinstanz"):
         if isinstance(patch.get(name), dict):
             raw[name] = patch[name]
     if isinstance(patch.get("auftrag_vorlagen"), list):

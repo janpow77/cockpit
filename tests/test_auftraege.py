@@ -14,7 +14,7 @@ def _auftrag(**kw):
     basis = dict(id="a_test1", titel="T", text="Prüfe das Repo", host="nuc", projekt="/home/janpow/Projekte/x",
                  projekt_name="x", agent="claude", profil="bearbeiten", prioritaet=3, zeitfenster="sofort",
                  status="geplant", reihenfolge=10, branch=None, worktree=None, session_id=None, modus="umsetzen", freigegeben=None,
-                 pruefung=None, pruefung_ok=None, pr_url=None, pr_checks=None, ergebnis=None)
+                 pruefung=None, pruefung_ok=None, pr_url=None, pr_checks=None, ergebnis=None, agent_auto=None, agent_grund=None)
     basis.update(kw)
     return SimpleNamespace(**basis)
 
@@ -307,3 +307,10 @@ def test_claude_permission_denials_als_verweigert():
                       "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}], "usage": {"input_tokens": 1, "output_tokens": 1}})
     erg = svc.ergebnis_aus_log(roh)
     assert erg["verweigert"] == ["Bash(npm test)"]
+
+
+def test_claude_md_kontext_nur_fuer_codex_und_agy():
+    codex = svc.start_befehl(_auftrag(agent="codex"), bins={})
+    claude = svc.start_befehl(_auftrag(agent="claude"), bins={})
+    assert "[ 1 = 1 ] && [ -f /home/janpow/Projekte/x/.cockpit-auftraege/wt-a_test1/CLAUDE.md ]" in codex and "head -c 4000" in codex
+    assert "[ 0 = 1 ]" in claude

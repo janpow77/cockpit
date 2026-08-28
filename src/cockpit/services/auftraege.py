@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 
 STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "freigabe", "unterbrochen", "fertig", "fehler", "abgebrochen")
 AGENTEN = ("claude", "codex", "gemini")
+AGENT_AUTO = "auto"
 # Modus: nur berichten/planen · Plan zeigen und erst nach Freigabe umsetzen · direkt umsetzen
 MODI = ("bericht", "plan_freigabe", "umsetzen")
 # Antigravity CLI (agy 1.1.22, Google-Abo): --mode plan (nur lesen/planen) bzw. accept-edits (Dateiänderungen ohne Nachfrage).
@@ -102,7 +103,7 @@ def neue_id() -> str:
 def as_dict(a: AuftragRow) -> dict:
     return {
         "id": a.id, "titel": a.titel, "text": a.text, "host": a.host, "projekt": a.projekt, "agent": a.agent,
-        "modus": a.modus, "freigegeben": a.freigegeben,
+        "modus": a.modus, "freigegeben": a.freigegeben, "agent_auto": bool(a.agent_auto), "agent_grund": a.agent_grund,
         "projekt_name": a.projekt_name, "profil": a.profil, "prioritaet": a.prioritaet,
         "zeitfenster": a.zeitfenster, "status": a.status, "reihenfolge": a.reihenfolge,
         "branch": a.branch, "worktree": a.worktree, "session_id": a.session_id,
@@ -295,6 +296,11 @@ def start_befehl(a: AuftragRow, *, bins: dict[str, str] | None = None, resume: b
         f"{{ mkdir -p .git/info && {{ grep -qx '{LAUF_DIR}/' .git/info/exclude 2>/dev/null || echo '{LAUF_DIR}/' >> .git/info/exclude; }}; }} 2>/dev/null || true",
         f"{{ [ -d {wt} ] || git worktree add -B {shlex.quote(branch)} {wt} >/dev/null 2>&1 || git worktree add {wt} {shlex.quote(branch)} >/dev/null 2>&1; }}",
         f"printf '%s' {shlex.quote(text)} > {shlex.quote(p['prompt'])}",
+        # Codex liest nur AGENTS.md, agy keins von beiden: die Konventionen des Repos (CLAUDE.md) beim Erststart anhängen
+        (
+            f"if [ {'0' if (resume or a.agent == 'claude') else '1'} = 1 ] && [ -f {wt}/CLAUDE.md ]; then "
+            f"printf '\\n\\n--- Konventionen des Repos (CLAUDE.md, Auszug) ---\\n' >> {shlex.quote(p['prompt'])}; head -c 4000 {wt}/CLAUDE.md >> {shlex.quote(p['prompt'])}; fi"
+        ),
         f"rm -f {shlex.quote(p['done'])}",
         # Abhängigkeiten des Hauptrepos in den Worktree verlinken (node_modules, .venv) – sonst scheitern Build, Tests und Qualitätstor
         f"for d in . frontend backend; do for m in node_modules .venv venv; do [ -d {shlex.quote(a.projekt)}/$d/$m ] && [ ! -e {wt}/$d/$m ] && ln -s {shlex.quote(a.projekt)}/$d/$m {wt}/$d/$m 2>/dev/null; done; done; true",
@@ -698,7 +704,21 @@ def host_fuer(session: Session, name: str) -> HostRow | None:
     return _ziel(h) if h else None
 
 
-def starten(session: Session, a: AuftragRow, *, bins: dict[str, str], resume: bool = False, nachfrage: str | None = None) -> AuftragRow:
+def agent_aufloesen(session: Session, a: AuftragRow, *, bins: dict[str, str], auslastung: dict | None = None) -> AuftragRow:
+    """Wunsch „auto“ in einen konkreten Agenten überführen (einmalig beim ersten Start)."""
+    from . import agent_wahl
+
+    if a.agent != AGENT_AUTO:
+        return a
+    ausl = auslastung or {}
+    typ = agent_wahl.aufgabentyp(a.titel, a.text, a.modus or "umsetzen", a.profil)
+    verfuegbar = {k: bool(bins.get(k)) for k in AGENTEN}
+    agent, grund = agent_wahl.waehlen(typ, claude_5h=ausl.get("claude_5h"), claude_woche=ausl.get("claude_woche"), codex_woche=ausl.get("codex_woche"), verfuegbar=verfuegbar)
+    return aendern(session, a, agent=agent, agent_auto=1, agent_grund=f"{typ}: {grund}")
+
+
+def starten(session: Session, a: AuftragRow, *, bins: dict[str, str], resume: bool = False, nachfrage: str | None = None, auslastung: dict | None = None) -> AuftragRow:
+    a = agent_aufloesen(session, a, bins=bins, auslastung=auslastung)
     host = host_fuer(session, a.host)
     if host is None:
         return aendern(session, a, status="fehler", fehler=f"Host {a.host} nicht verfügbar", beendet=_iso())

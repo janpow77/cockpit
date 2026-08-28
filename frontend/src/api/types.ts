@@ -374,6 +374,7 @@ export interface WallConfig {
   codex_sandbox: 'danger-full-access' | 'workspace-write'
   agent_hosts: string[]
   flow_agent: Record<string, unknown>
+  leitinstanz: Record<string, unknown>
   prod_hosts?: string[]
   push?: Record<string, unknown>
   ki_nutzung?: Record<string, unknown>
@@ -430,14 +431,14 @@ export interface McpServerState {
 
 export type AuftragStatus = 'eingang' | 'geplant' | 'laeuft' | 'rueckfrage' | 'freigabe' | 'unterbrochen' | 'fertig' | 'fehler' | 'abgebrochen'
 export type AuftragProfil = 'lesen' | 'bearbeiten' | 'bearbeiten_tests' | 'voll'
-export type AuftragAgent = 'claude' | 'codex' | 'gemini'
+export type AuftragAgent = 'claude' | 'codex' | 'gemini' | 'auto'
 export type AuftragModus = 'bericht' | 'plan_freigabe' | 'umsetzen'
 export type Zeitfenster = 'sofort' | 'nachts' | 'nach_reset'
 export interface AuftragPruefung { befehl: string; ok: boolean; dauer_s: number | null; auszug: string }
 
 export interface Auftrag {
   id: string; titel: string; text: string; host: string; projekt: string; projekt_name: string
-  agent: AuftragAgent; modus: AuftragModus; profil: AuftragProfil; prioritaet: number; zeitfenster: Zeitfenster; status: AuftragStatus; reihenfolge: number
+  agent: AuftragAgent; agent_auto: boolean; agent_grund: string | null; modus: AuftragModus; profil: AuftragProfil; prioritaet: number; zeitfenster: Zeitfenster; status: AuftragStatus; reihenfolge: number
   branch: string | null; worktree: string | null; session_id: string | null; freigegeben: string | null
   gestartet: string | null; beendet: string | null; dauer_s: number | null
   ergebnis: string | null; fehler: string | null; kosten_usd: number | null; tokens_in: number | null; tokens_out: number | null; turns: number | null

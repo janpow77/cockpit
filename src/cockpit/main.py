@@ -16,12 +16,13 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from . import __version__
+from . import __version__, auth
 from .config import load_config
 from .db import get_session_factory, init_db
 from .routes.apps import router as apps_router
@@ -39,7 +40,16 @@ from .routes.overview import router as overview_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
 from .routes.traffic import router as traffic_router
-from .services import auftrag_runner, bootstrap, health_check, telegram_dialog, traffic_collector, wall_loop
+from .services import (
+    auftrag_runner,
+    bootstrap,
+    health_check,
+    leitinstanz,
+    telegram_dialog,
+    traffic_collector,
+    wall_loop,
+)
+from .services import wall_config as wc
 
 logging.basicConfig(
     level=logging.INFO,
@@ -149,6 +159,46 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class LeitinstanzMiddleware(BaseHTTPMiddleware):
+    """Reicht /admin/api/auftraege an die Leitinstanz durch (Einstellung leitinstanz.url), nach lokaler Anmeldeprüfung."""
+
+    async def dispatch(self, request: Request, call_next):
+        if not leitinstanz.betrifft(request.url.path):
+            return await call_next(request)
+        factory = get_session_factory()
+        session = factory()
+        try:
+            cfg = wc.load(session)
+            basis = leitinstanz.url_aus(cfg.leitinstanz)
+            if not basis:
+                return await call_next(request)
+            tok = auth._extract_token(request)
+            if not tok or auth.lookup_session(session, tok) is None:
+                return JSONResponse({"detail": "Authorization required"}, status_code=401)
+            from .routes.overview import _secret_value
+
+            benutzer = _secret_value(session, str(cfg.leitinstanz.get("benutzer_secret") or "leitinstanz_benutzer")) or "admin"
+            passwort = _secret_value(session, str(cfg.leitinstanz.get("passwort_secret") or "leitinstanz_passwort"))
+        finally:
+            session.close()
+        if not passwort:
+            return JSONResponse({"detail": "Leitinstanz konfiguriert, aber kein Passwort im Vault (leitinstanz_passwort)"}, status_code=502)
+        body = await request.body()
+        for versuch in (False, True):
+            token = await leitinstanz.token_holen(basis, benutzer, passwort, erneuern=versuch)
+            if not token:
+                return JSONResponse({"detail": "Leitinstanz nicht erreichbar oder Anmeldung fehlgeschlagen"}, status_code=502)
+            try:
+                r = await leitinstanz.weiterleiten(basis, token, request.method, request.url.path, request.url.query or None, body, request.headers.get("content-type"))
+            except Exception as exc:  # noqa: BLE001
+                return JSONResponse({"detail": f"Leitinstanz nicht erreichbar: {str(exc)[:120]}"}, status_code=502)
+            if r.status_code == 401 and not versuch:
+                continue
+            return Response(content=r.content, status_code=r.status_code, media_type=r.headers.get("content-type"))
+        return JSONResponse({"detail": "Leitinstanz: Anmeldung fehlgeschlagen"}, status_code=502)
+
+
+app.add_middleware(LeitinstanzMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
