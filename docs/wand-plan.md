@@ -630,3 +630,32 @@ Antwort unverändert zurück. Runner und Telegram-Dialog ruhen auf Satelliten
 (`runde()`/`dialog_loop` prüfen `leitinstanz.url`). Damit gibt es Aufträge, Kanban-Board, PRs
 und den Telegram-Dialog genau einmal; die Wand, Werkstatt, LLM-Konsole und Hosts bleiben je
 Instanz lokal. Die Leitinstanz selbst hat `url` leer.
+
+## 22. Frontend-Review durch drei Agenten und Fixes (v0.5.0, 28.08.2026)
+
+Drei Prüfaufträge gleichzeitig über das Kanban (Claude `a_871b12f7bf` 630 s / 5,56 $, Codex
+`a_de11b86572` 314 s, agy `a_99b1c1bc75` ~10 min), Modus „nur berichten“. Alle drei fanden
+denselben schwersten Fehler: `<Toasts />` hing nur in der AppShell, die Vollbild-Routen
+(`/wall`, `/kanban`, `/chat`, `/kompakt`, `/login`) liegen außerhalb – jede fehlgeschlagene
+Aktion im Kanban blieb stumm.
+
+Behoben (v0.4.25 – v0.5.0): Toasts global in `App.vue`; Tastenkürzel `f`/`r` greifen nicht mehr in
+Eingabefeldern; sichtbarer Fokusring auf Kanban-Karten; Polling ohne Wettläufe
+(`stores/poll.ts`: verkettete Timeouts, `inFlight`, Generation, `lastError`), Kanban-Mutationssperre
+plus Generationsprüfung für Board- und Protokollantworten, Tastatur-Verschieben
+(`Strg`+Pfeile) mit `aria-live`; Confirm-Store löst offene Anfragen auf; `TrafficView` verschattet
+`window` nicht mehr; Deployment-Abzeichen mit gültigen Varianten; neuer `ErrorState` statt
+„keine Daten“ in acht Ansichten; Einstellungen bei Ladefehler gesperrt; Modal-Formulare mit
+nativer Pflichtfeldprüfung und Doppelklickschutz; mobile Navigationsschublade unter 768 px;
+Token-Ablauf gespeichert und geprüft. Struktur: `KanbanView.vue` 1000 → 500 Zeilen (Komponenten
+`components/kanban/`), `WallView.vue` → 551 Zeilen (neun Kacheln in `components/wall/`).
+
+Offen aus dem Review: Token im `localStorage` (bewusst, kein Cookie-Umbau), Aufteilung weiterer
+großer Views, Tastatur-Verschieben nur zwischen Eingang und Geplant.
+
+**janpow-ai als zweiter Agenten-Host (28.08.):** Claude Code 2.1.217 und codex-cli 0.150.1 unter
+`~/.npm-global/bin` (Symlinks `~/.local/bin/claude`, `~/bin/codex`), beide angemeldet;
+tmux-Sitzung `arbeit`; `agent_hosts = [nuc, janpow-ai]`. flow-agent dort neu enrollt (nur noch der
+Systemdienst, Rolle gpu-server, keine Unauthorized-Meldungen), Ollama an `100.114.73.106:11434`
+gebunden, ai-router-Spoke `janpow-ai` grün, beide GPUs im Pool. Testauftrag (Codex, Bericht über
+flow-agent) in 42 s fertig.
