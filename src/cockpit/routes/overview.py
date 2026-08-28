@@ -490,7 +490,6 @@ async def verlauf_lesen(
 @router.post("/push-test")
 async def push_test(_=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     """Schickt eine Testnachricht ueber den Push-Kanal (Telegram) – prueft Token, Chat und Weg."""
-    from ..services import push
 
     cfg = wc.load(session)
     pcfg = cfg.push or {}
@@ -499,7 +498,15 @@ async def push_test(_=Depends(require_auth), session: Session = Depends(get_sess
     if not token or not chat_id:
         raise HTTPException(status_code=409, detail="telegram_bot_token / telegram_chat_id fehlen im Vault")
     instanz = str(pcfg.get("instanz") or next((h.name for h in crud_hosts.list_hosts(session) if h.is_self), "Wand"))
-    ok = await push.telegram_senden(token, chat_id, f"Cockpit {instanz}: Testnachricht – Push-Alarme sind eingerichtet ✅")
+    from ..services import wall_loop
+
+    stand = wall_loop.letzter_stand() or {}
+    alerts = [a for a in stand.get("alerts") or [] if a.get("level") in ("krit", "warn")]
+    ok = await wall_loop.karte_senden(
+        session, token, chat_id, instanz,
+        alerts or [{"level": "info", "text": "Testnachricht – Push-Alarme sind eingerichtet", "hint": "Diese Karte kommt bei neuen Punkten ab „prüfen“"}],
+        [], stand, cfg,
+    )
     crud_audit.write(session, action="wall.push_test", target="telegram", after={"ok": ok})
     if not ok:
         raise HTTPException(status_code=502, detail="Telegram hat die Nachricht nicht angenommen (siehe Log)")

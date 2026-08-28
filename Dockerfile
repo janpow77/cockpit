@@ -34,7 +34,7 @@ WORKDIR /app
 # Docker-CLI (statisch) damit der Container ueber den gemounteten /var/run/docker.sock
 # `docker ps` auf dem Self-Host ausfuehren kann.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates tini openssh-client git gnupg \
+    && apt-get install -y --no-install-recommends curl ca-certificates tini openssh-client git gnupg fonts-dejavu-core \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
     && chmod a+r /etc/apt/keyrings/docker.gpg \

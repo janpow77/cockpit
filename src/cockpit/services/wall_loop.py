@@ -14,7 +14,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ..db import get_session_factory
-from . import push, verlauf
+from . import push, statuskarte, verlauf
 from . import wall_config as wc
 
 log = logging.getLogger(__name__)
@@ -70,8 +70,8 @@ async def _alarme_pushen(stand: dict, cfg: wc.WallConfig) -> None:
             token = _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
             chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
             if token and chat_id:
-                text = push.nachricht(hinzu, weg, str(pcfg.get("instanz") or (stand.get("hosts") or [{}])[0].get("name") or "Wand"))
-                ok = await push.telegram_senden(token, chat_id, text)
+                instanz = str(pcfg.get("instanz") or next((h.get("name") for h in stand.get("hosts") or [] if h.get("is_self")), "Wand"))
+                ok = await karte_senden(session, token, chat_id, instanz, hinzu, weg, stand, cfg)
                 log.info("Push: %d neu, %d entwarnt, gesendet=%s", len(hinzu), len(weg), ok)
                 if not ok:
                     return
@@ -83,6 +83,27 @@ async def _alarme_pushen(stand: dict, cfg: wc.WallConfig) -> None:
         wc.write_setting(session, "alerts_state", relevant)
     finally:
         session.close()
+
+
+async def karte_senden(session, token: str, chat_id: str, instanz: str, hinzu: list[dict], weg: list[str], stand: dict, cfg: wc.WallConfig) -> bool:
+    """Statuskarte als Bild mit Kurztext; faellt auf reinen Text zurueck, wenn das Bild nicht entsteht."""
+    wand_url = str((cfg.push or {}).get("wand_url") or "")
+    try:
+        keys = [k for k in verlauf.keys(session) if k.startswith(("host.", "dienst.", "alerts."))]
+        series = verlauf.series(session, keys, hours=24, max_points=120) if keys else {}
+        png = await asyncio.to_thread(
+            statuskarte.render,
+            instanz=instanz, hinzu=hinzu, weg=weg,
+            zusammenfassung=statuskarte.zusammenfassung_aus_stand(stand),
+            verlaeufe=statuskarte.verlaeufe_fuer(hinzu, series), wand_url=wand_url,
+        )
+    except Exception as exc:  # noqa: BLE001 - Bild ist Beiwerk
+        log.warning("Statuskarte: %s", exc)
+        png = None
+    if png:
+        if await push.telegram_foto(token, chat_id, png, push.caption(hinzu, weg, instanz)):
+            return True
+    return await push.telegram_senden(token, chat_id, push.nachricht(hinzu, weg, instanz))
 
 
 async def wall_loop(stop_event: asyncio.Event, *, interval_s: int = 90) -> None:

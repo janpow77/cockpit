@@ -301,3 +301,9 @@ erreichbar, und ufw ließ 22/tcp aus dem Docker-Netz nicht durch. Lösung: ufw-R
 `COCKPIT_SELF_SSH_HOST=host.docker.internal` mit `extra_hosts: host-gateway` in der
 compose.yaml; der Cockpit-Schlüssel ist bei `deploy` eingetragen. Verlaufstabelle kommt
 per Migration `003_wall_samples.sql` (Tabellen entstehen nur aus `src/cockpit/migrations`).
+
+**Statuskarte (v0.3.17):** Push-Nachrichten kommen als Bild (`services/statuskarte.py`, Pillow,
+DejaVu im Image): Kopf mit Instanz und Zeit, je Punkt eine Zeile mit Farbbalken, „entwarnt“
+grün, Verlauf 24 h der betroffenen Kennzahlen (Platte/RAM/Last je Host, Antwortzeit je
+Dienst, sonst Alarmzahlen), Fußzeile mit Zusammenfassung und Wand-Adresse; Kurztext als
+HTML-Caption. Ohne Bild (Pillow/Schrift fehlt, Telegram lehnt ab) geht reiner Text raus.

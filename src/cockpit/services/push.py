@@ -15,6 +15,7 @@ import httpx
 log = logging.getLogger(__name__)
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+TELEGRAM_FOTO = "https://api.telegram.org/bot{token}/sendPhoto"
 _RANG = {"krit": 0, "warn": 1, "info": 2}
 
 
@@ -71,4 +72,37 @@ async def telegram_senden(token: str, chat_id: str, text: str) -> bool:
         return True
     except httpx.HTTPError as exc:
         log.warning("Telegram nicht erreichbar: %s", exc)
+        return False
+
+
+def caption(hinzu: list[dict], weg: list[str], instanz: str) -> str:
+    """Kurztext zur Statuskarte (Telegram-HTML, max. 1024 Zeichen)."""
+    import html
+
+    teile = [f"<b>Cockpit {html.escape(instanz)}</b>"]
+    for a in sorted(hinzu, key=lambda x: _RANG.get(x.get("level"), 9))[:6]:
+        symbol = "🔴" if a.get("level") == "krit" else ("🟠" if a.get("level") == "warn" else "🔵")
+        teile.append(f"{symbol} {html.escape(str(a.get('text') or ''))}")
+    for k in weg[:4]:
+        teile.append(f"✅ entwarnt: {html.escape(k.partition('|')[2])}")
+    rest = len(hinzu) - 6 + max(0, len(weg) - 4)
+    if rest > 0:
+        teile.append(f"… und {rest} weitere")
+    return "\n".join(teile)[:1000]
+
+
+async def telegram_foto(token: str, chat_id: str, png: bytes, caption_html: str) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=25.0) as c:
+            resp = await c.post(
+                TELEGRAM_FOTO.format(token=token),
+                data={"chat_id": chat_id, "caption": caption_html, "parse_mode": "HTML"},
+                files={"photo": ("cockpit.png", png, "image/png")},
+            )
+        if resp.status_code >= 400:
+            log.warning("Telegram-Foto: HTTP %s %s", resp.status_code, resp.text[:120])
+            return False
+        return True
+    except httpx.HTTPError as exc:
+        log.warning("Telegram-Foto nicht erreichbar: %s", exc)
         return False

@@ -85,3 +85,27 @@ def test_login_sperre_nach_fuenf_fehlversuchen():
     assert not erlaubt and 0 < rest <= 61
     assert login_erlaubt("10.0.0.1", jetzt=1000 + 61)[0]
     assert login_erlaubt("10.0.0.2", jetzt=1005)[0]
+
+
+def test_statuskarte_rendert_png():
+    from cockpit.services import statuskarte
+
+    png = statuskarte.render(
+        instanz="ccx23",
+        hinzu=[{"level": "krit", "text": "Platte auf ccx23 zu 91 % voll", "hint": "Aufräumen oder vergrößern", "host": "ccx23"},
+               {"level": "warn", "text": "hpp.flowaudit.de antwortet langsam (3400 ms)"}],
+        weg=["warn|Sicherung hpp ist 40 h alt"],
+        zusammenfassung={"krit": 1, "warn": 1, "info": 0, "hosts": 4, "hosts_online": 3},
+        verlaeufe=[{"label": "Platte ccx23", "werte": [70, 72, 80, 91], "einheit": "%"}],
+        wand_url="http://100.99.159.80:7843/admin/wall",
+    )
+    assert png is not None and png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 5000
+
+
+def test_verlaeufe_fuer_alarme():
+    from cockpit.services import statuskarte
+
+    series = {"host.ccx23.disk_pct": [["t", 70], ["t", 91]], "dienst.hpp.flowaudit.de.ms": [["t", 100], ["t", 3400]], "alerts.krit": [["t", 0], ["t", 1]]}
+    v = statuskarte.verlaeufe_fuer([{"text": "Platte auf ccx23 zu 91 % voll", "host": "ccx23"}, {"text": "hpp.flowaudit.de antwortet langsam (3400 ms)"}], series)
+    assert [x["label"] for x in v] == ["Platte ccx23", "Antwortzeit hpp.flowaudit.de"]
+    assert statuskarte.verlaeufe_fuer([], series)[0]["label"] == "Kritische Punkte"

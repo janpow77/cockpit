@@ -120,6 +120,7 @@ DEFAULT_PUSH: dict[str, Any] = {
     "ruhe_bis": "07:00",
     "zeitzone": "Europe/Berlin",
     "instanz": "",
+    "wand_url": "http://100.99.159.80:7843/admin/wall",
 }
 
 DEFAULT_DEMO: dict[str, Any] = {
