@@ -78,6 +78,10 @@ function mockOverview(): Overview {
         { name: 'regulierung', branch: 'main', dirty: 0, ahead: 0, last_commit: NOW, age_h: 21, message: 'docs(vorfuehrung): Folien ergänzt', pause: null, next_step: null },
       ] },
     ],
+    ki_nutzung: { ok: true, host: 'nuc',
+      claude: { verfuegbar: true, plan: 'max', limits: { five_hour: { label: '5 Stunden', prozent: 16, reset: NOW }, seven_day: { label: '7 Tage', prozent: 62, reset: NOW } }, heute: { out: 301339, kontext: 194995828 }, tage: [{ tag: '2026-08-22', out: 204492, kontext: 1 }, { tag: '2026-08-23', out: 51388, kontext: 1 }, { tag: '2026-08-24', out: 147617, kontext: 1 }, { tag: '2026-08-25', out: 1471180, kontext: 1 }, { tag: '2026-08-26', out: 610550, kontext: 1 }, { tag: '2026-08-27', out: 1776199, kontext: 1 }, { tag: '2026-08-28', out: 301339, kontext: 1 }] },
+      codex: { verfuegbar: true, plan: 'prolite', limits: { primary: { label: '7 Tage', prozent: 1, reset: NOW } }, heute: { out: 9930, kontext: 852286, sitzungen: 1 }, tage: [] },
+      gemini: { verfuegbar: false, hinweis: 'Gemini CLI legt keine Nutzungsdaten ab' } },
     kira: { ok: true, total: 1284, note: null, host: 'nuc', entries: [
       { id: '1', category: 'architecture', project: 'regulierung', text: 'Demo-Modus: in-process httpx.ASGITransport fährt die eigene API, Vorgang.ist_demo markiert Demo-Daten', tags: ['demo', 'kpang'], created_at: NOW },
       { id: '2', category: 'solution', project: 'regulierung', text: 'Append-only-Trigger beim Demo-Löschen in der Transaktion pausieren (ADR-004)', tags: ['trigger'], created_at: NOW },

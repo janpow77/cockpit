@@ -56,6 +56,14 @@ def werte_aus_stand(stand: dict) -> dict[str, float]:
     kira = stand.get("kira") or {}
     if isinstance(kira.get("total"), (int, float)):
         out["kira.total"] = float(kira["total"])
+    ki = stand.get("ki_nutzung") or {}
+    for dienst in ("claude", "codex"):
+        for key, lim in ((ki.get(dienst) or {}).get("limits") or {}).items():
+            if isinstance(lim.get("prozent"), (int, float)):
+                out[f"ki.{dienst}.{key}"] = float(lim["prozent"])
+        heute = (ki.get(dienst) or {}).get("heute") or {}
+        if isinstance(heute.get("out"), (int, float)):
+            out[f"ki.{dienst}.out_heute"] = float(heute["out"])
     return out
 
 

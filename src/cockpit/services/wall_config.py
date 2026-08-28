@@ -123,6 +123,15 @@ DEFAULT_PUSH: dict[str, Any] = {
     "wand_url": "http://100.99.159.80:7843/admin/wall",
 }
 
+# KI-Nutzung: Auslastung/Limits von Claude Code und Codex vom Arbeitsplatz-Host (NUC)
+DEFAULT_KI_NUTZUNG: dict[str, Any] = {
+    "host": "nuc",
+    "claude_credentials": "/home/janpow/.claude/.credentials.json",
+    "claude_projekte": "/home/janpow/.claude/projects",
+    "codex_sessions": "/home/janpow/.codex/sessions",
+    "warn_pct": 85,
+}
+
 DEFAULT_DEMO: dict[str, Any] = {
     "login_url": "https://hpp.flowaudit.de/api/auth/login",
     "aufbau_url": "https://hpp.flowaudit.de/api/kpang/vollzug/demo/aufbauen",
@@ -200,6 +209,7 @@ class WallConfig:
     kira: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KIRA))
     prod_hosts: list[str] = field(default_factory=lambda: list(DEFAULT_PROD_HOSTS))
     push: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_PUSH))
+    ki_nutzung: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KI_NUTZUNG))
     werkstatt_aktiv_tage: int = 14
     verlauf_tage: int = 30
     chat_max_tokens: int = 900
@@ -214,7 +224,7 @@ class WallConfig:
             "chat_think": self.chat_think,
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
-            "push": self.push, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
+            "push": self.push, "ki_nutzung": self.ki_nutzung, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
             "verlauf_tage": self.verlauf_tage, "chat_max_tokens": self.chat_max_tokens,
         }
 
@@ -248,7 +258,7 @@ def load(session: Session) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung"):
         if isinstance(raw.get(name), dict):
             setattr(cfg, name, raw[name])
     for name, lo, hi in (("werkstatt_aktiv_tage", 1, 365), ("verlauf_tage", 1, 365), ("chat_max_tokens", 100, 8000)):
@@ -271,7 +281,7 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung"):
         if isinstance(patch.get(name), dict):
             raw[name] = patch[name]
     for name in ("werkstatt_aktiv_tage", "verlauf_tage", "chat_max_tokens"):

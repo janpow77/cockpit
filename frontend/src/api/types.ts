@@ -311,8 +311,17 @@ export interface Overview {
   dienste: WallDienst[]
   werkstatt: WerkstattHost[]
   kira: KiraStand
+  ki_nutzung?: KiNutzung
 }
 
+export interface KiLimit { label: string; prozent: number; reset: string | null }
+export interface KiDienst {
+  verfuegbar: boolean; hinweis?: string | null; plan?: string | null; stufe?: string | null; stand?: string | null
+  limits?: Record<string, KiLimit>
+  heute?: { out: number; kontext: number; sitzungen?: number; modelle?: Record<string, { out: number; kontext: number }> }
+  tage?: { tag: string; out: number; kontext: number; sitzungen?: number }[]
+}
+export interface KiNutzung { ok: boolean; hinweis?: string | null; host?: string; claude: KiDienst; codex: KiDienst; gemini: KiDienst }
 export interface TmuxSitzung { name: string; attached: boolean; created: number | null; windows: { name: string; active: boolean; cmd: string }[] }
 export interface VerlaufAntwort { hours: number; series: Record<string, [string, number][]> }
 export interface WallAlert { level: 'krit' | 'warn' | 'info'; text: string; host: string | null; hint: string | null; url: string | null }
@@ -347,6 +356,7 @@ export interface WallConfig {
   kira: Record<string, string>
   prod_hosts?: string[]
   push?: Record<string, unknown>
+  ki_nutzung?: Record<string, unknown>
   werkstatt_aktiv_tage?: number
   verlauf_tage?: number
   chat_max_tokens?: number

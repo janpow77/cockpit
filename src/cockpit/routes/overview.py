@@ -30,6 +30,7 @@ from ..crud import traffic as crud_traffic
 from ..db import get_session
 from ..models import HostRow
 from ..services import ai_router_client, docker_inspect, github_client, host_stats
+from ..services import ki_nutzung as kn
 from ..services import wall_config as wc
 from ..services import wall_extras as wx
 from ..services.secret_vault import VaultDecryptError, VaultDisabledError, decrypt
@@ -372,9 +373,18 @@ async def build_overview(session: Session) -> dict:
         if kira_host is not None and kira_host.name in erreichbar
         else asyncio.sleep(0, result={"ok": False, "total": None, "entries": [], "note": "Kira-Host nicht erreichbar", "host": cfg.kira.get("host")})
     )
-    dienste_res, kira_out, *werkstatt_res = await asyncio.gather(
-        wx.dienste_pruefen([u for u in urls if u]), kira_task, *werkstatt_tasks, return_exceptions=True
+    ki_host = host_by_name.get(str(cfg.ki_nutzung.get("host") or ""))
+    ki_task = (
+        asyncio.to_thread(kn.abfragen, ki_host, cfg.ki_nutzung)
+        if ki_host is not None and ki_host.name in erreichbar
+        else asyncio.sleep(0, result={"ok": False, "hinweis": "KI-Host nicht erreichbar", "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}})
     )
+    dienste_res, kira_out, ki_out, *werkstatt_res = await asyncio.gather(
+        wx.dienste_pruefen([u for u in urls if u]), kira_task, ki_task, *werkstatt_tasks, return_exceptions=True
+    )
+    if not isinstance(ki_out, dict):
+        log.warning("Wand: KI-Nutzung fehlgeschlagen: %s", ki_out)
+        ki_out = {"ok": False, "hinweis": str(ki_out)[:120], "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}}
     dienste_out = dienste_res if isinstance(dienste_res, list) else []
     if not isinstance(kira_out, dict):
         log.warning("Wand: Kira-Abfrage fehlgeschlagen: %s", kira_out)
@@ -433,6 +443,7 @@ async def build_overview(session: Session) -> dict:
         hosts_out, projects_out, backups_out, dienste_out, ai_router_out, github_out, werkstatt_out,
         prod_hosts=cfg.prod_hosts,
     )
+    alerts = sorted(alerts + kn.alarme(ki_out, float(cfg.ki_nutzung.get("warn_pct") or 85)), key=lambda a: {"krit": 0, "warn": 1, "info": 2}.get(a["level"], 9))
 
     return {
         "generated_at": _iso_now(),
@@ -442,6 +453,7 @@ async def build_overview(session: Session) -> dict:
         "dienste": dienste_out,
         "werkstatt": werkstatt_out,
         "kira": kira_out,
+        "ki_nutzung": ki_out,
         "hero": {
             **cfg.hero,
             "project_state": hero_proj,

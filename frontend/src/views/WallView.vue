@@ -268,6 +268,27 @@ const werkstattSumme = computed(() => {
   return `${aktiv} aktiv in 14 Tagen · ${pausen} ${pausen === 1 ? 'Pause' : 'Pausen'} · ${werkstattAlleRepos.value.length} Repos`
 })
 const kira = computed(() => overview.value?.kira ?? null)
+const ki = computed(() => overview.value?.ki_nutzung ?? null)
+const KI_DIENSTE = [
+  { key: 'claude', titel: 'Claude', sub: 'Claude Code · Max' },
+  { key: 'codex', titel: 'Codex', sub: 'ChatGPT' },
+  { key: 'gemini', titel: 'Gemini', sub: 'Gemini CLI' },
+] as const
+function kTokens(n: number | undefined): string {
+  if (n == null) return '–'
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1).replace('.', ',')} Mrd.`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace('.', ',')} Mio.`
+  if (n >= 1e3) return `${Math.round(n / 1e3)} k`
+  return String(n)
+}
+function resetText(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const tage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
+  return `Reset ${tage[d.getDay()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+function limitKlasse(p: number): string { return p >= 97 ? 'krit' : p >= 85 ? 'warn' : 'ok' }
+function tagKurz(tag: string): string { return tag.slice(8, 10) + '.' + tag.slice(5, 7) + '.' }
 const KATEGORIE: Record<string, string> = { architecture: 'Architektur', solution: 'Lösung', problem: 'Problem', reference: 'Referenz', pattern: 'Muster', workflow: 'Ablauf', preference: 'Präferenz', feedback: 'Feedback' }
 function kategorie(k: string | null): string { return (k && KATEGORIE[k]) || k || '–' }
 function gpuLast(gpus: { util_pct: number }[]): number {
@@ -538,7 +559,29 @@ async function demo(neu = false) {
         <RouterLink to="/chat" class="knopf klein" style="margin-top: 8px; display: inline-block">KI-Konsole öffnen</RouterLink>
       </div>
 
-      <div v-if="kira" class="kachel kira einblenden" style="--i: 8">
+      <div v-if="ki" class="kachel ki einblenden" style="--i: 8">
+        <h4>KI-Nutzung <span class="dim">· Limits und Tokens{{ ki.host ? ` · ${ki.host}` : '' }}{{ !ki.ok && ki.hinweis ? ` · ${ki.hinweis}` : '' }}</span></h4>
+        <div class="ki-grid">
+          <div v-for="d in KI_DIENSTE" :key="d.key" class="ki-dienst">
+            <div class="ki-kopf"><b>{{ d.titel }}</b><span class="mono dim">{{ ki[d.key]?.plan ? `${d.sub} · ${ki[d.key]?.plan}` : d.sub }}</span></div>
+            <template v-if="ki[d.key]?.verfuegbar">
+              <div v-for="(lim, lk) in ki[d.key]?.limits ?? {}" :key="lk" class="ki-limit">
+                <div class="ki-limit-kopf"><span>{{ lim.label }}</span><span class="mono" :class="limitKlasse(lim.prozent)">{{ Math.round(lim.prozent) }} %</span></div>
+                <div class="balken"><i :class="limitKlasse(lim.prozent)" :style="{ width: `${Math.min(100, lim.prozent)}%` }" /></div>
+                <div class="mono dim ki-reset">{{ resetText(lim.reset) }}</div>
+              </div>
+              <div v-if="!Object.keys(ki[d.key]?.limits ?? {}).length" class="dim ki-hinweis">{{ ki[d.key]?.hinweis || 'Keine Limitdaten' }}</div>
+              <div v-if="ki[d.key]?.heute" class="ki-heute"><em class="kpi-klein">{{ kTokens(ki[d.key]?.heute?.out) }}</em><small>Tokens heute (Ausgabe) · {{ kTokens(ki[d.key]?.heute?.kontext) }} Kontext{{ ki[d.key]?.heute?.sitzungen != null ? ` · ${ki[d.key]?.heute?.sitzungen} Sitzungen` : '' }}</small></div>
+              <div v-if="ki[d.key]?.tage?.length" class="ki-tage" :title="(ki[d.key]?.tage ?? []).map((t) => `${tagKurz(t.tag)}: ${kTokens(t.out)}`).join(' · ')">
+                <div v-for="t in ki[d.key]?.tage" :key="t.tag" class="ki-tag"><i :style="{ height: `${Math.max(4, Math.round((t.out / Math.max(1, ...(ki[d.key]?.tage ?? []).map((x) => x.out))) * 100))}%` }" /><span class="mono dim">{{ t.tag.slice(8, 10) }}</span></div>
+              </div>
+            </template>
+            <div v-else class="dim ki-hinweis">{{ ki[d.key]?.hinweis || 'keine Daten' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="kira" class="kachel kira einblenden" style="--i: 9">
         <h4>Kira · zuletzt gelernt <span class="dim">· {{ kira.total != null ? `${zahl(kira.total)} Einträge im Gedächtnis` : (kira.note || 'nicht erreichbar') }}{{ kira.host ? ` · ${kira.host}` : '' }}</span></h4>
         <TransitionGroup name="liste" tag="div">
           <div v-for="e in kira.entries.slice(0, 5)" :key="e.id || e.text" class="kira-zeile">
@@ -550,7 +593,7 @@ async function demo(neu = false) {
         <div v-if="!kira.entries.length" class="dim">{{ kira.note || 'Noch keine Wissenseinträge.' }}</div>
       </div>
 
-      <div class="kachel github einblenden" style="--i: 9">
+      <div class="kachel github einblenden" style="--i: 10">
         <h4>GitHub <span class="dim">· {{ overview.github.enabled ? `alle ${overview.github.repos.length} Repositories · nach Aktivität · ${zahl(commitAnzahl)} Commits zuletzt` : 'kein Token' }}</span></h4>
         <div v-if="!overview.github.enabled" class="dim">GITHUB_TOKEN setzen, dann erscheinen hier alle Repos mit Aktivität.</div>
         <div v-else-if="overview.github.error" class="dim">{{ overview.github.error }}</div>
@@ -735,6 +778,23 @@ async function demo(neu = false) {
 .r-kopf .mono { font-size: 11px; white-space: nowrap; }
 .r-sub { font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kachel.kira { grid-column: span 2; }
+.kachel.ki { grid-column: 1 / -1; }
+.ki-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.ki-dienst { background: var(--flaeche-2); border: 1px solid var(--linie); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.ki-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+.ki-kopf .mono { font-size: 11px; }
+.ki-limit { margin-bottom: 8px; }
+.ki-limit-kopf { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+.ki-limit-kopf .mono.ok { color: var(--ok); } .ki-limit-kopf .mono.warn { color: var(--warn); } .ki-limit-kopf .mono.krit { color: var(--krit); }
+.balken i.ok { background: var(--ok); } .balken i.krit { background: var(--krit); }
+.ki-reset { font-size: 10px; margin-top: 2px; }
+.ki-heute { display: flex; flex-direction: column; margin-top: 8px; }
+.ki-heute small { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+.ki-tage { display: flex; gap: 6px; align-items: flex-end; height: 44px; margin-top: 10px; }
+.ki-tag { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.ki-tag i { display: block; width: 100%; background: linear-gradient(180deg, #6FA8FF, #34508F); border-radius: 3px 3px 0 0; }
+.ki-tag span { font-size: 9px; margin-top: 2px; }
+.ki-hinweis { font-size: 12px; }
 .kachel.sitzungen { grid-column: 1 / -1; }
 .sitzung { padding: 6px 0; border-bottom: 1px solid var(--linie); font-size: 13px; }
 .sitzung:last-of-type { border-bottom: 0; }

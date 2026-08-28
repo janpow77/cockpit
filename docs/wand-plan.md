@@ -312,3 +312,17 @@ HTML-Caption. Ohne Bild (Pillow/Schrift fehlt, Telegram lehnt ab) geht reiner Te
 auf macOS läuft die Sonde in zsh, das bei leeren Globs (`/sys/class/drm/card*`) den Befehl
 abbricht – daher `setopt nonomatch` am Anfang und die GPU-Schleife nur bei vorhandenem
 `/sys/class/drm`. Beides erzeugte sonst den Fehlalarm „Kennzahlen nicht abrufbar“.
+
+## 16. KI-Nutzung (v0.3.20)
+
+Kachel „KI-Nutzung“ mit drei Spalten – **Claude** (Claude Code, Max): Auslastung des
+5-Stunden- und des 7-Tage-Fensters mit Reset-Zeit aus `api.anthropic.com/api/oauth/usage`
+(Anmeldung aus `~/.claude/.credentials.json` des NUC, Token verlässt den Host nicht) und
+Tokens je Tag/Modell aus `~/.claude/projects/*/*.jsonl`; **Codex** (ChatGPT): zuletzt
+gemeldete `rate_limits` (Wochenfenster, Plan) und Tokenzähler aus `~/.codex/sessions`;
+**Gemini**: keine lokalen Nutzungsdaten (ehrlich als „keine Daten“). Sonde
+`services/ki_nutzung.py` läuft als Python-Skript auf dem Arbeitsplatz-Host (Einstellung
+`ki_nutzung`), 5 min Cache. Alarm ab `warn_pct` (85 %) je Limit, kritisch ab 97 %;
+Limit-Prozente und Tages-Tokens landen im Verlauf (`ki.claude.seven_day`, …). Für die
+Abo-Konten gibt es keine offiziellen Nutzungs-APIs – die Werte kommen genau aus den
+Quellen, die auch die Apps selbst anzeigen.

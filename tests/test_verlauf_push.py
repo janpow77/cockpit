@@ -109,3 +109,15 @@ def test_verlaeufe_fuer_alarme():
     v = statuskarte.verlaeufe_fuer([{"text": "Platte auf ccx23 zu 91 % voll", "host": "ccx23"}, {"text": "hpp.flowaudit.de antwortet langsam (3400 ms)"}], series)
     assert [x["label"] for x in v] == ["Platte ccx23", "Antwortzeit hpp.flowaudit.de"]
     assert statuskarte.verlaeufe_fuer([], series)[0]["label"] == "Kritische Punkte"
+
+
+def test_ki_nutzung_alarme_und_verlauf():
+    from cockpit.services import ki_nutzung
+
+    daten = {"claude": {"limits": {"five_hour": {"label": "5 Stunden", "prozent": 40.0}, "seven_day": {"label": "7 Tage", "prozent": 91.0, "reset": "2026-09-01T18:00:00+00:00"}}, "heute": {"out": 300}},
+             "codex": {"limits": {"primary": {"label": "7 Tage", "prozent": 98.0, "reset": "2026-09-03T16:31:42+00:00"}}}}
+    a = ki_nutzung.alarme(daten)
+    assert [(x["level"], x["text"]) for x in a] == [("warn", "Claude: Limit 7 Tage zu 91 % ausgeschöpft"), ("krit", "Codex/ChatGPT: Limit 7 Tage zu 98 % ausgeschöpft")]
+    assert a[0]["hint"] == "Reset 2026-09-01 18:00 UTC"
+    w = verlauf.werte_aus_stand({"ki_nutzung": daten})
+    assert w["ki.claude.seven_day"] == 91.0 and w["ki.codex.primary"] == 98.0 and w["ki.claude.out_heute"] == 300
