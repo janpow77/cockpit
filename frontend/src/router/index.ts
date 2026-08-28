@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'settings', name: 'settings', component: () => import('../views/settings/SettingsView.vue') },
     ],
   },
-  // Wand, Kanban, Kompaktansicht und KI-Konsole laufen ohne Sidebar (Vollbild), aber mit Anmeldung.
+  // Wand, Kanban, Kompaktansicht und LLM-Konsole laufen ohne Sidebar (Vollbild), aber mit Anmeldung.
   { path: '/wall', name: 'wall', component: () => import('../views/WallView.vue') },
   { path: '/kanban', name: 'kanban', component: () => import('../views/KanbanView.vue') },
   { path: '/kompakt', name: 'kompakt', component: () => import('../views/KompaktView.vue') },

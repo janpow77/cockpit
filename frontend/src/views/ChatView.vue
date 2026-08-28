@@ -564,7 +564,7 @@ onBeforeUnmount(() => abortController?.abort())
   <main class="chat-console">
     <header class="console-header">
       <div class="title-block">
-        <h1>KI-Konsole</h1>
+        <h1>LLM-Konsole</h1>
         <div class="router-state mono">
           <span class="status-dot" :class="routerOk ? 'ok' : 'error'" aria-hidden="true"></span>
           <span>{{ routerAddress }}</span>
@@ -634,7 +634,7 @@ onBeforeUnmount(() => abortController?.abort())
 
     <section ref="historyElement" class="history" aria-label="Gesprächsverlauf" aria-live="polite" @scroll.passive="onHistoryScroll">
       <div v-if="!messages.length" class="empty-state">
-        <div class="empty-mark" aria-hidden="true">KI</div>
+        <div class="empty-mark" aria-hidden="true">LLM</div>
         <h2>Bereit für Ihre Anfrage</h2>
         <p>Wählen Sie ein Modell und beginnen Sie ein neues Gespräch.</p>
         <p v-if="modelsError" class="console-error" role="alert">{{ modelsError }}</p>
@@ -755,7 +755,7 @@ onBeforeUnmount(() => abortController?.abort())
           ref="inputElement"
           v-model="input"
           rows="1"
-          placeholder="Nachricht an die KI-Konsole …"
+          placeholder="Nachricht an die LLM-Konsole …"
           aria-label="Nachricht"
           :disabled="!models.length"
           @keydown="onInputKeydown"

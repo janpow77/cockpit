@@ -379,7 +379,7 @@ async def build_overview(session: Session) -> dict:
     ki_task = (
         asyncio.to_thread(kn.abfragen, ki_host, cfg.ki_nutzung)
         if ki_host is not None and ki_host.name in erreichbar
-        else asyncio.sleep(0, result={"ok": False, "hinweis": "KI-Host nicht erreichbar", "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}})
+        else asyncio.sleep(0, result={"ok": False, "hinweis": "LLM-Host nicht erreichbar", "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}})
     )
     fa_cfg = cfg.flow_agent or {}
     fa_task = asyncio.to_thread(

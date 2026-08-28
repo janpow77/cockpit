@@ -383,7 +383,7 @@ async function demo(neu = false) {
       <div class="kopf-rechts">
         <span class="live" :title="`Alle ${REFRESH_MS / 1000} s aktualisiert · R = sofort`"><i :class="['punkt', error ? 'krit' : 'ok']" />{{ error ? 'GESTÖRT' : 'LIVE' }}<em>· {{ seitLoad }} s</em></span>
         <span class="mono uhr">{{ uhr }}</span>
-        <RouterLink to="/chat" class="knopf klein">KI-Konsole</RouterLink>
+        <RouterLink to="/chat" class="knopf klein">LLM-Konsole</RouterLink>
         <RouterLink to="/kanban" class="knopf klein ghost">Aufträge</RouterLink>
         <RouterLink to="/kompakt" class="knopf klein ghost" title="Handy-Ansicht">Kompakt</RouterLink>
         <RouterLink to="/" class="knopf klein ghost">Admin</RouterLink>
@@ -603,7 +603,7 @@ async function demo(neu = false) {
         <h4>Lokale Modelle <span class="dim">· ai-router</span></h4>
         <div class="zeile"><span><i :class="['punkt', overview.ai_router.ok ? 'ok' : 'krit']" /><b>{{ overview.ai_router.freigegeben.length }} für die Konsole freigegeben</b></span><span class="mono dim">{{ overview.ai_router.model_count }} geladen · {{ overview.ai_router.url.replace(/^https?:\/\//, '') }}</span></div>
         <div class="modelle mono">{{ overview.ai_router.freigegeben.join(' · ') || 'Whitelist leer – in den Einstellungen freigeben' }}</div>
-        <RouterLink to="/chat" class="knopf klein" style="margin-top: 8px; display: inline-block">KI-Konsole öffnen</RouterLink>
+        <RouterLink to="/chat" class="knopf klein" style="margin-top: 8px; display: inline-block">LLM-Konsole öffnen</RouterLink>
       </div>
 
       <div v-if="kira" class="kachel kira einblenden" style="--i: 9">

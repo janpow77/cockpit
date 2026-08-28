@@ -97,7 +97,7 @@ const wocheCodex = computed(() => (dienst('codex')?.tage ?? []).reduce((summe, t
         <p v-else class="dienst-hinweis dim">{{ dienst(d.key)?.hinweis || (d.key === 'gemini' ? 'Limits nur in Gemini sichtbar' : 'Keine Limitdaten gemeldet') }}</p>
       </section>
     </div>
-    <div v-else class="ladezustand mono" :class="{ fehler: error }">{{ error || 'Lade KI-Nutzung …' }}</div>
+    <div v-else class="ladezustand mono" :class="{ fehler: error }">{{ error || 'Lade LLM-Nutzung …' }}</div>
 
     <Transition name="details">
       <div v-if="offen && ki" class="detail-raster">

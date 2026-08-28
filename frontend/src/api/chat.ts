@@ -11,7 +11,7 @@ export async function listChatModels(): Promise<ChatModelsResponse> {
         { tag: 'qwen3.8-heretic:27b', label: 'Qwen 3.8 · 27B', parameter_size: '26.9B', size_bytes: 17_176_000_000 },
         { tag: 'qwen3:14b', label: 'Qwen 3 · 14B', parameter_size: '14.8B', size_bytes: 9_276_000_000 },
       ],
-      system: 'Du bist die KI-Konsole des flowaudit-Cockpits.',
+      system: 'Du bist die LLM-Konsole des flowaudit-Cockpits.',
     }
   }
   const { data } = await client.get<ChatModelsResponse>('/chat/models')
@@ -39,7 +39,7 @@ export interface ChatSendOptions {
 /** Streamt die Antwort als Server-Sent Events; axios kann keine Streams, daher fetch. */
 export async function streamChat(opts: ChatSendOptions): Promise<void> {
   if (USE_MOCKS) {
-    const text = 'Das ist eine Beispielantwort der KI-Konsole im Mock-Modus. '
+    const text = 'Das ist eine Beispielantwort der LLM-Konsole im Mock-Modus. '
     if (opts.rag && opts.rag !== 'off') {
       opts.onChunk({ sources: [{ quelle: 'memory', titel: 'Demo-Modus per ASGITransport', text: 'Der Demo-Modus fährt die eigene API in-process …', category: 'architecture', project: 'regulierung', created_at: new Date().toISOString(), score: 0.82, id: '1', ref: null }] })
     }

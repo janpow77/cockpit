@@ -187,7 +187,7 @@ DEFAULT_CHAT_MODELS: list[dict[str, str]] = [
 ]
 
 DEFAULT_CHAT_SYSTEM = (
-    "Du bist die KI-Konsole des flowaudit-Cockpits von Jan Riener (Prüfbehörde EFRE Hessen, "
+    "Du bist die LLM-Konsole des flowaudit-Cockpits von Jan Riener (Prüfbehörde EFRE Hessen, "
     "Entwickler von HPP, Checklisten-Designer, flowinvoice u. a.). Antworte sachlich und auf Deutsch mit echten "
     "Umlauten – so knapp wie möglich: kurze Fragen in zwei bis vier Sätzen ohne Überschriften, Listen nur bei "
     "Aufzählungen. Stütze dich auf den mitgelieferten Kira-Kontext und zitiere ihn als [n]; "

@@ -369,10 +369,10 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
   <div class="kanban-seite" :class="{ reduziert }">
     <header class="kopf">
       <div class="titel"><span class="marke">flowaudit</span><span class="untertitel">Aufträge</span></div>
-      <div class="kopf-mitte mono"><span v-if="fehler" class="fehler">{{ fehler }}</span><span v-else class="dim">KI-Aufträge steuern und verfolgen</span></div>
+      <div class="kopf-mitte mono"><span v-if="fehler" class="fehler">{{ fehler }}</span><span v-else class="dim">LLM-Aufträge steuern und verfolgen</span></div>
       <nav class="kopf-rechts" aria-label="Seitennavigation">
         <RouterLink to="/wall" class="knopf klein ghost">Zur Wand</RouterLink>
-        <RouterLink to="/chat" class="knopf klein ghost">KI-Konsole</RouterLink>
+        <RouterLink to="/chat" class="knopf klein ghost">LLM-Konsole</RouterLink>
         <button class="knopf klein ghost" type="button" @click="vorschlaegeOeffnen"><Lightbulb :size="14" /> Vorschläge einholen</button>
         <button class="knopf klein" type="button" @click="neuOeffnen">Neuer Auftrag</button>
       </nav>
@@ -384,7 +384,7 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
     </section>
 
     <section class="ki-nutzung-bereich" aria-labelledby="ki-nutzung-titel">
-      <header class="ki-bereich-kopf"><div><h2 id="ki-nutzung-titel">KI-Nutzung</h2><span class="mono dim">Kontingente und Tokenverbrauch</span></div><button class="details-knopf" type="button" :aria-expanded="kiDetailsOffen" aria-controls="ki-nutzung-inhalt" @click="kiDetailsUmschalten">Details <ChevronDown :size="15" :class="{ gedreht: kiDetailsOffen }" /></button></header>
+      <header class="ki-bereich-kopf"><div><h2 id="ki-nutzung-titel">LLM-Nutzung</h2><span class="mono dim">Kontingente und Tokenverbrauch</span></div><button class="details-knopf" type="button" :aria-expanded="kiDetailsOffen" aria-controls="ki-nutzung-inhalt" @click="kiDetailsUmschalten">Details <ChevronDown :size="15" :class="{ gedreht: kiDetailsOffen }" /></button></header>
       <div id="ki-nutzung-inhalt"><KiNutzungPanel :offen="kiDetailsOffen" /></div>
     </section>
 

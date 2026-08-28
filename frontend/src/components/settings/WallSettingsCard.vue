@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Einstellungen der Wand und der KI-Konsole: Ausblendliste, Links, Hero, Sonden,
+ * Einstellungen der Wand und der LLM-Konsole: Ausblendliste, Links, Hero, Sonden,
  * Demo-Start, Sicherungspfad, Modell-Whitelist, Systemprompt, MCP-Server.
  * Listen als Zeilen, Zuordnungen als JSON mit Prüfung vor dem Speichern.
  */
@@ -150,7 +150,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
   { key: 'hero', label: 'Hero-Projekt', hint: 'project, title, sub, url, demo_path, probe', model: hero, rows: 8 },
   { key: 'probes', label: 'Sonden (JSON-Endpunkte mit Kennzahlen)', hint: 'id, label, url, secret_key, header, header_prefix, fields[{key,label}]', model: probes, rows: 12 },
   { key: 'demo', label: 'Demo-Start (HPP)', hint: 'login_url, aufbau_url, user_secret, password_secret – Werte liegen im Vault', model: demo, rows: 6 },
-  { key: 'chat_models', label: 'Modell-Whitelist der KI-Konsole', hint: '[{tag, label}] – nur geladene Modelle erscheinen', model: chatModels, rows: 7 },
+  { key: 'chat_models', label: 'Modell-Whitelist der LLM-Konsole', hint: '[{tag, label}] – nur geladene Modelle erscheinen', model: chatModels, rows: 7 },
   { key: 'mcp_servers', label: 'MCP-Server', hint: 'id, name, transport, url|command, secret_key, header, header_prefix, health_url, skills_tool', model: mcpServers, rows: 14 },
   { key: 'work_dirs', label: 'Werkstatt (Host → Projektverzeichnis)', hint: 'git-Stand, uncommittete Änderungen und Pausen (.session_resume.md) je Host', model: workDirs, rows: 6 },
   { key: 'kira', label: 'Kira-Memory', hint: 'host, url, env_file, env_key – der Schlüssel wird auf dem Host aus der .env gelesen', model: kira, rows: 6 },
@@ -163,7 +163,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
 </script>
 
 <template>
-  <Card title="Wand & KI-Konsole" subtitle="Was auf der Wand erscheint, welche Modelle die Konsole anbietet, welche MCP-Server gezeigt werden">
+  <Card title="Wand & LLM-Konsole" subtitle="Was auf der Wand erscheint, welche Modelle die Konsole anbietet, welche MCP-Server gezeigt werden">
     <template #actions>
       <button class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50" :disabled="saving || loading" @click="save">
         <Save :size="14" /> Speichern
@@ -184,7 +184,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
           <span class="text-[11px] text-slate-400">Hostnamen wie in der Host-Verwaltung, eine Angabe je Zeile.</span>
         </label>
         <label class="block md:col-span-2">
-          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Systemprompt der KI-Konsole</span>
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Systemprompt der LLM-Konsole</span>
           <textarea v-model="chatSystem" rows="3" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm p-2" />
         </label>
         <label class="block">
