@@ -31,7 +31,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/kanban', name: 'kanban', component: () => import('../views/KanbanView.vue') },
   { path: '/kompakt', name: 'kompakt', component: () => import('../views/KompaktView.vue') },
   { path: '/chat', name: 'chat', component: () => import('../views/ChatView.vue') },
-  { path: '/ki', name: 'ki', component: () => import('../views/KiNutzungView.vue') },
+  { path: '/ki', redirect: '/kanban' },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

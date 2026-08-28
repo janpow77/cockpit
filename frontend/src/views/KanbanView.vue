@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Edit3, ExternalLink, GripVertical, Lightbulb, Play, Send, Square, Trash2, X } from 'lucide-vue-next'
+import { ChevronDown, Edit3, ExternalLink, GripVertical, Lightbulb, Play, Send, Square, Trash2, X } from 'lucide-vue-next'
 import { aendern, anlegen, listeAuftraege, loeschen, logLesen, nachfragen, projekte, starten, stoppen, umsetzen, vorlagen as vorlagenAbrufen, vorschlaegeEinholen } from '../api/auftraege'
 import { extractError } from '../api/client'
 import type { Auftrag, AuftragAgent, AuftragModus, AuftragProfil, AuftragStatus, AuftraegeAntwort, LogZeile, Projekt, Vorlage, Zeitfenster } from '../api/types'
 import { usePollStore } from '../stores/poll'
 import { useToastStore } from '../stores/toast'
+import KiNutzungPanel from '../components/kanban/KiNutzungPanel.vue'
 
 const REFRESH_MS = 10_000
 type SpaltenStatus = 'eingang' | 'geplant' | 'laeuft' | 'rueckfrage' | 'fertig'
@@ -57,6 +58,7 @@ const jetzt = ref(Date.now())
 const gezogenId = ref<string | null>(null)
 const dropSpalte = ref<SpaltenStatus | null>(null)
 const verschoben = ref(false)
+const kiDetailsOffen = ref(false)
 const poll = usePollStore()
 const toast = useToastStore()
 const reduziert = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -152,6 +154,7 @@ onMounted(() => {
   }
   poll.start('kanban', laden, REFRESH_MS)
   void projekteLaden()
+  try { kiDetailsOffen.value = window.localStorage.getItem('cockpit-kanban-ki-details') === 'offen' } catch { /* Speicherung ist optional. */ }
   uhrTimer = window.setInterval(() => { jetzt.value = Date.now() }, 1000)
   window.addEventListener('keydown', tastatur)
 })
@@ -164,6 +167,10 @@ onBeforeUnmount(() => {
 })
 
 function tastatur(event: KeyboardEvent) { if (event.key === 'Escape') schliessen() }
+function kiDetailsUmschalten() {
+  kiDetailsOffen.value = !kiDetailsOffen.value
+  try { window.localStorage.setItem('cockpit-kanban-ki-details', kiDetailsOffen.value ? 'offen' : 'kompakt') } catch { /* Private Modi können localStorage sperren. */ }
+}
 function schliessen() {
   panel.value = null; ausgewaehltId.value = null; bearbeitenAktiv.value = false; nachfrageText.value = ''; umsetzungHinweis.value = ''; logs.value = []; logPollingStoppen()
 }
@@ -302,7 +309,6 @@ function tokens(anzahl: number | null): string {
 }
 function datum(iso: string | null): string { return iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : '–' }
 function kosten(wert: number | null): string { return wert == null ? '–' : `${wert.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $` }
-function prozent(wert: number | null): number { return Math.min(100, Math.max(0, wert ?? 0)) }
 function zeitAusLog(iso: string | null): string { return iso ? new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '' }
 
 function dragStart(event: DragEvent, auftrag: Auftrag) {
@@ -351,7 +357,6 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
       <div class="kopf-mitte mono"><span v-if="fehler" class="fehler">{{ fehler }}</span><span v-else class="dim">KI-Aufträge steuern und verfolgen</span></div>
       <nav class="kopf-rechts" aria-label="Seitennavigation">
         <RouterLink to="/wall" class="knopf klein ghost">Zur Wand</RouterLink>
-        <RouterLink to="/ki" class="knopf klein ghost">KI-Nutzung</RouterLink>
         <RouterLink to="/chat" class="knopf klein ghost">KI-Konsole</RouterLink>
         <button class="knopf klein ghost" type="button" @click="vorschlaegeOeffnen"><Lightbulb :size="14" /> Vorschläge einholen</button>
         <button class="knopf klein" type="button" @click="neuOeffnen">Neuer Auftrag</button>
@@ -360,10 +365,12 @@ async function drop(event: DragEvent, ziel: SpaltenStatus, vorId?: string) {
 
     <section class="kapazitaet" aria-label="Kapazität">
       <strong class="mono">läuft {{ antwort?.kapazitaet.laufend ?? '–' }} / max {{ antwort?.kapazitaet.parallel_max ?? '–' }}</strong>
-      <div v-if="antwort?.kapazitaet.fuenf_stunden_pct != null" class="limit claude-limit"><span>Claude 5h</span><i><b :style="{ width: `${prozent(antwort.kapazitaet.fuenf_stunden_pct)}%` }" /></i><em>{{ antwort.kapazitaet.fuenf_stunden_pct }} %</em></div>
-      <div v-if="antwort?.kapazitaet.woche_pct != null" class="limit claude-limit"><span>Woche</span><i><b :style="{ width: `${prozent(antwort.kapazitaet.woche_pct)}%` }" /></i><em>{{ antwort.kapazitaet.woche_pct }} %</em></div>
-      <div v-if="antwort?.kapazitaet.codex_woche_pct != null" class="limit codex-limit"><span>Codex Woche</span><i><b :style="{ width: `${prozent(antwort.kapazitaet.codex_woche_pct)}%` }" /></i><em>{{ antwort.kapazitaet.codex_woche_pct }} %</em></div>
-      <span v-if="antwort?.kapazitaet.pause_grund" class="pause">{{ antwort.kapazitaet.pause_grund }}</span>
+      <span v-if="antwort?.kapazitaet.pause_grund" class="pause">· {{ antwort.kapazitaet.pause_grund }}</span>
+    </section>
+
+    <section class="ki-nutzung-bereich" aria-labelledby="ki-nutzung-titel">
+      <header class="ki-bereich-kopf"><div><h2 id="ki-nutzung-titel">KI-Nutzung</h2><span class="mono dim">Kontingente und Tokenverbrauch</span></div><button class="details-knopf" type="button" :aria-expanded="kiDetailsOffen" aria-controls="ki-nutzung-inhalt" @click="kiDetailsUmschalten">Details <ChevronDown :size="15" :class="{ gedreht: kiDetailsOffen }" /></button></header>
+      <div id="ki-nutzung-inhalt"><KiNutzungPanel :offen="kiDetailsOffen" /></div>
     </section>
 
     <main class="board" aria-label="Kanban-Board">
@@ -470,9 +477,9 @@ button, input, textarea, select { font: inherit; } button { cursor: pointer; } b
 .fehler, .fehler-text { color: var(--krit); }
 .knopf { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--display); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--akzent); color: #1A1200; border: 1px solid var(--akzent); border-radius: 5px; padding: 8px 14px; font-size: 14px; text-decoration: none; white-space: nowrap; }
 .knopf.klein { padding: 6px 12px; font-size: 13px; }.knopf.ghost { background: transparent; color: var(--text-2); border-color: var(--linie); }.knopf:hover { filter: brightness(1.08); }.knopf.gefahr { background: var(--krit); border-color: var(--krit); color: white; }.knopf.gefahr.ghost { background: transparent; color: var(--krit); }
-.kapazitaet { min-height: 40px; display: flex; align-items: center; gap: 22px; padding: 7px 26px; border-bottom: 1px solid var(--linie); background: #0D1428; font-size: 11px; color: var(--text-2); }
-.kapazitaet > strong { color: var(--ok); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }.limit { display: grid; grid-template-columns: auto 92px 38px; align-items: center; gap: 7px; }.limit i { height: 5px; background: var(--flaeche-2); border-radius: 4px; overflow: hidden; }.limit b { display: block; height: 100%; background: var(--info); border-radius: inherit; transition: width .35s ease; }.limit em { font-style: normal; font-family: var(--mono); font-size: 9px; text-align: right; }.pause { color: var(--warn); font-family: var(--mono); margin-left: auto; }
-.limit.claude-limit b { background: #E79A5A; }.limit.codex-limit b { background: #4CC3A5; }
+.kapazitaet { min-height: 34px; display: flex; align-items: center; gap: 7px; padding: 5px 26px; border-bottom: 1px solid var(--linie); background: #0D1428; font-size: 11px; color: var(--text-2); }
+.kapazitaet > strong { color: var(--ok); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }.pause { color: var(--warn); font-family: var(--mono); }
+.ki-nutzung-bereich { padding: 10px 18px 11px; border-bottom: 1px solid var(--linie); background: #0D1428; }.ki-bereich-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }.ki-bereich-kopf > div { display: flex; align-items: baseline; gap: 9px; }.ki-bereich-kopf h2 { margin: 0; font-family: var(--display); font-size: 18px; letter-spacing: .06em; text-transform: uppercase; }.ki-bereich-kopf span { font-size: 8px; }.details-knopf { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid var(--linie); border-radius: 5px; background: transparent; color: var(--text-2); font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }.details-knopf:hover { border-color: var(--akzent); color: var(--akzent); }.details-knopf svg { transition: transform .18s ease; }.details-knopf svg.gedreht { transform: rotate(180deg); }
 .board { display: grid; grid-template-columns: repeat(5, minmax(245px, 1fr)); gap: 12px; padding: 16px 18px 40px; align-items: start; overflow-x: auto; }
 .spalte { min-width: 0; min-height: calc(100vh - 150px); background: rgba(19, 26, 46, .68); border: 1px solid var(--linie); border-radius: 9px; padding: 10px; transition: border-color .15s, background .15s; }.spalte.ziel { border-color: var(--akzent); background: rgba(242, 184, 75, .045); }
 .spalten-kopf { display: flex; align-items: center; justify-content: space-between; padding: 2px 3px 10px; }.spalten-kopf h2 { margin: 0; font-family: var(--display); font-size: 20px; letter-spacing: .05em; text-transform: uppercase; }.spalten-kopf span { min-width: 22px; padding: 2px 6px; text-align: center; color: var(--text-3); background: var(--flaeche-2); border-radius: 10px; font-size: 10px; }
@@ -493,8 +500,8 @@ button, input, textarea, select { font: inherit; } button { cursor: pointer; } b
 .freigabe-block { padding: 16px; border: 1px solid rgba(242,184,75,.42); border-radius: 7px; background: rgba(242,184,75,.045); }.freigabe-block .plan { margin: 0 0 14px; padding: 11px; border: 1px solid var(--linie); border-radius: 5px; background: #090E1C; color: var(--text); font-size: 10px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }.freigabe-block label { display: flex; flex-direction: column; gap: 6px; color: var(--text-2); font-size: 11px; }.freigabe-block textarea { box-sizing: border-box; width: 100%; padding: 9px 10px; resize: vertical; border: 1px solid var(--linie); border-radius: 5px; outline: none; background: var(--flaeche); color: var(--text); }.freigabe-block textarea:focus { border-color: var(--akzent); }
 @keyframes puls { 50% { opacity: .35; transform: scale(.82); } }
 @media (max-width: 1100px) {
-  .kopf { grid-template-columns: 1fr; }.kopf-mitte { text-align: left; }.kopf-rechts { justify-content: flex-start; flex-wrap: wrap; }.kapazitaet { flex-wrap: wrap; gap: 8px 18px; }.pause { width: 100%; margin: 0; }.board { grid-template-columns: 1fr; overflow: visible; }.spalte { min-height: 120px; }.karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); }.leere-spalte { padding: 14px; }
+  .kopf { grid-template-columns: 1fr; }.kopf-mitte { text-align: left; }.kopf-rechts { justify-content: flex-start; flex-wrap: wrap; }.kapazitaet { flex-wrap: wrap; }.board { grid-template-columns: 1fr; overflow: visible; }.spalte { min-height: 120px; }.karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); }.leere-spalte { padding: 14px; }
 }
-@media (max-width: 620px) { .kopf { padding: 13px 15px; }.kapazitaet { padding: 8px 15px; }.limit { grid-template-columns: auto 70px 34px; }.board { padding: 12px 10px 28px; }.karten { grid-template-columns: 1fr; }.formular, .detail { padding-left: 16px; padding-right: 16px; }.metadaten, .formular-zeile, .formular .agent-auswahl { grid-template-columns: 1fr; }.nachfrage { align-items: stretch; flex-direction: column; } }
+@media (max-width: 620px) { .kopf { padding: 13px 15px; }.kapazitaet { padding: 6px 15px; }.ki-nutzung-bereich { padding: 9px 10px; }.ki-bereich-kopf > div { align-items: flex-start; flex-direction: column; gap: 1px; }.board { padding: 12px 10px 28px; }.karten { grid-template-columns: 1fr; }.formular, .detail { padding-left: 16px; padding-right: 16px; }.metadaten, .formular-zeile, .formular .agent-auswahl { grid-template-columns: 1fr; }.nachfrage { align-items: stretch; flex-direction: column; } }
 @media (prefers-reduced-motion: reduce) { .kanban-seite *, .kanban-seite *::before, .kanban-seite *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .001ms !important; } }
 </style>

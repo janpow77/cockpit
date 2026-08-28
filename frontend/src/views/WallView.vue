@@ -312,12 +312,6 @@ const werkstattSumme = computed(() => {
 })
 const kira = computed(() => overview.value?.kira ?? null)
 const flowAgent = computed(() => overview.value?.flow_agent ?? null)
-const ki = computed(() => overview.value?.ki_nutzung ?? null)
-/** Kurzform für die Kopfzeile: Claude-Wochenlimit in Prozent. */
-const kiKurz = computed(() => {
-  const l = ki.value?.claude?.limits?.seven_day
-  return l ? `Claude ${Math.round(l.prozent)} %` : ''
-})
 const KATEGORIE: Record<string, string> = { architecture: 'Architektur', solution: 'Lösung', problem: 'Problem', reference: 'Referenz', pattern: 'Muster', workflow: 'Ablauf', preference: 'Präferenz', feedback: 'Feedback' }
 function kategorie(k: string | null): string { return (k && KATEGORIE[k]) || k || '–' }
 function flowStatusKlasse(status: string): string {
@@ -391,7 +385,6 @@ async function demo(neu = false) {
         <span class="mono uhr">{{ uhr }}</span>
         <RouterLink to="/chat" class="knopf klein">KI-Konsole</RouterLink>
         <RouterLink to="/kanban" class="knopf klein ghost">Aufträge</RouterLink>
-        <RouterLink to="/ki" class="knopf klein ghost" :title="kiKurz">KI-Nutzung{{ kiKurz ? ` · ${kiKurz}` : '' }}</RouterLink>
         <RouterLink to="/kompakt" class="knopf klein ghost" title="Handy-Ansicht">Kompakt</RouterLink>
         <RouterLink to="/" class="knopf klein ghost">Admin</RouterLink>
         <button class="knopf klein ghost" title="Vollbild (F)" @click="vollbild">⛶</button>
