@@ -40,18 +40,20 @@ _CMD_MAC = (
     "echo cpus $(sysctl -n hw.ncpu 2>/dev/null || echo 0)"
 )
 _CMD = (
+    # zsh (macOS) bricht bei leeren Globs ab - nonomatch schaltet das ab; bash ignoriert den Befehl
+    "setopt nonomatch 2>/dev/null; "
     f"if [ -r /proc/loadavg ]; then {_CMD_LINUX}; else {_CMD_MAC}; fi; "
     "(df -P /data 2>/dev/null || df -P / 2>/dev/null) | awk 'NR==2{print \"disk\", $2, $3, $5}'; "
     "if command -v docker >/dev/null 2>&1; then echo containers $(docker ps -q 2>/dev/null | wc -l); else echo containers 0; fi; "
     # GPUs: NVIDIA ueber nvidia-smi, AMD ueber sysfs (nur Auslastung)
     "if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null "
     "| awk -F', *' '{print \"gpu\", $1, $2, $3}'; "
-    "else for d in /sys/class/drm/card*/device; do [ -r \"$d/gpu_busy_percent\" ] || continue; "
+    "elif [ -d /sys/class/drm ]; then for d in /sys/class/drm/card*/device; do [ -r \"$d/gpu_busy_percent\" ] || continue; "
     "u=$(cat \"$d/mem_info_vram_used\" 2>/dev/null || echo 0); t=$(cat \"$d/mem_info_vram_total\" 2>/dev/null || echo 0); "
     "echo gpu $(cat \"$d/gpu_busy_percent\") $((u/1048576)) $((t/1048576)); done 2>/dev/null; fi; "
     # tmux-Sitzungen des SSH-Nutzers: je Fenster eine Tab-getrennte Zeile
     # Kein tmux-Server ist kein Fehler: Exit-Code der Sonde bleibt 0
-    "tmux list-windows -a -F 'tmuxw\t#{session_name}\t#{window_name}\t#{window_active}\t#{pane_current_command}\t#{session_attached}\t#{session_created}' 2>/dev/null || true"
+    "tmux list-windows -a -F 'tmuxw\t#{session_name}\t#{window_name}\t#{window_active}\t#{pane_current_command}\t#{session_attached}\t#{session_created}' 2>/dev/null || true; true"
 )
 
 
