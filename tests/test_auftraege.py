@@ -61,7 +61,10 @@ def test_agentbefehl_codex_und_gemini():
     assert codex.startswith("/home/janpow/bin/codex exec ") and "--json" in codex and "-s read-only" in codex
     assert "--skip-git-repo-check" in codex
     codex_r = svc.agent_befehl(_auftrag(agent="codex", session_id="thr_1"), bins={}, text="x", resume=True, pfade=p)
-    assert "exec resume thr_1" in codex_r and "--approve-for-me" in codex_r
+    assert "exec resume thr_1" in codex_r and "-c sandbox_mode=workspace-write" in codex_r and "-c approval_policy=never" in codex_r
+    assert " -s " not in codex_r and "--approve-for-me" not in codex_r  # exec resume kennt diese Flags nicht
+    codex_rl = svc.agent_befehl(_auftrag(agent="codex", profil="lesen", session_id="thr_1"), bins={}, text="x", resume=True, pfade=p)
+    assert "-c sandbox_mode=read-only" in codex_rl
     gem = svc.agent_befehl(_auftrag(agent="gemini", profil="bearbeiten"), bins={"gemini": "/g/gemini"}, text="x", resume=False, pfade=p)
     assert gem.startswith("/g/gemini -p ") and "-o stream-json" in gem and "--approval-mode auto_edit" in gem
     gem_r = svc.agent_befehl(_auftrag(agent="gemini", session_id="s-9"), bins={}, text="x", resume=True, pfade=p)

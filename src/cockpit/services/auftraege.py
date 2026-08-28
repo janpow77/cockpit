@@ -234,7 +234,12 @@ def agent_befehl(a: AuftragRow, *, bins: dict[str, str], text: str, resume: bool
         bin_ = bins.get("codex", "codex")
         flags = PROFILE_CODEX.get(profil, PROFILE_CODEX["bearbeiten"])
         if resume and a.session_id:
-            return f"{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json {flags} --skip-git-repo-check"
+            # `exec resume` kennt weder -s noch --approve-for-me: Sandbox/Freigabe als Konfigurations-Overrides
+            sandbox = "read-only" if profil == "lesen" else "workspace-write"
+            return (
+                f"{bin_} exec resume {shlex.quote(a.session_id)} {prompt} --json --skip-git-repo-check "
+                f"-c sandbox_mode={shlex.quote(sandbox)} -c approval_policy=never"
+            )
         return f"{bin_} exec {prompt} --json {flags} --skip-git-repo-check"
     if a.agent == "gemini":
         bin_ = bins.get("gemini", "gemini")
