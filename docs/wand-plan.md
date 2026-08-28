@@ -335,3 +335,57 @@ Terminalzeilen (`tmux capture-pane`), darunter „Arbeitspaket“ – Text wird 
 zweiten Klick, Audit-Eintrag `wall.tmux_senden`). Ziel-Form `sitzung:fenster`, Text ≤ 2000
 Zeichen; Self-Hosts über Loopback-SSH. KI-Sonde nutzt denselben Loopback (die Dateien
 liegen beim Nutzer, nicht im Container).
+
+## 17. Aufträge – Kanban für Agentenläufe (v0.4.0, 28.08.2026)
+
+Seite `/kanban` („Aufträge“ in der Seitenleiste, Link in der Wand-Kopfzeile). Jede Karte ist
+ein Auftrag: Titel, Auftragstext, Projektverzeichnis auf einem Host (aus der Werkstatt),
+**Agent** (Claude Code · Codex · Gemini), Profil, Priorität 1–5, Zeitfenster
+(sofort · nachts 22–7 · nach Wochen-Reset). Spalten Eingang → Geplant → Läuft → Rückfrage
+→ Fertig; Eingang↔Geplant per Drag & Drop. Detailpanel mit Ergebnis, Kosten/Tokens, Branch,
+Diff-Link (GitHub compare) und Live-Protokoll; „Nachfrage“ setzt die Sitzung fort
+(`--resume` / `codex exec resume` / `gemini -r`).
+
+**Lauf:** Der Runner (`services/auftrag_runner.py`, alle 20 s) legt auf dem Host einen
+Git-Worktree `<projekt>/.cockpit-auftraege/wt-<id>` mit Branch `auftrag/<id>` an (Verzeichnis
+in `.git/info/exclude`) und startet dort den Agenten per `nohup` mit JSON-Protokoll
+(`lauf.jsonl`, `stderr.txt`, `done.txt`, `pid.txt`). Befehle (`services/auftraege.py`):
+Claude `claude -p "$(cat auftrag.txt)" <Profil> --output-format stream-json --verbose
+--max-turns 80` (ohne `--bare`: läuft über die Max-Anmeldung, zählt aufs 5-Stunden-Fenster);
+Codex `codex exec --json -s read-only|workspace-write [--approve-for-me]
+--skip-git-repo-check`; Gemini `gemini -p … -o stream-json --approval-mode
+default|auto_edit|yolo --skip-trust`. Programme absolut (`agent_bins`, weil `bash -lc`
+über SSH `~/bin`/`~/.npm-global/bin` nicht kennt). Profile: `lesen` (nur Lesen, git/gh/rg,
+graphify-MCP), `bearbeiten` (acceptEdits), `bearbeiten_tests` (+ npm/pytest/ruff/git commit),
+`voll` (Classifier). Nie `--dangerously-skip-permissions`. Am Ende: Commit auf dem Branch,
+Ergebnis/Kosten/Session aus dem letzten `result`-Ereignis, Rückfrage-Erkennung (Frage am
+Schluss), Push per Telegram (fertig/Rückfrage/Fehler).
+
+**Kontingent:** `parallel_max` aus der KI-Nutzung – Basis `auftrag_parallel` (3); ≥ 60 %
+5-Stunden-Fenster → Basis−1, ≥ 85 % → 1, ≥ 95 % oder Woche ≥ 98 % → 0 (Pause mit Grund);
+Gemini nur ein Lauf gleichzeitig. Geplante Aufträge starten nach Priorität/Reihenfolge, sobald
+Kapazität und Zeitfenster passen.
+
+**Vorlagen** (`services/auftrag_vorlagen.py`, 22 Stück, `{projekt}` wird ersetzt): Repo
+prüfen, Oberfläche verbessern, Tests ergänzen, Sicherheits-Audit, Doku, Abhängigkeiten,
+Performance, Fehler beheben, Sprache/Umlaute, **Vorschläge einholen**, PRs prüfen, Issues
+sichten, Aufräumen/entflechten, Barrierefreiheit, Fehlerbehandlung/Logging, TODO/FIXME,
+CI/flackernde Tests, Release vorbereiten, Datenschutz (DSGVO), Container härten, API-Doku,
+Migrationen prüfen. Eigene Vorlagen über Einstellung `auftrag_vorlagen` (gleiche id ersetzt).
+Quellen der Recherche: wshobson/commands, qdhenry/Claude-Command-Suite, awesome-copilot.
+
+**Vorschläge (automatisch):** Vorlage „Vorschläge einholen“ liest Git-Verlauf, GitHub
+(`gh`: Issues, PRs, CI, Dependabot), die graphify-Analyse von flow-agent
+(`graphify-out/<Datum>/GRAPH_REPORT.md`, MCP auf 127.0.0.1:8765) und den Code und endet mit
+einem JSON-Block; der Runner legt daraus Karten „Vorschlag: …“ in den Eingang (Dubletten
+nach Titel je Projekt vermieden, Profil/Priorität aus dem Vorschlag). Wöchentlich
+automatisch je aktivem Werkstatt-Projekt (Einstellung `vorschlaege`: aktiv, wochentag 6 =
+Sonntag, stunde 1, agent; Zeitfenster nachts) oder auf Abruf über „Vorschläge einholen“
+(`POST /admin/api/auftraege/vorschlaege`).
+
+**Prüfstand 28.08.:** Probeläufe im Scratch-Repo – Claude (`lesen`, 2 Turns, Ergebnis/
+Session/Kosten geparst), Codex (`thread.started`/`item.completed`/`turn.completed` wie im
+Parser). Gemini CLI 0.46 auf dem NUC: `IneligibleTierError` – Code Assist für Einzelnutzer
+wird vom CLI nicht mehr bedient; Abhilfe: API-Schlüssel in `~/.gemini/.env` oder
+Antigravity-Anmeldung. Zwei Startbefehl-Fehler behoben: `&` löste die ganze `&&`-Kette in
+den Hintergrund (jetzt Untershell), neues git legt `.git/info` nicht an (jetzt `mkdir -p`).

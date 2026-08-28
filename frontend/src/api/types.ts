@@ -354,6 +354,10 @@ export interface WallConfig {
   mcp_servers: Record<string, unknown>[]
   work_dirs: Record<string, string>
   kira: Record<string, string>
+  agent_bins: Record<string, string>
+  vorschlaege: Record<string, unknown>
+  auftrag_vorlagen: Record<string, unknown>[]
+  auftrag_parallel: number
   prod_hosts?: string[]
   push?: Record<string, unknown>
   ki_nutzung?: Record<string, unknown>
@@ -407,3 +411,26 @@ export interface McpServerState {
     tools: { name: string; description: string }[]; skills: unknown } | null
   error?: string
 }
+
+export type AuftragStatus = 'eingang' | 'geplant' | 'laeuft' | 'rueckfrage' | 'fertig' | 'fehler' | 'abgebrochen'
+export type AuftragProfil = 'lesen' | 'bearbeiten' | 'bearbeiten_tests' | 'voll'
+export type AuftragAgent = 'claude' | 'codex' | 'gemini'
+export type Zeitfenster = 'sofort' | 'nachts' | 'nach_reset'
+
+export interface Auftrag {
+  id: string; titel: string; text: string; host: string; projekt: string; projekt_name: string
+  agent: AuftragAgent; profil: AuftragProfil; prioritaet: number; zeitfenster: Zeitfenster; status: AuftragStatus; reihenfolge: number
+  branch: string | null; worktree: string | null; session_id: string | null
+  gestartet: string | null; beendet: string | null; dauer_s: number | null
+  ergebnis: string | null; fehler: string | null; kosten_usd: number | null; tokens_in: number | null; tokens_out: number | null; turns: number | null
+  letzte_zeile: string | null; diff_url: string | null; erstellt: string; aktualisiert: string
+}
+
+export interface Kapazitaet {
+  parallel_max: number; laufend: number; pause_grund: string | null; fuenf_stunden_pct: number | null; woche_pct: number | null; codex_woche_pct: number | null
+}
+
+export interface AuftraegeAntwort { auftraege: Auftrag[]; kapazitaet: Kapazitaet }
+export interface LogZeile { ts: string | null; art: 'text' | 'tool' | 'result' | 'system' | 'fehler'; text: string }
+export interface Projekt { host: string; pfad: string; name: string }
+export interface Vorlage { id: string; titel: string; profil: AuftragProfil; prioritaet: number; text: string }

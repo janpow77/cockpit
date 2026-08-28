@@ -371,6 +371,7 @@ async function demo(neu = false) {
         <span class="live" :title="`Alle ${REFRESH_MS / 1000} s aktualisiert · R = sofort`"><i :class="['punkt', error ? 'krit' : 'ok']" />{{ error ? 'GESTÖRT' : 'LIVE' }}<em>· {{ seitLoad }} s</em></span>
         <span class="mono uhr">{{ uhr }}</span>
         <RouterLink to="/chat" class="knopf klein">KI-Konsole</RouterLink>
+        <RouterLink to="/kanban" class="knopf klein ghost">Aufträge</RouterLink>
         <RouterLink to="/ki" class="knopf klein ghost" :title="kiKurz">KI-Nutzung{{ kiKurz ? ` · ${kiKurz}` : '' }}</RouterLink>
         <RouterLink to="/kompakt" class="knopf klein ghost" title="Handy-Ansicht">Kompakt</RouterLink>
         <RouterLink to="/" class="knopf klein ghost">Admin</RouterLink>

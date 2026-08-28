@@ -25,6 +25,7 @@ from .config import load_config
 from .db import get_session_factory, init_db
 from .routes.apps import router as apps_router
 from .routes.audit import router as audit_router
+from .routes.auftraege import router as auftraege_router
 from .routes.auth import router as auth_router
 from .routes.backups import router as backups_router
 from .routes.chat import router as chat_router
@@ -37,7 +38,7 @@ from .routes.overview import router as overview_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
 from .routes.traffic import router as traffic_router
-from .services import bootstrap, health_check, traffic_collector, wall_loop
+from .services import auftrag_runner, bootstrap, health_check, traffic_collector, wall_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +87,7 @@ async def lifespan(app: FastAPI):
     wall_interval = int(os.environ.get("COCKPIT_WALL_INTERVAL", "90"))
     wall_task = asyncio.create_task(wall_loop.wall_loop(_APP_STATE["stop_event"], interval_s=wall_interval))
     _APP_STATE["wall_task"] = wall_task
+    _APP_STATE["auftrag_task"] = asyncio.create_task(auftrag_runner.runner_loop(_APP_STATE["stop_event"], interval_s=20))
     health_task = asyncio.create_task(
         health_check.health_loop(_APP_STATE["stop_event"], interval_s=interval)
     )
@@ -171,6 +173,7 @@ app.include_router(settings_router)
 app.include_router(traffic_router)
 app.include_router(deployments_router)
 app.include_router(overview_router)
+app.include_router(auftraege_router)
 app.include_router(chat_router)
 app.include_router(mcp_router)
 
