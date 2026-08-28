@@ -128,3 +128,33 @@ def test_tmux_zielmuster():
 
     assert _TMUX_ZIEL.match("projekte:flowinvoice") and _TMUX_ZIEL.match("claude:1")
     assert not _TMUX_ZIEL.match("projekte") and not _TMUX_ZIEL.match("a:b; rm -rf /") and not _TMUX_ZIEL.match("a b:c")
+
+
+def test_bestaetigen_filtert_kurze_aussetzer():
+    from cockpit.services import push
+
+    a = {"level": "krit", "text": "pdf.flowaudit.de antwortet nicht (ConnectTimeout)"}
+    key = push.schluessel(a)
+    # 1. Lauf: Alarm taucht auf → noch nichts melden, zählen
+    hinzu, weg, gemeldet, z = push.bestaetigen([], {}, [a], laeufe=2)
+    assert hinzu == [] and weg == [] and gemeldet == [] and z == {key: 1}
+    # 2. Lauf: Alarm weg → Zähler verfällt, nichts gemeldet (kurzer Aussetzer)
+    hinzu, weg, gemeldet, z = push.bestaetigen(gemeldet, z, [], laeufe=2)
+    assert hinzu == [] and weg == [] and gemeldet == [] and z == {}
+    # zwei Läufe in Folge → melden
+    _, _, gemeldet, z = push.bestaetigen([], {}, [a], laeufe=2)
+    hinzu, weg, gemeldet, z = push.bestaetigen(gemeldet, z, [a], laeufe=2)
+    assert hinzu == [a] and gemeldet == [key] and z == {}
+    # gemeldeter Alarm fehlt einmal → noch keine Entwarnung
+    hinzu, weg, gemeldet, z = push.bestaetigen(gemeldet, z, [], laeufe=2)
+    assert weg == [] and gemeldet == [key] and z == {key: -1}
+    # taucht wieder auf → Zähler zurück, weiterhin gemeldet
+    hinzu, weg, gemeldet, z = push.bestaetigen(gemeldet, z, [a], laeufe=2)
+    assert hinzu == [] and weg == [] and gemeldet == [key] and z == {}
+    # zweimal in Folge weg → Entwarnung
+    _, _, gemeldet, z = push.bestaetigen(gemeldet, z, [], laeufe=2)
+    hinzu, weg, gemeldet, z = push.bestaetigen(gemeldet, z, [], laeufe=2)
+    assert weg == [key] and gemeldet == [] and z == {}
+    # info unter min_level wird ignoriert
+    hinzu, weg, gemeldet, z = push.bestaetigen([], {}, [{"level": "info", "text": "x"}] * 3, laeufe=1)
+    assert hinzu == [] and z == {}

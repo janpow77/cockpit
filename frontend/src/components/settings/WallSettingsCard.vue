@@ -161,7 +161,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
   { key: 'vorschlaege', label: 'Aufträge: wöchentliche Vorschlagsläufe', hint: 'aktiv, wochentag (0 = Montag … 6 = Sonntag), stunde, agent – je aktivem Werkstatt-Projekt, Ergebnis als Karten im Eingang', model: vorschlaege, rows: 5 },
   { key: 'flow_agent', label: 'flow-agent (Projektinventar aller Hosts)', hint: 'url, secret_key (Vault: Lese-Schlüssel), hosts = flow-agent-Hostname → Cockpit-Host', model: flowAgent, rows: 6 },
   { key: 'auftrag_vorlagen', label: 'Aufträge: eigene Vorlagen', hint: '[{id, titel mit {projekt}, profil, prioritaet, text}] – gleiche id ersetzt die Vorgabe', model: auftragVorlagen, rows: 8 },
-  { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
+  { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), bestaetigung_laeufe (Vorgabe 2: Alarm erst nach so vielen Wand-Läufen in Folge, Entwarnung ebenso), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
 ]
 </script>
 

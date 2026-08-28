@@ -518,3 +518,13 @@ mit Hinweis auf die Kopie des Projekts auf dem Agenten-Host; der Runner startet 
 geplanten Aufträge nicht, sondern setzt sie mit klarem Fehlertext auf „Fehler“; wöchentliche
 Vorschlagsläufe nur für Agenten-Hosts. Wer Agenten auf einem weiteren Host anmeldet, trägt ihn
 in `agent_hosts` ein (und passt ggf. `agent_bins` an).
+
+**v0.4.16 – Push ohne Flattern:** Der Nutzer bekam per Telegram ständig „… antwortet nicht
+(ConnectTimeout)“ mit Entwarnung kurz darauf. Zwei Ursachen: (1) alle drei Instanzen pushten in
+denselben Chat – die janpow-ai-Instanz sieht `pilot/pdf/zvg/mcp.flowaudit.de` mit Timeouts
+(5–6 s Antwortzeiten aus ihrem Netz); (2) jeder Wand-Lauf meldete sofort. Abhilfe: Push nur noch
+auf dem Hetzner-Cockpit (`push.aktiv=false` auf NUC und janpow-ai, `push.instanz` benannt) und
+`push.bestaetigen()`: ein Alarm wird erst nach `bestaetigung_laeufe` (Vorgabe 2 ≈ 3 min)
+aufeinanderfolgenden Läufen gemeldet, die Entwarnung erst nach ebenso vielen Läufen ohne den
+Alarm; Zähler in Setting `alerts_zaehler`, gemeldete Schlüssel weiter in `alerts_state`.
+Ruhezeit: zurückgehaltene Warnungen gelten als bestätigt und gehen morgens gesammelt raus.
