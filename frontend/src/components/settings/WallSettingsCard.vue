@@ -7,6 +7,7 @@
 import { onMounted, ref } from 'vue'
 import { Save, Radar } from 'lucide-vue-next'
 import Card from '../shared/Card.vue'
+import ErrorState from '../shared/ErrorState.vue'
 import Spinner from '../shared/Spinner.vue'
 import { getWallConfig, patchWallConfig, pushTest } from '../../api/overview'
 import { useToastStore } from '../../stores/toast'
@@ -17,6 +18,7 @@ const toast = useToastStore()
 const loading = ref(true)
 const saving = ref(false)
 const cfg = ref<WallConfig | null>(null)
+const ladeFehler = ref<string | null>(null)
 
 const hosts = ref('')
 const hide = ref('')
@@ -54,6 +56,8 @@ function json(v: unknown): string { return JSON.stringify(v, null, 2) }
 
 async function load() {
   loading.value = true
+  ladeFehler.value = null
+  cfg.value = null
   try {
     const c = await getWallConfig()
     cfg.value = c
@@ -84,7 +88,7 @@ async function load() {
     flowAgent.value = json(c.flow_agent ?? {})
     leitinstanz.value = json(c.leitinstanz ?? {})
     agentHosts.value = zeilen(c.agent_hosts ?? ['nuc'])
-  } catch (err) { toast.error(extractError(err)) }
+  } catch (err) { ladeFehler.value = extractError(err); toast.error(ladeFehler.value) }
   finally { loading.value = false }
 }
 onMounted(load)
@@ -106,6 +110,7 @@ function parse<T>(feld: string, text: string, erwartet: 'object' | 'array'): T |
 }
 
 async function save() {
+  if (!cfg.value || ladeFehler.value) return
   fehler.value = {}
   const patch: Partial<WallConfig> = {
     hosts: ausZeilen(hosts.value),
@@ -172,12 +177,13 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
 <template>
   <Card title="Cockpit & LLM-Konsole" subtitle="Was im Cockpit erscheint, welche Modelle die Konsole anbietet, welche MCP-Server gezeigt werden">
     <template #actions>
-      <button class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50" :disabled="saving || loading" @click="save">
+      <button class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50" :disabled="saving || loading || !cfg || !!ladeFehler" @click="save">
         <Save :size="14" /> Speichern
       </button>
     </template>
     <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Cockpit-Einstellungen …</div>
-    <div v-else class="space-y-5">
+    <ErrorState v-else-if="ladeFehler" title="Cockpit-Einstellungen konnten nicht geladen werden" :message="ladeFehler" @retry="load()" />
+    <div v-else-if="cfg" class="space-y-5">
       <p class="text-xs text-slate-500 flex items-center gap-1.5"><Radar :size="12" /> Das Cockpit liegt unter <span class="font-mono">/admin/wall</span>, die Konsole unter <span class="font-mono">/admin/chat</span>, die MCP-Seite unter <span class="font-mono">/admin/mcp</span>. Secrets nur im Vault anlegen – hier stehen nur deren Schlüsselnamen.</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <label class="block">

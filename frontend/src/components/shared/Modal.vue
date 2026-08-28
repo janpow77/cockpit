@@ -2,7 +2,7 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { X } from 'lucide-vue-next'
 
-const props = defineProps<{ open: boolean; title?: string; width?: string }>()
+const props = defineProps<{ open: boolean; title?: string; width?: string; formId?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 function onKey(e: KeyboardEvent) {
@@ -31,7 +31,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             <slot />
           </div>
           <footer v-if="$slots.footer" class="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 rounded-b-xl">
-            <slot name="footer" />
+            <slot name="footer" :form-id="formId" />
           </footer>
         </div>
       </div>

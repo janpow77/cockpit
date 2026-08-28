@@ -4,6 +4,7 @@ import { Activity, Plus, Trash2, RefreshCw, AlertTriangle } from 'lucide-vue-nex
 import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import Modal from '../../components/shared/Modal.vue'
 import Sparkline from '../../components/shared/Sparkline.vue'
@@ -35,6 +36,7 @@ const confirm = useConfirmStore()
 const poll = usePollStore()
 
 const loading = ref(true)
+const fehler = ref<string | null>(null)
 const sources = ref<TrafficSource[]>([])
 const hosts = ref<Host[]>([])
 const apps = ref<App[]>([])
@@ -66,15 +68,17 @@ const errorRatePct = computed(() =>
   series.value ? Math.round(series.value.error_rate * 10000) / 100 : 0,
 )
 
-async function loadCore() {
+async function load() {
   loading.value = true
+  fehler.value = null
   try {
     const [s, h, a] = await Promise.all([listSources(), listHosts(), listApps()])
     sources.value = s
     hosts.value = h
     apps.value = a
   } catch (err) {
-    toast.error(extractError(err))
+    fehler.value = extractError(err)
+    toast.error(fehler.value)
   } finally {
     loading.value = false
   }
@@ -111,7 +115,7 @@ async function saveSource() {
     await createSource(form.value)
     toast.success('Traffic-Quelle angelegt')
     showCreate.value = false
-    await loadCore()
+    await load()
   } catch (err) {
     toast.error(extractError(err))
   }
@@ -128,7 +132,7 @@ async function removeSource(s: TrafficSource) {
   try {
     await deleteSource(s.id)
     toast.success('Traffic-Quelle entfernt')
-    await loadCore()
+    await load()
   } catch (err) {
     toast.error(extractError(err))
   }
@@ -138,7 +142,7 @@ async function triggerCollect() {
   try {
     const res = await collectNow()
     toast.success(`Sammellauf: ${res.ok}/${res.sources} ok, ${res.lines} Zeilen`)
-    await loadCore()
+    await load()
     await loadSeries()
   } catch (err) {
     toast.error(extractError(err))
@@ -146,7 +150,7 @@ async function triggerCollect() {
 }
 
 onMounted(async () => {
-  await loadCore()
+  await load()
   poll.start('traffic-series', loadSeries, 30_000)
 })
 onBeforeUnmount(() => {
@@ -298,7 +302,8 @@ function removeServerMap(idx: number) {
         </div>
       </div>
 
-      <div v-if="!loading && !sources.length">
+      <ErrorState v-if="!loading && fehler" title="Traffic-Daten konnten nicht geladen werden" :message="fehler" @retry="load()" />
+      <div v-else-if="!loading && !sources.length">
         <EmptyState
           title="Keine Traffic-Quellen"
           message="Pro Host eine Quelle anlegen (Pfad zur Caddy-access.log + Server-Name → App-Mapping)."

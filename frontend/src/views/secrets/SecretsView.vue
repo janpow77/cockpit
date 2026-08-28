@@ -5,6 +5,7 @@ import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import Modal from '../../components/shared/Modal.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import { listSecrets, createSecret, updateSecret, deleteSecret, revealSecret, type SecretCreate } from '../../api/secrets'
 import { useToastStore } from '../../stores/toast'
@@ -18,6 +19,8 @@ const confirm = useConfirmStore()
 
 const secrets = ref<Secret[]>([])
 const loading = ref(true)
+const fehler = ref<string | null>(null)
+const speichern = ref(false)
 const showModal = ref(false)
 const editing = ref<Secret | null>(null)
 
@@ -31,7 +34,8 @@ const revealModal = ref<{ open: boolean; secret: Secret | null; purpose: string;
 
 async function load() {
   loading.value = true
-  try { secrets.value = await listSecrets() } catch (err) { toast.error(extractError(err)) }
+  fehler.value = null
+  try { secrets.value = await listSecrets() } catch (err) { fehler.value = extractError(err); toast.error(fehler.value) }
   finally { loading.value = false }
 }
 onMounted(load)
@@ -49,6 +53,8 @@ function openEdit(s: Secret) {
 }
 
 async function save() {
+  if (speichern.value) return
+  speichern.value = true
   try {
     if (editing.value) {
       const patch: any = {
@@ -66,6 +72,7 @@ async function save() {
     showModal.value = false
     await load()
   } catch (err) { toast.error(extractError(err)) }
+  finally { speichern.value = false }
 }
 
 async function remove(s: Secret) {
@@ -113,6 +120,7 @@ async function copyValue() {
       </template>
 
       <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Secrets...</div>
+      <ErrorState v-else-if="fehler" title="Secrets konnten nicht geladen werden" :message="fehler" @retry="load()" />
       <div v-else-if="!secrets.length"><EmptyState title="Keine Secrets" message="Lege Tokens, API-Keys, Passwoerter zentral an." /></div>
       <table v-else class="w-full text-sm">
         <thead>
@@ -159,8 +167,8 @@ async function copyValue() {
       </table>
     </Card>
 
-    <Modal :open="showModal" :title="editing ? `Secret '${editing.key}' bearbeiten` : 'Secret hinzufuegen'" @close="showModal = false">
-      <form class="space-y-3" @submit.prevent="save">
+    <Modal :open="showModal" :title="editing ? `Secret '${editing.key}' bearbeiten` : 'Secret hinzufuegen'" form-id="secret-form" @close="showModal = false">
+      <form id="secret-form" class="space-y-3" @submit.prevent="save">
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Key</span>
           <input v-model="form.key" required :disabled="!!editing" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 disabled:bg-slate-100 dark:disabled:bg-slate-800 px-3 py-2 text-sm font-mono" />
@@ -184,9 +192,9 @@ async function copyValue() {
           <input v-model="form.comment" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm" />
         </label>
       </form>
-      <template #footer>
-        <button class="rounded-md px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="showModal = false">Abbrechen</button>
-        <button class="rounded-md px-3 py-1.5 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white" @click="save">Speichern</button>
+      <template #footer="{ formId }">
+        <button type="button" class="rounded-md px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="showModal = false">Abbrechen</button>
+        <button type="submit" :form="formId" :disabled="speichern" class="rounded-md px-3 py-1.5 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-50">Speichern</button>
       </template>
     </Modal>
 

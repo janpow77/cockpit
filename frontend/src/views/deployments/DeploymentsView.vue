@@ -5,6 +5,7 @@ import { History, GitCommit, Package, Clock } from 'lucide-vue-next'
 import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import { listRecent } from '../../api/deployments'
 import { useToastStore } from '../../stores/toast'
@@ -15,14 +16,17 @@ import type { Deployment } from '../../api/types'
 const toast = useToastStore()
 const router = useRouter()
 const loading = ref(true)
+const fehler = ref<string | null>(null)
 const items = ref<Deployment[]>([])
 
 async function load() {
   loading.value = true
+  fehler.value = null
   try {
     items.value = await listRecent(100)
   } catch (err) {
-    toast.error(extractError(err))
+    fehler.value = extractError(err)
+    toast.error(fehler.value)
   } finally {
     loading.value = false
   }
@@ -53,6 +57,7 @@ function sourceVariant(s: string): 'slate' | 'sky' | 'amber' {
   <div class="space-y-6 animate-fade-in">
     <Card title="Deployments" subtitle="Letzte Image-Aktivierungen pro App, host-uebergreifend">
       <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Historie…</div>
+      <ErrorState v-else-if="fehler" title="Deployments konnten nicht geladen werden" :message="fehler" @retry="load()" />
       <EmptyState
         v-else-if="!items.length"
         title="Noch keine Deployments protokolliert"
