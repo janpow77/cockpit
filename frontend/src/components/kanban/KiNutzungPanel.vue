@@ -69,7 +69,8 @@ function rund(v: number): number { return Math.round(v * 10) / 10 }
 function bogen(p: number): string {
   const a = Math.PI * Math.min(100, Math.max(0, p)) / 100
   const x = 50 - 44 * Math.cos(a); const y = 50 - 44 * Math.sin(a)
-  return `M 6 50 A 44 44 0 ${p > 50 ? 1 : 0} 1 ${rund(x)} ${rund(y)}`
+  // Halbkreis von links (6,50) über oben nach rechts: der Wertbogen überspannt höchstens 180°, Large-Arc-Flag daher immer 0
+  return `M 6 50 A 44 44 0 0 1 ${rund(x)} ${rund(y)}`
 }
 function tagKurz(tag: string): string { return `${tag.slice(8, 10)}.${tag.slice(5, 7)}.` }
 function reihe(key: string): number[] { return verlauf.value?.series[key]?.map((punkt) => punkt[1]) ?? [] }
