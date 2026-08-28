@@ -31,12 +31,13 @@ AGENTEN = ("claude", "codex", "gemini")
 # Modus: nur berichten/planen · Plan zeigen und erst nach Freigabe umsetzen · direkt umsetzen
 MODI = ("bericht", "plan_freigabe", "umsetzen")
 # Antigravity CLI (agy 1.1.22, Google-Abo): --mode plan (nur lesen/planen) bzw. accept-edits (Dateiänderungen ohne Nachfrage).
-# Kommandos/Lesen im Druckmodus nur per Allow-Regeln in ~/.gemini/antigravity-cli/settings.json (permissions.allow);
-# --sandbox scheitert auf dem NUC (Sandbox-Server nicht erreichbar). Nur "voll" darf alle Freigaben automatisch erteilen.
+# Im Druckmodus kann agy keine Freigabe erfragen: jedes Kommando außerhalb der Allow-Regeln (~/.gemini/antigravity-cli/settings.json)
+# bricht den ganzen Lauf mit CANCELED ab – daher Werkzeugfreigabe automatisch (wie Codex ohne Sandbox auf dem NUC);
+# Schutz bleibt Worktree + Branch, der Ausführungsmodus begrenzt Dateiänderungen. --sandbox scheitert auf dem NUC.
 PROFILE_AGY: dict[str, str] = {
-    "lesen": "--mode plan",
-    "bearbeiten": "--mode accept-edits",
-    "bearbeiten_tests": "--mode accept-edits",
+    "lesen": "--mode plan --dangerously-skip-permissions",
+    "bearbeiten": "--mode accept-edits --dangerously-skip-permissions",
+    "bearbeiten_tests": "--mode accept-edits --dangerously-skip-permissions",
     "voll": "--dangerously-skip-permissions",
 }
 # Profile je Agent (nie Bypass-Flags):
