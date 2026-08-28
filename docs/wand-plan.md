@@ -293,3 +293,11 @@ Hosts (root-gleich) und den Vault – das Passwort ist der eine Schlüssel. Offe
 Allowlist für konfigurierbare Ziel-URLs (Sonden, Demo, MCP) und ein Zweitfaktor; beides
 wird Pflicht, sobald das Cockpit je hinter einer öffentlichen Adresse hinge (dann nur mit
 Cloudflare Access davor).
+
+**Loopback-SSH auf dem Hetzner (v0.3.16):** Der Cockpit-Container hängt im Bridge-Netz
+`cockpit` (172.18.0.0/16); die Tailscale-IP des eigenen Hosts ist von dort nicht
+erreichbar, und ufw ließ 22/tcp aus dem Docker-Netz nicht durch. Lösung: ufw-Regel
+`allow from 172.18.0.0/16 to any port 22 proto tcp` (Kommentar docker-cockpit-to-ssh) und
+`COCKPIT_SELF_SSH_HOST=host.docker.internal` mit `extra_hosts: host-gateway` in der
+compose.yaml; der Cockpit-Schlüssel ist bei `deploy` eingetragen. Verlaufstabelle kommt
+per Migration `003_wall_samples.sql` (Tabellen entstehen nur aus `src/cockpit/migrations`).

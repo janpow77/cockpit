@@ -111,9 +111,14 @@ def _ziel(host: HostRow) -> HostRow:
     """Self-Host mit SSH-Zugang: per Loopback-SSH abfragen, damit tmux und Nutzerumgebung
     des Hosts sichtbar sind (im Container gibt es beides nicht)."""
     if host.is_self and getattr(host, "ssh_user", None) and getattr(host, "tailscale_ip", None):
+        import os
         from types import SimpleNamespace
 
-        return SimpleNamespace(**{k: getattr(host, k) for k in ("id", "name", "tailscale_ip", "ssh_user", "ssh_key_path")}, is_self=0)  # type: ignore[return-value]
+        # Im Bridge-Netz (Hetzner) ist die Tailscale-IP des eigenen Hosts nicht erreichbar -
+        # COCKPIT_SELF_SSH_HOST (z. B. host.docker.internal) zeigt dann auf das Host-Gateway.
+        ziel_ip = os.environ.get("COCKPIT_SELF_SSH_HOST") or host.tailscale_ip
+        werte = {k: getattr(host, k) for k in ("id", "name", "ssh_user", "ssh_key_path")}
+        return SimpleNamespace(**werte, tailscale_ip=ziel_ip, is_self=0)  # type: ignore[return-value]
     return host
 
 

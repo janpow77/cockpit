@@ -2,7 +2,7 @@
 # Wird via `docker compose -f compose.yaml up -d` auf CCX23 gestartet.
 services:
   cockpit:
-    image: cockpit:v0.3.14
+    image: cockpit:v0.3.16
     container_name: cockpit
     restart: unless-stopped
     ports:
@@ -12,6 +12,11 @@ services:
       - cockpit
     env_file:
       - /etc/cockpit/env
+    environment:
+      # Loopback-SSH zum eigenen Host (tmux-Sitzungen): im Bridge-Netz ueber das Host-Gateway
+      COCKPIT_SELF_SSH_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /var/lib/cockpit/data:/data
       - /etc/cockpit/config.yaml:/etc/cockpit/config.yaml:ro
