@@ -38,7 +38,7 @@ from .routes.overview import router as overview_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
 from .routes.traffic import router as traffic_router
-from .services import auftrag_runner, bootstrap, health_check, traffic_collector, wall_loop
+from .services import auftrag_runner, bootstrap, health_check, telegram_dialog, traffic_collector, wall_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,6 +88,7 @@ async def lifespan(app: FastAPI):
     wall_task = asyncio.create_task(wall_loop.wall_loop(_APP_STATE["stop_event"], interval_s=wall_interval))
     _APP_STATE["wall_task"] = wall_task
     _APP_STATE["auftrag_task"] = asyncio.create_task(auftrag_runner.runner_loop(_APP_STATE["stop_event"], interval_s=20))
+    _APP_STATE["telegram_task"] = asyncio.create_task(telegram_dialog.dialog_loop(_APP_STATE["stop_event"]))
     health_task = asyncio.create_task(
         health_check.health_loop(_APP_STATE["stop_event"], interval_s=interval)
     )

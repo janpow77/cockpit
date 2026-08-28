@@ -300,3 +300,10 @@ def test_pr_befehl_und_body():
 def test_pr_checks_kurz():
     assert svc.pr_checks_kurz("build\tpass\t1m2s\thttps://x\ntests\tfail\t30s\thttps://y\nlint\tpending\t0\thttps://z\n") == "1 grün · 1 rot · 1 läuft"
     assert svc.pr_checks_kurz("no checks reported on the 'auftrag/x' branch\n") == "keine Checks"
+
+
+def test_claude_permission_denials_als_verweigert():
+    roh = json.dumps({"type": "result", "subtype": "success", "result": "Ich konnte npm test nicht ausführen.", "session_id": "s1",
+                      "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}], "usage": {"input_tokens": 1, "output_tokens": 1}})
+    erg = svc.ergebnis_aus_log(roh)
+    assert erg["verweigert"] == ["Bash(npm test)"]

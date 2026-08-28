@@ -603,6 +603,12 @@ def ergebnis_aus_log(roh: str, agent: str = "claude") -> dict | None:
         "turns": letztes.get("num_turns"),
         "session_id": letztes.get("session_id") or session_id,
         "dauer_ms": letztes.get("duration_ms"),
+        # Werkzeuge, die Claude ohne Freigabe nicht ausführen durfte (dontAsk/acceptEdits verweigern still)
+        "verweigert": [
+            str(d.get("tool_name") or d.get("tool") or "?")
+            + (f"({str((d.get('tool_input') or {}).get('command') or '')[:60]})" if isinstance(d.get("tool_input"), dict) and (d.get("tool_input") or {}).get("command") else "")
+            for d in (letztes.get("permission_denials") or []) if isinstance(d, dict)
+        ],
     }
 
 
@@ -960,6 +966,12 @@ def stand_pruefen(session: Session, a: AuftragRow, github_url: str | None = None
     except Exception as exc:  # noqa: BLE001
         log.warning("Auftrag %s Abschluss: %s", a.id, exc)
     felder["status"] = status_nach_erfolg(a, felder.get("ergebnis"))
+    verweigert = erg.get("verweigert") or []
+    if verweigert and felder["status"] == "fertig":
+        # Claude hat Werkzeuge ohne Freigabe nicht ausführen dürfen – als Rückfrage „Berechtigung“ zeigen
+        felder["status"] = "rueckfrage"
+        felder["ergebnis"] = "Berechtigung verweigert für: " + ", ".join(verweigert[:6]) + " – Profil erhöhen und fortsetzen?\n\n" + (felder.get("ergebnis") or "")
+        felder["letzte_zeile"] = "Rückfrage: Berechtigung"
     if felder["status"] == "freigabe":
         felder["letzte_zeile"] = "Plan liegt vor – Freigabe im Kanban"
     a = aendern(session, a, **felder)

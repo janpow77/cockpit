@@ -111,6 +111,8 @@ DEFAULT_KIRA: dict[str, Any] = {
 
 # Push-Alarme per Telegram (Bot-Token und Chat-ID im Vault). Nachts nur Kritisches.
 DEFAULT_PUSH: dict[str, Any] = {
+    # Telegram-Dialog (Schaltflächen, Antworten per Reply, Kommandos) – nur auf der Instanz mit aktivem Push
+    "dialog": {"aktiv": True, "erlaubte_user_ids": [], "kuerzen": True},
     "aktiv": True,
     "kanal": "telegram",
     "token_secret": "telegram_bot_token",

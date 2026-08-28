@@ -58,6 +58,15 @@ async def _pushen(session: Session, a, cfg: wc.WallConfig) -> None:
     pcfg = cfg.push or {}
     if not pcfg.get("aktiv"):
         return
+    dialog = pcfg.get("dialog") if isinstance(pcfg.get("dialog"), dict) else {}
+    if dialog.get("aktiv", True) and a.status in ("freigabe", "rueckfrage", "unterbrochen", "fertig", "fehler", "abgebrochen"):
+        from . import telegram_dialog
+
+        try:
+            if await telegram_dialog.ereignis_senden(session, a, cfg):
+                return
+        except Exception as exc:  # noqa: BLE001 - dann klassischer Push
+            log.warning("Telegram-Dialog senden: %s", exc)
     token = _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
     chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
     if not token or not chat_id:

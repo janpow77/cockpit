@@ -178,6 +178,18 @@ class AuftragRow(Base):
     aktualisiert = Column(String, nullable=False)
 
 
+class TelegramNachrichtRow(Base):
+    """Telegram-Nachricht des Cockpits → Auftrag (Antworten per Reply landen beim richtigen Auftrag)."""
+
+    __tablename__ = "cockpit_telegram"
+
+    message_id = Column(Integer, primary_key=True)
+    chat_id = Column(String, primary_key=True)
+    auftrag_id = Column(String, nullable=False)
+    art = Column(String, nullable=False)
+    erstellt = Column(String, nullable=False)
+
+
 class WallSampleRow(Base):
     """Verlauf der Wand: ein Wert je Kennzahl und Lauf (services/verlauf.py)."""
 
