@@ -13,7 +13,7 @@ type DienstKey = 'claude' | 'codex' | 'gemini'
 const DIENSTE: { key: DienstKey; titel: string; sub: string; quelle: string; verlaufKeys: [string, string][] }[] = [
   { key: 'claude', titel: 'Claude', sub: 'Claude Code · Anthropic', quelle: 'Auslastung über die Anmeldung von Claude Code, Tokens aus den Sitzungsprotokollen', verlaufKeys: [['ki.claude.five_hour', '5 Stunden'], ['ki.claude.seven_day', '7 Tage']] },
   { key: 'codex', titel: 'Codex', sub: 'ChatGPT · OpenAI', quelle: 'Limits und Tokens aus den Codex-Sitzungen (Stand der letzten Sitzung)', verlaufKeys: [['ki.codex.primary', 'Wochenfenster']] },
-  { key: 'gemini', titel: 'Gemini', sub: 'Gemini CLI · Google', quelle: 'Gemini legt keine Nutzungsdaten ab – Limits nur in der App sichtbar', verlaufKeys: [] },
+  { key: 'gemini', titel: 'Gemini', sub: 'Antigravity CLI (agy) · Google-Abo', quelle: 'agy legt keine Nutzungsdaten ab – Kontingent nur in agy (/usage) sichtbar', verlaufKeys: [] },
 ]
 
 const ki = ref<KiNutzung | null>(null)
