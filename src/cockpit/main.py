@@ -27,10 +27,13 @@ from .routes.apps import router as apps_router
 from .routes.audit import router as audit_router
 from .routes.auth import router as auth_router
 from .routes.backups import router as backups_router
+from .routes.chat import router as chat_router
 from .routes.dashboard import router as dashboard_router
 from .routes.deployments import router as deployments_router
 from .routes.github import router as github_router
 from .routes.hosts import router as hosts_router
+from .routes.mcp import router as mcp_router
+from .routes.overview import router as overview_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
 from .routes.traffic import router as traffic_router
@@ -164,6 +167,9 @@ app.include_router(audit_router)
 app.include_router(settings_router)
 app.include_router(traffic_router)
 app.include_router(deployments_router)
+app.include_router(overview_router)
+app.include_router(chat_router)
+app.include_router(mcp_router)
 
 
 # ---------------------------- SPA ----------------------------------------

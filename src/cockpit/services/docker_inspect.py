@@ -62,6 +62,11 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
 
     result = run_on_host(host, cmd, timeout=15)
     if not result.ok:
+        if result.exit_code == 127:
+            # Host ohne Docker (z. B. MacBook): kein Fehler, nur keine Container
+            log.debug("kein docker auf %s", host.name)
+            _store(host.id, filter_expr, [])
+            return []
         log.warning("docker ps fehlgeschlagen auf %s: rc=%d err=%s", host.name, result.exit_code, result.stderr[:200])
         empty: list[dict] = []
         _store(host.id, filter_expr, empty)
@@ -74,6 +79,7 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
             continue
         try:
             obj = json.loads(line)
+            labels = _parse_labels(obj.get("Labels", ""))
             containers.append({
                 "name": obj.get("Names", ""),
                 "image": obj.get("Image", ""),
@@ -81,11 +87,58 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
                 "status": obj.get("Status", ""),
                 "ports": obj.get("Ports", ""),
                 "id": obj.get("ID", ""),
+                # Compose-Projekt/-Service: Grundlage der automatischen
+                # Gruppierung auf der Wand (Projekte je Host ohne Registrierung).
+                "project": labels.get("com.docker.compose.project", ""),
+                "service": labels.get("com.docker.compose.service", ""),
             })
         except (json.JSONDecodeError, AttributeError):
             continue
     _store(host.id, filter_expr, containers)
     return containers
+
+
+def _parse_labels(raw: str) -> dict[str, str]:
+    """'a=1,b=2' (docker ps --format json) -> {'a': '1', 'b': '2'}."""
+    out: dict[str, str] = {}
+    for part in (raw or "").split(","):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def projects_on_host(host: HostRow, *, refresh: bool = False) -> list[dict]:
+    """Gruppiert alle Container eines Hosts nach Compose-Projekt.
+
+    Container ohne Projekt-Label bilden je Container ein eigenes 'Projekt'
+    (Name = Containername). Ergebnis je Projekt: {name, containers, running,
+    status, names} - Status wie summarize_app.
+    """
+    containers = list_containers(host, filter_expr="", refresh=refresh)
+    gruppen: dict[str, list[dict]] = {}
+    for c in containers:
+        key = c.get("project") or c.get("name") or "?"
+        gruppen.setdefault(key, []).append(c)
+    projekte: list[dict] = []
+    for name, cs in sorted(gruppen.items(), key=lambda kv: kv[0].lower()):
+        running = sum(1 for c in cs if c.get("state") == "running")
+        if running == len(cs):
+            status = "healthy"
+        elif running == 0:
+            status = "down"
+        else:
+            status = "degraded"
+        projekte.append({
+            "name": name,
+            "containers": len(cs),
+            "running": running,
+            "status": status,
+            "names": [c.get("name", "") for c in cs],
+            "container_rows": [{"name": c.get("name", ""), "service": c.get("service", ""), "ports": c.get("ports", ""), "state": c.get("state", "")} for c in cs],
+            "images": sorted({(c.get("image") or "").split("@")[0] for c in cs})[:6],
+        })
+    return projekte
 
 
 def summarize_app(host: HostRow, *, filter_expr: str) -> dict:
@@ -128,6 +181,45 @@ def restart_app(host: HostRow, *, compose_path: str | None, container_filter: st
         "ok": result.ok,
         "log": (result.stdout + result.stderr)[-2000:],
         "error": None if result.ok else (result.stderr or f"rc={result.exit_code}")[:200],
+    }
+
+
+def deploy_app(
+    host: HostRow,
+    *,
+    compose_path: str | None,
+    force_recreate: bool = False,
+    pull: bool = True,
+) -> dict:
+    """Image-Update: ``docker compose pull`` + ``up -d`` (optional ``--force-recreate``).
+
+    Im Gegensatz zu ``restart_app`` aktualisiert dies die Images (pull) und
+    erzeugt Container neu — der kanonische Deploy-Schritt (siehe
+    cockpit/docs/system-landschaft.md). Erfordert ``compose_path``: ohne Compose
+    ist ein deterministisches pull/up nicht moeglich. Liefert ``{ok, log, error}``.
+    """
+    if not compose_path:
+        return {"ok": False, "log": "", "error": "deploy erfordert compose_path"}
+
+    work_dir = compose_path.rsplit("/", 1)[0]
+    base = f"docker compose -f {shlex.quote(compose_path)}"
+    parts = [f"cd {shlex.quote(work_dir)}"]
+    if pull:
+        parts.append(f"{base} pull")
+    up = f"{base} up -d"
+    if force_recreate:
+        up += " --force-recreate"
+    parts.append(up)
+    cmd = " && ".join(parts)
+
+    # pull + up koennen laenger dauern (Images ziehen) -> grosszuegiger Timeout
+    result = run_on_host(host, cmd, timeout=600)
+
+    invalidate_cache(host.id)
+    return {
+        "ok": result.ok,
+        "log": (result.stdout + result.stderr)[-4000:],
+        "error": None if result.ok else (result.stderr or f"rc={result.exit_code}")[:300],
     }
 
 

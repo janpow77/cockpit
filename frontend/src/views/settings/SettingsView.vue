@@ -9,6 +9,7 @@ import { useToastStore } from '../../stores/toast'
 import { extractError } from '../../api/client'
 import { formatDuration } from '../../utils/format'
 import type { Settings } from '../../api/types'
+import WallSettingsCard from '../../components/settings/WallSettingsCard.vue'
 
 const toast = useToastStore()
 const settings = ref<Settings | null>(null)
@@ -114,5 +115,7 @@ async function save() {
         </div>
       </div>
     </Card>
+
+    <WallSettingsCard />
   </div>
 </template>

@@ -26,3 +26,7 @@ data/
 
 # OS
 .DS_Store
+
+# Lokaler Test-Build (im Image wird /app/frontend_dist im Docker-Build erzeugt)
+frontend_dist/
+graphify-out/

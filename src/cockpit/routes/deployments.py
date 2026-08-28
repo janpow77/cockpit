@@ -6,8 +6,12 @@ import os
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from ..auth import client_ip, lookup_session, require_auth
-from ..auth import _extract_token  # noqa: F401  (intern, fuer Hook-Auth)
+from ..auth import (
+    _extract_token,  # noqa: F401  (intern, fuer Hook-Auth)
+    client_ip,
+    lookup_session,
+    require_auth,
+)
 from ..crud import apps as crud_apps
 from ..crud import deployments as crud_deployments
 from ..db import get_session

@@ -15,11 +15,11 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = getToken()
   }
 
-  async function login(password: string): Promise<boolean> {
+  async function login(username: string, password: string): Promise<boolean> {
     loading.value = true
     error.value = null
     try {
-      const result = await authApi.login(password)
+      const result = await authApi.login(username, password)
       token.value = result.token
       expiresAt.value = result.expires_at
       setToken(result.token)

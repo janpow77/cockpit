@@ -4,9 +4,9 @@ import { mock } from './mock'
 export interface LoginResponse { token: string; expires_at: string }
 export interface MeResponse { logged_in: boolean; expires_at: string }
 
-export async function login(password: string): Promise<LoginResponse> {
+export async function login(username: string, password: string): Promise<LoginResponse> {
   if (USE_MOCKS) return mock.login(password)
-  const { data } = await client.post<LoginResponse>('/auth/login', { password })
+  const { data } = await client.post<LoginResponse>('/auth/login', { username, password })
   return data
 }
 

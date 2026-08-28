@@ -198,6 +198,7 @@ class DeploymentRow(Base):
 
 # --------- Auth ---------
 class LoginRequest(BaseModel):
+    username: str | None = None  # fehlt -> "admin" (Skripte, Altbestand)
     password: str
 
 

@@ -2,7 +2,7 @@
 import { RouterLink } from 'vue-router'
 import {
   LayoutDashboard, Server, AppWindow, Github, Database, KeyRound, History, Settings, Plane,
-  Activity, Rocket,
+  Activity, Rocket, Radar, MessageSquare, Plug,
 } from 'lucide-vue-next'
 
 const items = [
@@ -15,6 +15,9 @@ const items = [
   { to: '/backups', label: 'Backups', icon: Database },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },
   { to: '/audit', label: 'Audit', icon: History },
+  { to: '/wall', label: 'Wand', icon: Radar },
+  { to: '/chat', label: 'KI-Konsole', icon: MessageSquare },
+  { to: '/mcp', label: 'MCP-Server', icon: Plug },
   { to: '/settings', label: 'Einstellungen', icon: Settings },
 ]
 </script>
@@ -51,7 +54,7 @@ const items = [
     </nav>
 
     <div class="px-5 py-3 border-t border-slate-200/70 dark:border-slate-800/70 text-xs text-slate-500 dark:text-slate-500">
-      <p>v0.1.0 · Phase 1</p>
+      <p>v0.3.13 · Wand, KI-Konsole, MCP</p>
     </div>
   </aside>
 </template>

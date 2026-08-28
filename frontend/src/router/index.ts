@@ -22,9 +22,13 @@ const routes: RouteRecordRaw[] = [
       { path: 'backups', name: 'backups', component: () => import('../views/backups/BackupsView.vue') },
       { path: 'secrets', name: 'secrets', component: () => import('../views/secrets/SecretsView.vue') },
       { path: 'audit', name: 'audit', component: () => import('../views/audit/AuditView.vue') },
+      { path: 'mcp', name: 'mcp', component: () => import('../views/mcp/McpView.vue') },
       { path: 'settings', name: 'settings', component: () => import('../views/settings/SettingsView.vue') },
     ],
   },
+  // Wand und KI-Konsole laufen ohne Sidebar (Vollbild), aber mit Anmeldung.
+  { path: '/wall', name: 'wall', component: () => import('../views/WallView.vue') },
+  { path: '/chat', name: 'chat', component: () => import('../views/ChatView.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
