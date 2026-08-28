@@ -186,11 +186,11 @@ def test_agy_befehl():
     a = _auftrag(agent="gemini", profil="bearbeiten_tests", modus="umsetzen", session_id="conv-1")
     cmd = svc.agent_befehl(a, bins={"gemini": "/home/janpow/.local/bin/agy"}, text="x", resume=True, pfade=p)
     assert cmd.startswith("/home/janpow/.local/bin/agy -p ") and "--output-format stream-json" in cmd
-    assert "--sandbox" in cmd and "--conversation conv-1" in cmd and "--mode accept-edits" in cmd and "dangerously" not in cmd
+    assert "--conversation conv-1" in cmd and "--mode accept-edits" in cmd and "dangerously" not in cmd and "--sandbox" not in cmd
     lese = svc.agent_befehl(_auftrag(agent="gemini", modus="bericht"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
     assert "--mode plan" in lese and "--dangerously-skip-permissions" not in lese
     voll = svc.agent_befehl(_auftrag(agent="gemini", profil="voll"), bins={"gemini": "/x/agy"}, text="x", resume=False, pfade=p)
-    assert "--dangerously-skip-permissions" in voll and "--sandbox" in voll
+    assert "--dangerously-skip-permissions" in voll
 
 
 def test_vorlagen_haben_modus():
@@ -200,3 +200,22 @@ def test_vorlagen_haben_modus():
     ids = {v["id"] for v in auftrag_vorlagen.vorlagen()}
     for erwartet in ("icons-vereinheitlichen", "uebersetzen", "design-vereinheitlichen", "tabellen-export", "formulare", "mobil", "benennung", "zustaende", "datenqualitaet"):
         assert erwartet in ids
+
+
+def test_log_zeilen_agy():
+    roh = "\n".join(json.dumps(z) for z in [
+        {"event": "init", "conversation_id": "ac7fdff7-c819", "init": {"cwd": "/x", "permission_mode": "request-review", "tools": ["run_command"]}},
+        {"event": "step_update", "step_update": {"conversation_id": "ac7fdff7-c819", "step_index": 1, "state": "DONE", "step_type": "agent_response", "usage": {"input_tokens": 100, "output_tokens": 10}}},
+        {"event": "step_update", "step_update": {"conversation_id": "ac7fdff7-c819", "step_index": 2, "state": "ACTIVE", "step_type": "tool", "tool_name": "run_command", "tool_info": {"name": "run_command", "parameters": {"CommandLine": "cat calc.py"}}}},
+        {"event": "step_update", "step_update": {"conversation_id": "ac7fdff7-c819", "step_index": 2, "state": "DONE", "step_type": "tool", "tool_name": "run_command"}},
+        {"event": "result", "result": {"conversation_id": "ac7fdff7-c819", "status": "DONE", "response": "add gibt die Summe zurück.", "num_turns": 1, "usage": {"input_tokens": 36040, "output_tokens": 773, "thinking_tokens": 457, "cache_read_tokens": 48783}}},
+    ])
+    zeilen = svc.log_zeilen(roh, agent="gemini")
+    assert [z["art"] for z in zeilen] == ["system", "tool", "result"]
+    assert zeilen[1]["text"] == "run_command: cat calc.py"
+    erg = svc.ergebnis_aus_log(roh, agent="gemini")
+    assert erg["session_id"] == "ac7fdff7-c819" and erg["ergebnis"] == "add gibt die Summe zurück."
+    assert erg["tokens_in"] == 36040 + 48783 and erg["tokens_out"] == 773 + 457 and erg["fehler"] is None
+    abgebrochen = json.dumps({"event": "result", "result": {"conversation_id": "c1", "status": "CANCELED", "response": "", "usage": {"output_tokens": 5}}})
+    e2 = svc.ergebnis_aus_log(abgebrochen, agent="gemini")
+    assert e2["fehler"] and "Werkzeugfreigabe" in e2["fehler"] and e2["ergebnis"] is None

@@ -445,3 +445,19 @@ fehlgeschlagene Aktionen, Control Plane weg → Warnung; wartende Aktionen → I
 uv, caddy; EVO: restic, rclone, nvidia-smi, node, npm, gh; Hetzner: nvidia-smi, uv; janpow-ai:
 uv, caddy), einziger nicht-grüner Check „Wissensbasis-Harvest“ (Endpunkt verlangt Anmeldung,
 HTTP 401); die Host-Agenten liefern kein graphify-Feld (`/graphify/status` leer).
+
+**Gemini über das Abo mit agy (v0.4.8, 28.08.2026):** Antigravity CLI 1.1.22 auf dem NUC
+installiert (`~/.local/bin/agy`, Anmeldung per Google-OAuth in einer tmux-Sitzung, Code aus
+dem Browser eingefügt). Headless: `agy -p … --output-format stream-json --mode plan|accept-edits`,
+Fortsetzung `--conversation <id>`; Ereignisse `event: init` (conversation_id, permission_mode),
+`step_update` (step_type tool mit tool_name/tool_info.parameters.CommandLine, agent_response mit
+usage), `result` (status SUCCESS|CANCELED, response, usage input/output/thinking/cache_read).
+Im Druckmodus kann agy keine Freigaben erfragen – ohne Regeln endet der Lauf mit
+`CANCELED` und leerer Antwort („no output produced — a tool required the … permission“).
+Deshalb `~/.gemini/antigravity-cli/settings.json` → `permissions.allow` mit 27 Regeln:
+Lesen (`read_file(/)`, `view_file(/)`, `list_dir(/)`, `grep_search(/)`, `find_by_name(/)`),
+Kommandos (`command(git)`, `command(rg)`, `command(cat)`, `command(sed)`, …,
+`command(gh (pr|issue|run|api|repo))`, `command(npm run (build|lint|test|type-check|format:check))`,
+`command(pytest)`, `command(ruff)`). `--sandbox` scheitert auf dem NUC („connecting to
+sandbox server … connection reset“) und bleibt weg. `agent_bins.gemini` zeigt auf beiden
+Instanzen auf agy. Gemini CLI 0.46 bleibt installiert, wird aber nicht mehr benutzt.

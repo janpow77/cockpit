@@ -30,13 +30,14 @@ STATUS = ("eingang", "geplant", "laeuft", "rueckfrage", "freigabe", "fertig", "f
 AGENTEN = ("claude", "codex", "gemini")
 # Modus: nur berichten/planen · Plan zeigen und erst nach Freigabe umsetzen · direkt umsetzen
 MODI = ("bericht", "plan_freigabe", "umsetzen")
-# Antigravity CLI (agy 1.1.22, Google-Abo): --mode plan (nur lesen/planen) bzw. accept-edits (Dateiänderungen ohne Nachfrage),
-# Terminal-Sandbox immer an; nur "voll" darf alle Werkzeugfreigaben automatisch erteilen
+# Antigravity CLI (agy 1.1.22, Google-Abo): --mode plan (nur lesen/planen) bzw. accept-edits (Dateiänderungen ohne Nachfrage).
+# Kommandos/Lesen im Druckmodus nur per Allow-Regeln in ~/.gemini/antigravity-cli/settings.json (permissions.allow);
+# --sandbox scheitert auf dem NUC (Sandbox-Server nicht erreichbar). Nur "voll" darf alle Freigaben automatisch erteilen.
 PROFILE_AGY: dict[str, str] = {
-    "lesen": "--mode plan --sandbox",
-    "bearbeiten": "--mode accept-edits --sandbox",
-    "bearbeiten_tests": "--mode accept-edits --sandbox",
-    "voll": "--sandbox --dangerously-skip-permissions",
+    "lesen": "--mode plan",
+    "bearbeiten": "--mode accept-edits",
+    "bearbeiten_tests": "--mode accept-edits",
+    "voll": "--dangerously-skip-permissions",
 }
 # Profile je Agent (nie Bypass-Flags):
 PROFILE_CODEX: dict[str, str] = {
@@ -340,8 +341,35 @@ def _codex_zeile(d: dict) -> dict | None:
     return None
 
 
+def _agy_zeile(d: dict) -> dict | None:
+    """Antigravity CLI (agy) stream-json: event init / step_update (tool, agent_response) / result."""
+    ev = d.get("event")
+    if ev == "init":
+        return {"ts": None, "art": "system", "text": f"agy-Sitzung {str(d.get('conversation_id', ''))[:8]} · Modus {(d.get('init') or {}).get('permission_mode', '?')}"}
+    if ev == "step_update":
+        su = d.get("step_update") or {}
+        if su.get("step_type") == "tool" and su.get("state") == "ACTIVE":
+            params = ((su.get("tool_info") or {}).get("parameters") or {})
+            kurz = params.get("CommandLine") or params.get("AbsolutePath") or params.get("Pattern") or params.get("Query") or json.dumps(params, ensure_ascii=False)
+            return {"ts": None, "art": "tool", "text": f"{su.get('tool_name')}: {str(kurz)[:200]}"}
+        text = su.get("text") or su.get("delta") or su.get("content")
+        if su.get("step_type") == "agent_response" and isinstance(text, str) and text.strip():
+            return {"ts": None, "art": "text", "text": text.strip()[:1500]}
+        return None
+    if ev == "result":
+        r = d.get("result") or {}
+        u = r.get("usage") or {}
+        status = str(r.get("status") or "")
+        if status in ("CANCELED", "FAILED", "ERROR") and not (r.get("response") or "").strip():
+            return {"ts": None, "art": "fehler", "text": f"agy: {status} ohne Antwort (Werkzeugfreigabe fehlt? Regeln in ~/.gemini/antigravity-cli/settings.json)"}
+        return {"ts": None, "art": "result", "text": f"{str(r.get('response') or '').strip()[:3000]}  ·  {u.get('output_tokens', 0)} Ausgabe-Tokens"}
+    return None
+
+
 def _gemini_zeile(d: dict) -> dict | None:
-    """Gemini CLI stream-json (Format variiert je Version): Text, Werkzeuge, Ergebnis generisch."""
+    """Gemini CLI stream-json (Format variiert je Version) bzw. agy: Text, Werkzeuge, Ergebnis generisch."""
+    if "event" in d and ("step_update" in d or "init" in d or "result" in d):
+        return _agy_zeile(d)
     typ = str(d.get("type") or d.get("event") or "")
     if typ in ("init", "session"):
         return {"ts": None, "art": "system", "text": f"Gemini-Sitzung {str(d.get('session_id', ''))[:8]}"}
@@ -438,6 +466,7 @@ def _ergebnis_gemini(roh: str) -> dict | None:
     text = None
     fehler = None
     stats: dict = {}
+    agy_usage: dict | None = None
     for line in roh.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -445,6 +474,19 @@ def _ergebnis_gemini(roh: str) -> dict | None:
         try:
             d = json.loads(line)
         except ValueError:
+            continue
+        if d.get("event") == "result" and isinstance(d.get("result"), dict):
+            r = d["result"]
+            sid = r.get("conversation_id") or sid
+            agy_usage = r.get("usage") or agy_usage
+            antwort = str(r.get("response") or "").strip()
+            if antwort:
+                text = antwort
+            elif str(r.get("status") or "") in ("CANCELED", "FAILED", "ERROR"):
+                fehler = f"agy: {r.get('status')} ohne Antwort (Werkzeugfreigabe fehlt? Regeln in ~/.gemini/antigravity-cli/settings.json)"
+            continue
+        if d.get("event") == "init":
+            sid = d.get("conversation_id") or sid
             continue
         typ = str(d.get("type") or d.get("event") or "")
         if d.get("conversation_id") or (typ in ("init", "session") and d.get("session_id")):
@@ -460,6 +502,11 @@ def _ergebnis_gemini(roh: str) -> dict | None:
             stats = d["stats"]
     if sid is None and text is None and not fehler:
         return None
+    if agy_usage is not None:
+        return {"ergebnis": text, "fehler": fehler, "subtype": None, "kosten_usd": None,
+                "tokens_in": (agy_usage.get("input_tokens") or 0) + (agy_usage.get("cache_read_tokens") or 0) or None,
+                "tokens_out": (agy_usage.get("output_tokens") or 0) + (agy_usage.get("thinking_tokens") or 0) or None,
+                "turns": None, "session_id": sid, "dauer_ms": None}
     tok = stats.get("total_tokens") or stats.get("tokens") or {}
     return {"ergebnis": text, "fehler": fehler, "subtype": None, "kosten_usd": None,
             "tokens_in": (tok.get("input") if isinstance(tok, dict) else None), "tokens_out": (tok.get("output") if isinstance(tok, dict) else None),
