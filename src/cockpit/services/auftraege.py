@@ -306,13 +306,19 @@ def stand_befehl(a: AuftragRow, zeilen: int = 60) -> str:
     return f"echo \"DONE=$(cat {shlex.quote(p['done'])} 2>/dev/null)\"; tail -n {int(zeilen)} {shlex.quote(p['log'])} 2>/dev/null; echo '---STDERR---'; tail -n 5 {shlex.quote(p['stderr'])} 2>/dev/null"
 
 
+# Dateien, die Commit-Hooks des Nutzers (graphify) im Worktree neu erzeugen – gehören nicht in den Abschluss-Commit
+HOOK_ARTEFAKTE = ("ARCHITEKTUR.md", "ARCHITECTURE.md", "graphify-out")
+
+
 def abschluss_befehl(a: AuftragRow) -> str:
-    """Aenderungen im Worktree committen und Kennzahlen des Diffs liefern."""
+    """Aenderungen im Worktree committen (ohne Hook-Artefakte, ohne eigene Hooks) und Kennzahlen des Diffs liefern."""
     p = _lauf_pfade(a)
     msg = f"auftrag {a.id}: {a.titel}"[:120]
+    ausnahmen = " ".join(shlex.quote(f":!{x}") for x in HOOK_ARTEFAKTE)
+    zuruecksetzen = " ".join(shlex.quote(x) for x in HOOK_ARTEFAKTE)
     return (
-        f"cd {shlex.quote(p['worktree'])} && git add -A && "
-        f"(git diff --cached --quiet || git -c user.name=cockpit -c user.email=cockpit@flowaudit.de commit -q -m {shlex.quote(msg)}) ; "
+        f"cd {shlex.quote(p['worktree'])} && git checkout -q -- {zuruecksetzen} 2>/dev/null; git add -A -- . {ausnahmen} && "
+        f"(git diff --cached --quiet || git -c core.hooksPath=/dev/null -c user.name=cockpit -c user.email=cockpit@flowaudit.de commit -q -m {shlex.quote(msg)}) ; "
         "echo \"COMMITS=$(git rev-list --count HEAD ^$(git merge-base HEAD $(git rev-parse --abbrev-ref HEAD@{upstream} 2>/dev/null || echo master) 2>/dev/null || echo HEAD) 2>/dev/null)\"; "
         "echo \"HEAD=$(git rev-parse --short HEAD)\"; git diff --shortstat HEAD~1 HEAD 2>/dev/null | head -1"
     )

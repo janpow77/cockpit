@@ -221,3 +221,9 @@ def test_log_zeilen_agy():
     abgebrochen = json.dumps({"event": "result", "result": {"conversation_id": "c1", "status": "CANCELED", "response": "", "usage": {"output_tokens": 5}}})
     e2 = svc.ergebnis_aus_log(abgebrochen, agent="gemini")
     assert e2["fehler"] and "Werkzeugfreigabe" in e2["fehler"] and e2["ergebnis"] is None
+
+
+def test_abschluss_ohne_hook_artefakte():
+    cmd = svc.abschluss_befehl(_auftrag())
+    assert "':!ARCHITEKTUR.md'" in cmd and "git checkout -q -- ARCHITEKTUR.md" in cmd
+    assert "-c core.hooksPath=/dev/null" in cmd and "git add -A -- ." in cmd
