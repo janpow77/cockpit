@@ -53,7 +53,7 @@ _CMD = (
     "echo gpu $(cat \"$d/gpu_busy_percent\") $((u/1048576)) $((t/1048576)); done 2>/dev/null; fi; "
     # tmux-Sitzungen des SSH-Nutzers: je Fenster eine Tab-getrennte Zeile
     # Kein tmux-Server ist kein Fehler: Exit-Code der Sonde bleibt 0
-    "tmux list-windows -a -F 'tmuxw\t#{session_name}\t#{window_name}\t#{window_active}\t#{pane_current_command}\t#{session_attached}\t#{session_created}\\t#{window_index}' 2>/dev/null || true; true"
+    "tmux list-windows -a -F 'tmuxw\t#{session_name}\t#{window_name}\t#{window_active}\t#{pane_current_command}\t#{session_attached}\t#{session_created}\t#{window_index}' 2>/dev/null || true; true"
 )
 
 
