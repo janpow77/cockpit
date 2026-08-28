@@ -37,3 +37,20 @@ def test_json_aus_toolresult_verschachtelt():
     res = {"content": [{"type": "text", "text": "{\"result\": \"{\\\"results\\\": [{\\\"id\\\": \\\"1\\\"}]}\"}"}]}
     assert rag._json_aus_toolresult(res) == {"results": [{"id": "1"}]}
     assert rag._json_aus_toolresult({"content": [{"type": "text", "text": "kein json"}]}) is None
+
+
+def test_schwellen_und_dubletten():
+    mem = [
+        {"id": "a", "category": "reference", "content": "Treffer", "score": 0.7},
+        {"id": "a", "category": "reference", "content": "Treffer", "score": 0.7},
+        {"id": "b", "category": "solution", "content": "Rauschen", "score": 0.21},
+    ]
+    q = rag.memory_quellen(mem, limit=6, hide=[])
+    assert [x["id"] for x in q] == ["a"]
+    know = [
+        {"chunk_id": "c1", "titel": "Drucksache", "auszug": "Art. 14 …", "score": 0.58},
+        {"chunk_id": "c2", "titel": "VO 2021/1060", "auszug": "Artikel 74 …", "score": 0.71},
+        {"chunk_id": "c2", "titel": "VO 2021/1060", "auszug": "Artikel 74 …", "score": 0.71},
+    ]
+    assert [x["id"] for x in rag.knowledge_quellen(know, limit=4)] == ["c2"]
+    assert len(rag.knowledge_quellen(know, limit=4, min_score=rag.MIN_SCORE_KNOWLEDGE_ONLY)) == 2

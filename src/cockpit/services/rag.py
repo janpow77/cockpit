@@ -30,6 +30,12 @@ MAX_QUERY = 500
 MAX_TEXT_MEMORY = 1200
 MAX_TEXT_KNOWLEDGE = 1000
 MCP_TIMEOUT = 25.0
+# Relevanzschwellen (gemessen 27.08.2026): passende Gedaechtnis-Treffer liegen bei 0,5-0,9,
+# Rauschen bei 0,2-0,3; die Wissensbasis liefert fuer fachfremde Fragen ~0,57-0,58 (irrelevant),
+# fuer passende Rechtsfragen >= 0,65. Ohne Schwellen verwaesserte Fachfremdes die Antworten.
+MIN_SCORE_MEMORY = 0.32
+MIN_SCORE_KNOWLEDGE_BOTH = 0.62
+MIN_SCORE_KNOWLEDGE_ONLY = 0.50
 
 
 # ---------------------------------------------------------------------------
@@ -51,16 +57,23 @@ def _kurz(text: str, n: int) -> str:
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 
-def memory_quellen(results: list[dict], limit: int, hide: list[str]) -> list[dict]:
-    """Treffer der Memory-Suche → Quellen; Protokoll-Kategorien und private Projekte bleiben weg."""
+def memory_quellen(results: list[dict], limit: int, hide: list[str], min_score: float = MIN_SCORE_MEMORY) -> list[dict]:
+    """Treffer der Memory-Suche → Quellen; Protokoll-Kategorien, private Projekte, Rauschen und Dubletten bleiben weg."""
     from . import wall_config as wc
 
     out: list[dict] = []
+    gesehen: set[str] = set()
     for r in results:
         if not isinstance(r, dict):
             continue
         if r.get("category") in ("session_log", "transcript"):
             continue
+        if r.get("score") is not None and float(r["score"]) < min_score:
+            continue
+        kennung = str(r.get("id") or (r.get("content") or "")[:80])
+        if kennung in gesehen:
+            continue
+        gesehen.add(kennung)
         project = str(r.get("project") or "")
         content = str(r.get("summary") or r.get("content") or "")
         if wc.is_hidden(project, hide) or wc.is_hidden(content, hide):
@@ -82,12 +95,19 @@ def memory_quellen(results: list[dict], limit: int, hide: list[str]) -> list[dic
     return out
 
 
-def knowledge_quellen(results: list[dict], limit: int) -> list[dict]:
-    """Treffer der Wissensbasis → Quellen mit Fundstelle (Titel, Artikel, Dokumenttyp)."""
+def knowledge_quellen(results: list[dict], limit: int, min_score: float = MIN_SCORE_KNOWLEDGE_BOTH) -> list[dict]:
+    """Treffer der Wissensbasis → Quellen mit Fundstelle; unter der Schwelle und Dubletten bleiben weg."""
     out: list[dict] = []
+    gesehen: set[str] = set()
     for r in results:
         if not isinstance(r, dict):
             continue
+        if r.get("score") is not None and float(r["score"]) < min_score:
+            continue
+        kennung = str(r.get("chunk_id") or r.get("document_id") or "") + "|" + " ".join(str(r.get("auszug") or "").split())[:120]
+        if kennung in gesehen:
+            continue
+        gesehen.add(kennung)
         titel = str(r.get("titel") or r.get("title") or "Dokument")
         artikel = r.get("artikel")
         ref = " · ".join(x for x in (artikel, r.get("dokumenttyp"), r.get("funding_period")) if x)
@@ -215,7 +235,7 @@ async def suchen(
     async def memory() -> list[dict]:
         if mcp_moeglich:
             try:
-                args: dict[str, Any] = {"query": query, "limit": limit_memory + 4}
+                args: dict[str, Any] = {"query": query, "limit": limit_memory * 3}
                 if project:
                     args["project"] = project
                 obj = await asyncio.to_thread(_mcp_tool, mcp_url, mcp_headers, "memory_search", args)
@@ -227,7 +247,7 @@ async def suchen(
                 hinweise.append(f"MCP: {str(exc)[:80]}")
         if kira_host is not None:
             try:
-                obj = await asyncio.to_thread(_memory_api_suche, kira_host, kira_cfg, query, limit_memory + 4, project)
+                obj = await asyncio.to_thread(_memory_api_suche, kira_host, kira_cfg, query, limit_memory * 3, project)
                 if isinstance(obj, dict) and isinstance(obj.get("results"), list):
                     return memory_quellen(obj["results"], limit_memory, hide)
                 hinweise.append("Memory-API auf dem Kira-Host ohne Antwort")
@@ -244,10 +264,11 @@ async def suchen(
             return []
         try:
             obj = await asyncio.to_thread(
-                _mcp_tool, mcp_url, mcp_headers, "knowledge_search", {"query": query, "limit": limit_knowledge}
+                _mcp_tool, mcp_url, mcp_headers, "knowledge_search", {"query": query, "limit": limit_knowledge * 2}
             )
             if isinstance(obj, dict) and isinstance(obj.get("results"), list):
-                return knowledge_quellen(obj["results"], limit_knowledge)
+                schwelle = MIN_SCORE_KNOWLEDGE_ONLY if modus == "knowledge" else MIN_SCORE_KNOWLEDGE_BOTH
+                return knowledge_quellen(obj["results"], limit_knowledge, min_score=schwelle)
             hinweise.append("Wissensbasis ohne verwertbare Antwort")
         except Exception as exc:  # noqa: BLE001
             log.warning("RAG knowledge_search: %s", exc)

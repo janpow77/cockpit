@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -102,8 +103,13 @@ async def chat(
     # Kira-RAG: die letzte Nutzerfrage wird gesucht, Treffer wandern als Kontext in den Systemprompt
     quellen: list[dict] = []
     rag_note: str | None = None
+    t0 = time.monotonic()
     if req.rag != "off":
-        frage = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
+        # Suchanfrage: die letzte Nutzerfrage, bei Rueckfragen ("und wie ...") plus die davor
+        nutzer = [m.content for m in req.messages if m.role == "user"]
+        frage = nutzer[-1] if nutzer else ""
+        if len(nutzer) > 1 and len(frage) < 80:
+            frage = f"{nutzer[-2]} {frage}"
         mcp_server, mcp_headers = _mcp_zugang(session, cfg)
         kira_host = next((h for h in crud_hosts.list_hosts(session) if h.name == str(cfg.kira.get("host") or "")), None)
         quellen, rag_note = await rag.suchen(
@@ -111,6 +117,12 @@ async def chat(
             mcp_server=mcp_server, mcp_headers=mcp_headers, kira_host=kira_host, kira_cfg=cfg.kira, hide=cfg.hide,
         )
 
+    log.info(
+        "Konsole: modell=%s rag=%s projekt=%s quellen=%d (gedaechtnis %d, wissen %d) suche=%d ms hinweis=%s",
+        req.model, req.rag, req.rag_project or "-", len(quellen),
+        sum(1 for q in quellen if q["quelle"] == "memory"), sum(1 for q in quellen if q["quelle"] == "knowledge"),
+        int((time.monotonic() - t0) * 1000), rag_note or "-",
+    )
     messages: list[dict] = []
     system = (req.system or cfg.chat_system or "").strip()
     kontext = rag.kontext_block(quellen)

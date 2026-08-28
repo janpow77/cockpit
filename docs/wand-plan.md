@@ -262,3 +262,10 @@ Sekunden auf der Hero-Karte, fragt alle 5 s nach und öffnet danach das regulär
 - **Offen (bewusst, Admin-Konfiguration ist Tailscale-only):** Allowlist für konfigurierbare
   URLs (Sonden, Demo, MCP) gegen SSRF/Secret-Abfluss nach Admin-Übernahme; Rate-Limit am
   Login; Cache-Schlüssel mit Konfigurationshash; IPv6-Adressen in internen Links.
+
+**Relevanz (v0.3.14):** Ohne Schwellen verwässerte die Wissensbasis fachfremde Fragen
+(Drucksachen und Jahresberichte mit Score ~0,57 zu einer Frage nach Hetzner-Diensten).
+Jetzt: Gedächtnis ≥ 0,32, Wissensbasis ≥ 0,62 im Modus „Beides“ (≥ 0,50 bei „Wissen“),
+Dubletten je Chunk entfernt, Suchanfrage bei kurzen Rückfragen um die vorige Frage ergänzt,
+Systemprompt mit Glossar (HPP, KPAnG, MTS-K, VerwK, TER/RER). Jede Anfrage schreibt eine
+Protokollzeile („Konsole: modell=… rag=… quellen=… suche=… ms“) ins Container-Log.
