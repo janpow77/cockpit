@@ -142,6 +142,12 @@ DEFAULT_AGENT_BINS: dict[str, str] = {
 # Wöchentliche Vorschlagsläufe (Kanban): Sonntag 01:00 je aktivem Projekt, Ergebnis → Karten im Eingang
 DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": True, "wochentag": 6, "stunde": 1, "agent": "claude"}
 
+# flow-agent (agent.flowaudit.de): Projektinventar/graphify je Host, Lese-Schlüssel im Vault; hosts = flow-agent-Hostname → Cockpit-Host
+DEFAULT_FLOW_AGENT: dict[str, Any] = {
+    "url": "https://agent.flowaudit.de", "secret_key": "flow_agent_read_key",
+    "hosts": {"janpow-NUC15JNLU7X4": "nuc", "cockpit-nbg1-1": "ccx23", "evo2": "evo", "MacBook-Air.local": "macbook", "janpow-ai": "janpow-ai"},
+}
+
 DEFAULT_DEMO: dict[str, Any] = {
     "login_url": "https://hpp.flowaudit.de/api/auth/login",
     "aufbau_url": "https://hpp.flowaudit.de/api/kpang/vollzug/demo/aufbauen",
@@ -222,6 +228,7 @@ class WallConfig:
     ki_nutzung: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KI_NUTZUNG))
     agent_bins: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_AGENT_BINS))
     vorschlaege: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_VORSCHLAEGE))
+    flow_agent: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_FLOW_AGENT))
     auftrag_vorlagen: list[dict[str, Any]] = field(default_factory=list)
     auftrag_parallel: int = 3
     werkstatt_aktiv_tage: int = 14
@@ -239,7 +246,7 @@ class WallConfig:
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
             "push": self.push, "ki_nutzung": self.ki_nutzung, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
-            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege,
+            "agent_bins": self.agent_bins, "auftrag_vorlagen": self.auftrag_vorlagen, "auftrag_parallel": self.auftrag_parallel, "vorschlaege": self.vorschlaege, "flow_agent": self.flow_agent,
             "verlauf_tage": self.verlauf_tage, "chat_max_tokens": self.chat_max_tokens,
         }
 
@@ -273,7 +280,7 @@ def load(session: Session) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent"):
         if isinstance(raw.get(name), dict):
             setattr(cfg, name, raw[name])
     if isinstance(raw.get("auftrag_vorlagen"), list):
@@ -298,7 +305,7 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent"):
         if isinstance(patch.get(name), dict):
             raw[name] = patch[name]
     if isinstance(patch.get("auftrag_vorlagen"), list):

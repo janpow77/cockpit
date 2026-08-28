@@ -415,3 +415,14 @@ Schreibprofile, da der Druckmodus keine Regel-Freigaben kennt]`, Fortsetzung
 `--conversation <id>`; sonst klassisch `gemini -p … -o stream-json`. agy-Pfad ist
 vorbereitet, aber ungetestet (Installation `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 und Google-Anmeldung sind Nutzeraktionen).
+
+**flow-agent als Datenquelle (v0.4.4):** `services/flow_agent.py` liest mit dem Lese-
+Schlüssel (Vault `flow_agent_read_key`, Einstellung `flow_agent` mit `url`, `secret_key`,
+`hosts` = flow-agent-Hostname → Cockpit-Host, z. B. `janpow-NUC15JNLU7X4 → nuc`,
+`cockpit-nbg1-1 → ccx23`, `evo2 → evo`, `MacBook-Air.local → macbook`) das Projektinventar
+`/api/v1/projects` (Git-Stand, dirty/ahead/behind, Technologien je Host – 110 Projekte auf
+5 Hosts) und `/api/v1/graphify/status`. Die Projektliste des Kanbans zeigt damit alle Repos
+aller Hosts (Quelle, Branch, uncommittete Änderungen, graphify-Stand); Hosts ohne SSH-Zugang
+des Cockpits sind als nicht ausführbar markiert. Vorschlagsläufe bekommen einen Kontextblock
+„Stand laut flow-agent“ (Git-Zustand, Technologien, graphify-Alter, Hinweise) an den
+Auftragstext gehängt. 5 min Cache, Fehler → leere Ergebnisse.

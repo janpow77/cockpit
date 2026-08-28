@@ -20,14 +20,17 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import require_auth
 from ..crud import audit as crud_audit
 from ..db import get_session
+from ..models import HostRow
 from ..services import auftraege as svc
 from ..services import auftrag_runner as runner
 from ..services import auftrag_vorlagen
+from ..services import flow_agent as fa
 from ..services import wall_config as wc
 from ..services.ssh_runner import run_on_host
 
@@ -84,15 +87,51 @@ async def liste(_=Depends(require_auth), session: Session = Depends(get_session)
     return {"auftraege": [svc.as_dict(a) for a in rows], "kapazitaet": runner.kapazitaet(session)}
 
 
+def _flow_agent_zugang(session: Session, cfg: wc.WallConfig) -> tuple[str, str | None, dict[str, str]]:
+    from .overview import _secret_value
+
+    f = cfg.flow_agent or {}
+    url = str(f.get("url") or "https://agent.flowaudit.de")
+    token = _secret_value(session, str(f.get("secret_key") or "flow_agent_read_key"))
+    hosts = f.get("hosts") if isinstance(f.get("hosts"), dict) else {}
+    return url, token, {str(k): str(x) for k, x in hosts.items()}
+
+
+def _flow_agent_projekt(session: Session, cfg: wc.WallConfig, host: str, pfad: str) -> tuple[dict | None, dict | None]:
+    """Projektzeile und graphify-Stand aus flow-agent für einen Auftrag (None, wenn unbekannt oder kein Zugang)."""
+    url, token, hosts = _flow_agent_zugang(session, cfg)
+    if not token:
+        return None, None
+    name = _projekt_name(pfad)
+    p = next((x for x in fa.projekte(url, token, hosts) if x["host"] == host and (x["pfad"] == pfad.rstrip("/") or x["name"] == name)), None)
+    g = fa.graphify(url, token, hosts).get((host, name))
+    return p, g
+
+
 @router.get("/projekte")
 async def projekte(_=Depends(require_auth), session: Session = Depends(get_session)) -> list[dict]:
-    """Projektverzeichnisse: alle Repos aus der Werkstatt des letzten Wand-Standes, sonst die work_dirs."""
+    """Projektverzeichnisse: Werkstatt des letzten Wand-Standes plus Inventar von flow-agent (alle Hosts), sonst die work_dirs."""
     from ..services import wall_loop
 
     cfg = wc.load(session)
     stand = wall_loop.letzter_stand() or {}
     out: list[dict] = []
     gesehen: set[tuple[str, str]] = set()
+    url, token, hosts = _flow_agent_zugang(session, cfg)
+    bekannte_hosts = {h.name for h in session.execute(select(HostRow)).scalars()}
+    if token:
+        graph = fa.graphify(url, token, hosts)
+        for p in fa.projekte(url, token, hosts):
+            key = (p["host"], p["pfad"])
+            if key in gesehen or not p.get("git"):
+                continue
+            gesehen.add(key)
+            g = graph.get((p["host"], p["name"])) or {}
+            out.append({
+                "host": p["host"], "pfad": p["pfad"], "name": p["name"], "aktiv": p.get("status") in ("healthy", "ok", "degraded") or bool(p.get("dirty")),
+                "quelle": "flow-agent", "ausfuehrbar": p["host"] in bekannte_hosts, "branch": p.get("branch"), "dirty": p.get("dirty"),
+                "technologien": p.get("technologien"), "graphify_stand": g.get("generiert"),
+            })
     for w in stand.get("werkstatt") or []:
         basis = cfg.work_dirs.get(w.get("host") or "")
         if not basis:
@@ -103,11 +142,11 @@ async def projekte(_=Depends(require_auth), session: Session = Depends(get_sessi
             if key in gesehen:
                 continue
             gesehen.add(key)
-            out.append({"host": w["host"], "pfad": pfad, "name": r.get("name"), "aktiv": bool(r.get("aktiv"))})
+            out.append({"host": w["host"], "pfad": pfad, "name": r.get("name"), "aktiv": bool(r.get("aktiv")), "quelle": "werkstatt", "ausfuehrbar": True})
     if not out:
         for host, basis in cfg.work_dirs.items():
-            out.append({"host": host, "pfad": basis, "name": _projekt_name(basis), "aktiv": True})
-    out.sort(key=lambda p: (not p.get("aktiv"), p["host"], p["name"].lower()))
+            out.append({"host": host, "pfad": basis, "name": _projekt_name(basis), "aktiv": True, "quelle": "work_dirs", "ausfuehrbar": True})
+    out.sort(key=lambda p: (not p.get("ausfuehrbar", True), not p.get("aktiv"), p["host"], p["name"].lower()))
     return out
 
 
@@ -131,7 +170,9 @@ async def vorschlaege_einholen(req: VorschlaegeAnfrage, _=Depends(require_auth),
     if vorlage is None:
         raise HTTPException(status_code=404, detail="Vorlage »vorschlaege« fehlt")
     name = _projekt_name(req.projekt)
-    a = svc.anlegen(session, titel=vorlage["titel"].replace("{projekt}", name), text=vorlage["text"], host=req.host, projekt=req.projekt.rstrip("/"),
+    p, g = _flow_agent_projekt(session, cfg, req.host, req.projekt)
+    text = vorlage["text"] + fa.projekt_kontext(p, g)
+    a = svc.anlegen(session, titel=vorlage["titel"].replace("{projekt}", name), text=text, host=req.host, projekt=req.projekt.rstrip("/"),
                     projekt_name=name, agent=req.agent, modus="bericht", profil="lesen", prioritaet=2, zeitfenster="sofort", status="geplant")
     crud_audit.write(session, action="auftrag.vorschlaege", target=a.id, after={"projekt": a.projekt, "agent": a.agent})
     return svc.as_dict(a)
