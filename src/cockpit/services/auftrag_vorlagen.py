@@ -1,6 +1,6 @@
 """Vorformulierte Aufträge für das Kanban: Repo prüfen, GUI verbessern, Tests, Sicherheit, Doku …
 
-Jede Vorlage bringt Titel, Auftragstext, Profil und Priorität mit; ``{projekt}`` wird
+Jede Vorlage bringt Titel, Kurzbeschreibung, Auftragstext, Profil und Priorität mit; ``{projekt}`` wird
 durch den Projektnamen ersetzt. Eigene Vorlagen lassen sich über die Wand-Einstellung
 ``auftrag_vorlagen`` ergänzen oder ersetzen.
 """
@@ -11,6 +11,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "repo-pruefen",
         "titel": "Repo prüfen: {projekt}",
+        "kurz": "Prüft Architektur, Fehlerquellen, Sicherheit, Tests und Abhängigkeiten des Repositories.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 3,
@@ -28,6 +29,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "gui-verbessern",
         "titel": "Oberfläche verbessern: {projekt}",
+        "kurz": "Verbessert Lesbarkeit, Konsistenz und Barrierefreiheit der Benutzeroberfläche.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -43,6 +45,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "tests-ergaenzen",
         "titel": "Tests ergänzen: {projekt}",
+        "kurz": "Ergänzt aussagekräftige Tests für Kernlogik, Grenzfälle und Fehlerpfade.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -55,6 +58,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "sicherheit",
         "titel": "Sicherheits-Audit: {projekt}",
+        "kurz": "Untersucht das Projekt auf Sicherheitslücken und unsichere Voreinstellungen.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 2,
@@ -66,6 +70,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "doku",
         "titel": "Dokumentation aktualisieren: {projekt}",
+        "kurz": "Gleicht Dokumentation und Docstrings mit dem aktuellen Stand des Codes ab.",
         "profil": "bearbeiten",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -77,6 +82,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "abhaengigkeiten",
         "titel": "Abhängigkeiten aktualisieren: {projekt}",
+        "kurz": "Aktualisiert Abhängigkeiten schrittweise und prüft ihre Verträglichkeit.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -88,6 +94,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "performance",
         "titel": "Performance prüfen: {projekt}",
+        "kurz": "Findet und behebt die größten messbaren Leistungsbremsen.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -99,6 +106,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "fehler-beheben",
         "titel": "Fehler beheben: {projekt}",
+        "kurz": "Reproduziert einen beschriebenen Fehler und behebt dessen Ursache mit einem Test.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 2,
@@ -110,6 +118,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "vorschlaege",
         "titel": "Vorschläge einholen: {projekt}",
+        "kurz": "Ermittelt und priorisiert konkrete nächste Verbesserungen für das Repository.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 3,
@@ -126,6 +135,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "pr-review",
         "titel": "Offene Pull Requests prüfen: {projekt}",
+        "kurz": "Bewertet offene Pull Requests hinsichtlich Zweck, Risiken und Prüfstatus.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 2,
@@ -137,6 +147,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "issues-triage",
         "titel": "Issues sichten: {projekt}",
+        "kurz": "Sichtet offene Issues und priorisiert sie nach Nutzen und Aufwand.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 3,
@@ -148,6 +159,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "refactoring",
         "titel": "Aufräumen und entflechten: {projekt}",
+        "kurz": "Vereinfacht und entflechtet den Code ohne sein Verhalten zu verändern.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -159,6 +171,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "barrierefreiheit",
         "titel": "Barrierefreiheit prüfen: {projekt}",
+        "kurz": "Prüft und verbessert die Oberfläche gemäß WCAG 2.2 AA.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -170,6 +183,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "fehlerbehandlung",
         "titel": "Fehlerbehandlung und Protokollierung: {projekt}",
+        "kurz": "Vereinheitlicht Fehlerbehandlung und Protokollierung einschließlich ihrer Fehlerpfade.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -181,6 +195,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "todo-aufraeumen",
         "titel": "TODO/FIXME abarbeiten: {projekt}",
+        "kurz": "Bearbeitet oder präzisiert offene TODO-, FIXME-, XXX- und HACK-Markierungen.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -192,6 +207,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "ci-pruefen",
         "titel": "CI und flackernde Tests: {projekt}",
+        "kurz": "Analysiert fehlgeschlagene CI-Läufe und beseitigt Ursachen flackernder Tests.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -203,6 +219,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "release-vorbereiten",
         "titel": "Release vorbereiten: {projekt}",
+        "kurz": "Bereitet Änderungsprotokoll, Version und Hinweise für ein neues Release vor.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 2,
@@ -214,6 +231,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "datenschutz",
         "titel": "Datenschutz prüfen (DSGVO): {projekt}",
+        "kurz": "Dokumentiert und bewertet die Verarbeitung personenbezogener Daten.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 2,
@@ -225,6 +243,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "container-haerten",
         "titel": "Container und Deployment härten: {projekt}",
+        "kurz": "Härtet Container- und Deployment-Konfigurationen ohne unnötige Verhaltensänderungen.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -236,6 +255,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "api-doku",
         "titel": "API dokumentieren: {projekt}",
+        "kurz": "Aktualisiert OpenAPI-Beschreibungen und praktische Beispiele für die API.",
         "profil": "bearbeiten",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -247,6 +267,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "migrationen-pruefen",
         "titel": "Datenbank-Migrationen prüfen: {projekt}",
+        "kurz": "Prüft Datenbankschema und Migrationen auf Drift, Risiken und fehlende Regeln.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 3,
@@ -258,6 +279,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "icons-vereinheitlichen",
         "titel": "Icons vereinheitlichen: {projekt}",
+        "kurz": "Vereinheitlicht Auswahl, Darstellung und Barrierefreiheit der verwendeten Icons.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -269,6 +291,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "uebersetzen",
         "titel": "Übersetzen / Sprache vereinheitlichen: {projekt}",
+        "kurz": "Vereinheitlicht nutzersichtbare Texte, Formate und Fachbegriffe in einer Sprache.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -280,6 +303,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "design-vereinheitlichen",
         "titel": "Farben, Abstände, Typografie vereinheitlichen: {projekt}",
+        "kurz": "Vereinheitlicht Farben, Abstände, Typografie und wiederkehrende Oberflächenkomponenten.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -291,6 +315,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "zustaende",
         "titel": "Leer-, Lade- und Fehlerzustände: {projekt}",
+        "kurz": "Ergänzt verständliche Leer-, Lade- und Fehlerzustände in Seiten und Listen.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -302,6 +327,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "tabellen-export",
         "titel": "Tabellen: Sortierung, Filter, Export: {projekt}",
+        "kurz": "Erweitert Tabellen um einheitliche Sortierung, Filterung und Exportfunktionen.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 3,
@@ -313,6 +339,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "formulare",
         "titel": "Formulare und Validierung vereinheitlichen: {projekt}",
+        "kurz": "Vereinheitlicht Formulare, Validierung und Rückmeldungen beim Speichern.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -324,6 +351,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "mobil",
         "titel": "Mobile Ansicht prüfen: {projekt}",
+        "kurz": "Prüft und verbessert die Bedienbarkeit auf kleinen und mittleren Bildschirmen.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -335,6 +363,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "benennung",
         "titel": "Benennung und Begriffe vereinheitlichen: {projekt}",
+        "kurz": "Vereinheitlicht Fachbegriffe und Aktionsbezeichnungen in Oberfläche, API und Dokumentation.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -346,6 +375,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "datenqualitaet",
         "titel": "Datenqualität prüfen: {projekt}",
+        "kurz": "Untersucht gespeicherte Daten auf Lücken, Widersprüche und fehlende Plausibilitätsregeln.",
         "profil": "lesen",
         "modus": "bericht",
         "prioritaet": 3,
@@ -357,6 +387,7 @@ VORLAGEN: list[dict] = [
     {
         "id": "umlaute-sprache",
         "titel": "Sprache und Umlaute prüfen: {projekt}",
+        "kurz": "Korrigiert nutzersichtbare Sprache, Umlaute und Datumsformate.",
         "profil": "bearbeiten_tests",
         "modus": "plan_freigabe",
         "prioritaet": 4,
@@ -373,8 +404,11 @@ def vorlagen(extra: list[dict] | None = None) -> list[dict]:
     out = {v["id"]: dict(v) for v in VORLAGEN}
     for v in extra or []:
         if isinstance(v, dict) and v.get("id") and v.get("text"):
+            titel = str(v.get("titel") or v["id"])
             out[str(v["id"])] = {
-                "id": str(v["id"]), "titel": str(v.get("titel") or v["id"]), "profil": str(v.get("profil") or "bearbeiten"),
+                "id": str(v["id"]), "titel": titel,
+                "kurz": str(v.get("kurz") or f"Führt die benutzerdefinierte Vorlage „{titel}“ aus."),
+                "profil": str(v.get("profil") or "bearbeiten"),
                 "modus": str(v.get("modus") or ("bericht" if v.get("profil") == "lesen" else "plan_freigabe")),
                 "prioritaet": int(v.get("prioritaet") or 3), "text": str(v["text"]),
             }

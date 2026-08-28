@@ -128,10 +128,16 @@ def test_rueckfrage_erkennung():
 
 
 def test_vorlagen_mit_eigenen():
-    v = auftrag_vorlagen.vorlagen([{"id": "repo-pruefen", "titel": "Eigen: {projekt}", "text": "mein text"}, {"id": "kaputt"}])
+    v = auftrag_vorlagen.vorlagen([
+        {"id": "repo-pruefen", "titel": "Eigen: {projekt}", "kurz": "Prüft eigene Vorgaben.", "text": "mein text"},
+        {"id": "eigene-vorlage", "titel": "Eigene Vorlage", "text": "mein text"},
+        {"id": "kaputt"},
+    ])
     ids = [x["id"] for x in v]
-    assert "repo-pruefen" in ids and "gui-verbessern" in ids and "kaputt" not in ids
-    assert next(x for x in v if x["id"] == "repo-pruefen")["titel"] == "Eigen: {projekt}"
+    assert "repo-pruefen" in ids and "gui-verbessern" in ids and "eigene-vorlage" in ids and "kaputt" not in ids
+    eigene = next(x for x in v if x["id"] == "repo-pruefen")
+    assert eigene["titel"] == "Eigen: {projekt}" and eigene["kurz"] == "Prüft eigene Vorgaben."
+    assert next(x for x in v if x["id"] == "eigene-vorlage")["kurz"]
 
 
 def test_vorschlaege_aus_ergebnis():
@@ -156,6 +162,7 @@ def test_vorlagen_vollstaendig():
         assert erwartet in ids
     for v in auftrag_vorlagen.vorlagen():
         assert v["profil"] in svc.PROFILE and 1 <= v["prioritaet"] <= 5 and "{projekt}" in v["titel"]
+        assert isinstance(v["kurz"], str) and v["kurz"].strip()
         assert "ae" not in v["text"].replace("Cache", "").replace("aeu", "") or True
 
 
