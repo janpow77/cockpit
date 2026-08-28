@@ -26,8 +26,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'settings', name: 'settings', component: () => import('../views/settings/SettingsView.vue') },
     ],
   },
-  // Wand und KI-Konsole laufen ohne Sidebar (Vollbild), aber mit Anmeldung.
+  // Wand, Kompaktansicht und KI-Konsole laufen ohne Sidebar (Vollbild), aber mit Anmeldung.
   { path: '/wall', name: 'wall', component: () => import('../views/WallView.vue') },
+  { path: '/kompakt', name: 'kompakt', component: () => import('../views/KompaktView.vue') },
   { path: '/chat', name: 'chat', component: () => import('../views/ChatView.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]

@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Column, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -135,6 +135,18 @@ class SessionRow(Base):
     expires_at = Column(String, nullable=False)
     last_seen_at = Column(String, nullable=False)
     ip = Column(String, nullable=True)
+
+
+class WallSampleRow(Base):
+    """Verlauf der Wand: ein Wert je Kennzahl und Lauf (services/verlauf.py)."""
+
+    __tablename__ = "cockpit_wall_samples"
+    __table_args__ = (Index("ix_wall_samples_key_ts", "key", "ts"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ts = Column(String, nullable=False)
+    key = Column(String, nullable=False)
+    value = Column(Float, nullable=False)
 
 
 class TrafficSampleRow(Base):

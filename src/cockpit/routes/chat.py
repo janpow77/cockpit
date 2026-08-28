@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Literal
 
@@ -48,6 +49,30 @@ class ChatRequest(BaseModel):
     # Kira-RAG: 'memory' = Projektgedaechtnis, 'knowledge' = Wissensbasis, 'both', 'off'
     rag: Literal["off", "memory", "knowledge", "both"] = "off"
     rag_project: str | None = Field(default=None, max_length=100)
+
+
+class MerkenRequest(BaseModel):
+    content: str = Field(min_length=10, max_length=6000)
+    category: Literal["problem", "solution", "preference", "architecture", "workflow", "reference", "feedback", "pattern"] = "solution"
+    project: str | None = Field(default=None, max_length=100)
+    tags: list[str] | None = None
+
+
+# Bei "Beides" lohnt die Wissensbasis (EFRE-Recht, Verordnungen) nur bei fachlichen Fragen -
+# sonst kostet sie 5-10 s und liefert Beifang.
+_FACHLICH = re.compile(
+    r"\b(Art\.|Artikel|§|Verordnung|VO\b|CPR|EFRE|ESF|Prüfbehörde|Verwaltungsbehörde|Förder|Zuwendung|Vorhaben|"
+    r"Checkliste|Feststellung|TER\b|RER\b|Rechnungslegung|Jahresbericht|Systemprüfung|Kernanforderung|Gesetz|"
+    r"Richtlinie|Leitfaden|OWiG|KPAnG|Bußgeld|Kartell|Vergabe|Beihilfe|Haushaltsordnung|Kommission)",
+    re.I,
+)
+
+
+def rag_modus_effektiv(modus: str, frage: str) -> str:
+    """'both' nur mit Wissensbasis, wenn die Frage fachlich klingt (rein, testbar)."""
+    if modus == "both" and not _FACHLICH.search(frage or ""):
+        return "memory"
+    return modus
 
 
 def _mcp_zugang(session: Session, cfg: wc.WallConfig) -> tuple[dict | None, dict[str, str]]:
@@ -113,7 +138,7 @@ async def chat(
         mcp_server, mcp_headers = _mcp_zugang(session, cfg)
         kira_host = next((h for h in crud_hosts.list_hosts(session) if h.name == str(cfg.kira.get("host") or "")), None)
         quellen, rag_note = await rag.suchen(
-            query=frage, modus=req.rag, project=(req.rag_project or "").strip() or None,
+            query=frage, modus=rag_modus_effektiv(req.rag, frage), project=(req.rag_project or "").strip() or None,
             mcp_server=mcp_server, mcp_headers=mcp_headers, kira_host=kira_host, kira_cfg=cfg.kira, hide=cfg.hide,
         )
 
@@ -136,6 +161,7 @@ async def chat(
         options["temperature"] = req.temperature
     if kontext:
         options["num_ctx"] = int(cfg.chat_num_ctx)
+    options["num_predict"] = int(cfg.chat_max_tokens)
 
     async def sse():
         if req.rag != "off":
@@ -152,3 +178,37 @@ async def chat(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/merken")
+async def merken(
+    req: MerkenRequest, _=Depends(require_auth), session: Session = Depends(get_session)
+) -> dict:
+    """Antwort/Entscheidung ins Kira-Gedächtnis schreiben: memory_add über MCP, sonst Memory-API auf dem Kira-Host."""
+    cfg = wc.load(session)
+    tags = [t.strip()[:40] for t in (req.tags or []) if t.strip()][:10]
+    if "cockpit-konsole" not in tags:
+        tags.append("cockpit-konsole")
+    project = (req.project or "").strip() or None
+    mcp_server, mcp_headers = _mcp_zugang(session, cfg)
+    if mcp_server and mcp_headers:
+        try:
+            args = {"content": req.content, "category": req.category, "tags": tags}
+            if project:
+                args["project"] = project
+            obj = await asyncio.to_thread(rag._mcp_tool, mcp_server["url"], mcp_headers, "memory_add", args)
+            if isinstance(obj, dict) and (obj.get("id") or obj.get("entry_id")):
+                return {"ok": True, "id": obj.get("id") or obj.get("entry_id"), "weg": "mcp", "hinweis": None}
+            log.warning("memory_add über MCP ohne ID: %s", str(obj)[:160])
+        except Exception as exc:  # noqa: BLE001 - Rueckfall folgt
+            log.warning("memory_add über MCP: %s", exc)
+    kira_host = next((h for h in crud_hosts.list_hosts(session) if h.name == str(cfg.kira.get("host") or "")), None)
+    if kira_host is None:
+        raise HTTPException(status_code=502, detail="Gedächtnis nicht erreichbar (kein MCP-Token, kein Kira-Host)")
+    body = {"content": req.content, "category": req.category, "tags": tags}
+    if project:
+        body["project"] = project
+    obj = await asyncio.to_thread(rag._memory_api_schreiben, kira_host, cfg.kira, body)
+    if isinstance(obj, dict) and obj.get("id"):
+        return {"ok": True, "id": obj["id"], "weg": "api", "hinweis": None}
+    raise HTTPException(status_code=502, detail=f"Gedächtnis hat nicht gespeichert: {str(obj)[:160]}")

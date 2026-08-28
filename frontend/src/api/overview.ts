@@ -1,5 +1,5 @@
 import { client, USE_MOCKS } from './client'
-import type { Overview, WallConfig, DemoStartResult } from './types'
+import type { Overview, WallConfig, DemoStartResult, VerlaufAntwort } from './types'
 
 const NOW = new Date().toISOString()
 
@@ -104,5 +104,20 @@ export async function patchWallConfig(patch: Partial<WallConfig>): Promise<WallC
 export async function startDemo(neu = false): Promise<DemoStartResult> {
   if (USE_MOCKS) return { ok: true, uebersprungen: !neu, faelle: [{ aktenzeichen: 'DEMO-2026/005', schritte: 1, fehler: null }], url: 'https://hpp.flowaudit.de/kraftstoff/vollzug' }
   const { data } = await client.post<DemoStartResult>('/overview/demo', { neu }, { timeout: 660_000 })
+  return data
+}
+
+export async function getVerlauf(hours = 24, keys?: string[]): Promise<VerlaufAntwort> {
+  if (USE_MOCKS) {
+    const jetzt = Date.now()
+    const reihe = (basis: number) => Array.from({ length: 48 }, (_, i) => [new Date(jetzt - (47 - i) * 1800_000).toISOString(), basis + Math.round(Math.sin(i / 5) * basis * 0.1)] as [string, number])
+    return { hours, series: { 'hero.meldungen_24_h': reihe(34000), 'hero.tankstellen': reihe(2766), 'hero.verdachtsfaelle_24_h': reihe(238), 'hero.verfahren_offen': reihe(2), 'host.ccx23.load1': reihe(1), 'alerts.krit': reihe(0), 'alerts.warn': reihe(2) } }
+  }
+  const { data } = await client.get<VerlaufAntwort>('/overview/verlauf', { params: { hours, keys: keys?.join(',') }, timeout: 30_000 })
+  return data
+}
+
+export async function pushTest(): Promise<{ ok: boolean }> {
+  const { data } = await client.post<{ ok: boolean }>('/overview/push-test', {}, { timeout: 30_000 })
   return data
 }

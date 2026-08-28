@@ -109,6 +109,19 @@ DEFAULT_KIRA: dict[str, Any] = {
     "env_key": "MEMORY_API_KEY",
 }
 
+# Push-Alarme per Telegram (Bot-Token und Chat-ID im Vault). Nachts nur Kritisches.
+DEFAULT_PUSH: dict[str, Any] = {
+    "aktiv": True,
+    "kanal": "telegram",
+    "token_secret": "telegram_bot_token",
+    "chat_secret": "telegram_chat_id",
+    "min_level": "warn",
+    "ruhe_von": "22:00",
+    "ruhe_bis": "07:00",
+    "zeitzone": "Europe/Berlin",
+    "instanz": "",
+}
+
 DEFAULT_DEMO: dict[str, Any] = {
     "login_url": "https://hpp.flowaudit.de/api/auth/login",
     "aufbau_url": "https://hpp.flowaudit.de/api/kpang/vollzug/demo/aufbauen",
@@ -149,8 +162,9 @@ DEFAULT_CHAT_MODELS: list[dict[str, str]] = [
 
 DEFAULT_CHAT_SYSTEM = (
     "Du bist die KI-Konsole des flowaudit-Cockpits von Jan Riener (Prüfbehörde EFRE Hessen, "
-    "Entwickler von HPP, Checklisten-Designer, flowinvoice u. a.). Antworte sachlich, gut gegliedert und auf Deutsch "
-    "mit echten Umlauten. Stütze dich auf den mitgelieferten Kira-Kontext und zitiere ihn als [n]; "
+    "Entwickler von HPP, Checklisten-Designer, flowinvoice u. a.). Antworte sachlich und auf Deutsch mit echten "
+    "Umlauten – so knapp wie möglich: kurze Fragen in zwei bis vier Sätzen ohne Überschriften, Listen nur bei "
+    "Aufzählungen. Stütze dich auf den mitgelieferten Kira-Kontext und zitiere ihn als [n]; "
     "fehlt Passendes, sag es, statt zu raten. "
     "Glossar: HPP = Hessisches Preismonitoring-Portal (Landeskartellbehörde Hessen); "
     "KPAnG = Kraftstoffpreisanpassungsgesetz (12-Uhr-Regel: Preiserhöhungen nur einmal täglich um 12 Uhr, "
@@ -184,6 +198,10 @@ class WallConfig:
     work_dirs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_WORK_DIRS))
     kira: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_KIRA))
     prod_hosts: list[str] = field(default_factory=lambda: list(DEFAULT_PROD_HOSTS))
+    push: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_PUSH))
+    werkstatt_aktiv_tage: int = 14
+    verlauf_tage: int = 30
+    chat_max_tokens: int = 900
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -195,6 +213,8 @@ class WallConfig:
             "chat_think": self.chat_think,
             "mcp_servers": self.mcp_servers,
             "work_dirs": self.work_dirs, "kira": self.kira, "prod_hosts": self.prod_hosts,
+            "push": self.push, "werkstatt_aktiv_tage": self.werkstatt_aktiv_tage,
+            "verlauf_tage": self.verlauf_tage, "chat_max_tokens": self.chat_max_tokens,
         }
 
 
@@ -227,8 +247,11 @@ def load(session: Session) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push"):
         if isinstance(raw.get(name), dict):
+            setattr(cfg, name, raw[name])
+    for name, lo, hi in (("werkstatt_aktiv_tage", 1, 365), ("verlauf_tage", 1, 365), ("chat_max_tokens", 100, 8000)):
+        if isinstance(raw.get(name), int) and lo <= raw[name] <= hi:
             setattr(cfg, name, raw[name])
     if isinstance(raw.get("backup_dir"), str) and raw["backup_dir"]:
         cfg.backup_dir = raw["backup_dir"]
@@ -247,8 +270,11 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira"):
+    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push"):
         if isinstance(patch.get(name), dict):
+            raw[name] = patch[name]
+    for name in ("werkstatt_aktiv_tage", "verlauf_tage", "chat_max_tokens"):
+        if isinstance(patch.get(name), int):
             raw[name] = patch[name]
     for name in ("backup_dir", "chat_system"):
         if isinstance(patch.get(name), str):

@@ -158,7 +158,7 @@ def werkstatt_cmd(work_dir: str) -> str:
     )
 
 
-def parse_werkstatt(stdout: str, hide: list[str], now: float | None = None) -> list[dict]:
+def parse_werkstatt(stdout: str, hide: list[str], now: float | None = None, aktiv_tage: int = 14) -> list[dict]:
     """TSV → Zeilen; Pausen zuerst, dann uncommittete Arbeit, dann nach letztem Commit (rein, testbar)."""
     now = now or time.time()
     rows: list[dict] = []
@@ -195,6 +195,7 @@ def parse_werkstatt(stdout: str, hide: list[str], now: float | None = None) -> l
             "pause": _iso(pause_i),
             "pause_age_h": round((now - pause_i) / 3600, 1) if pause_i else None,
             "next_step": re.sub(r"[*_`]+", "", next_step).lstrip("-• ").strip() or None,
+            "aktiv": bool(aktiv) and (now - aktiv) <= aktiv_tage * 86400,
             "_aktiv": aktiv,
         })
     # Juengste Aktivitaet zuerst - egal ob Commit oder Pause; Repos ohne Historie ans Ende
@@ -204,16 +205,17 @@ def parse_werkstatt(stdout: str, hide: list[str], now: float | None = None) -> l
     return rows
 
 
-def _werkstatt_laden(host: HostRow, work_dir: str, hide: list[str]) -> dict:
+def _werkstatt_laden(host: HostRow, work_dir: str, hide: list[str], aktiv_tage: int = 14) -> dict:
     try:
         result = run_on_host(host, werkstatt_cmd(work_dir), timeout=90)
     except Exception as exc:  # noqa: BLE001 - Wand darf nie an einem Host scheitern
         return {"host": host.name, "ok": False, "error": str(exc)[:160], "repos": [], "dirty": 0, "pausen": 0,
                 "ms": None, "collected_at": _iso(time.time())}
-    repos = parse_werkstatt(result.stdout, hide)
+    repos = parse_werkstatt(result.stdout, hide, aktiv_tage=aktiv_tage)
     return {
         "host": host.name,
         "ok": bool(repos) or result.ok,
+        "aktiv": sum(1 for r in repos if r.get("aktiv")),
         "error": None if (repos or result.ok) else (result.stderr or f"rc={result.exit_code}")[:160],
         "repos": repos[:40],
         "repo_count": len(repos),
@@ -224,7 +226,7 @@ def _werkstatt_laden(host: HostRow, work_dir: str, hide: list[str]) -> dict:
     }
 
 
-def werkstatt(host: HostRow, work_dir: str, hide: list[str]) -> dict:
+def werkstatt(host: HostRow, work_dir: str, hide: list[str], aktiv_tage: int = 14) -> dict:
     """Stand des Projektverzeichnisses; beim ersten Aufruf synchron, danach
     stale-while-revalidate (alter Stand sofort, Auffrischung im Hintergrund)."""
     key = f"{host.id}:{work_dir}"
@@ -242,7 +244,7 @@ def werkstatt(host: HostRow, work_dir: str, hide: list[str]) -> dict:
         if starten:
             def _refresh() -> None:
                 try:
-                    data = _werkstatt_laden(host, work_dir, hide)
+                    data = _werkstatt_laden(host, work_dir, hide, aktiv_tage)
                     with _lock:
                         _ws_cache[key] = (time.time(), data)
                 finally:
@@ -250,7 +252,7 @@ def werkstatt(host: HostRow, work_dir: str, hide: list[str]) -> dict:
                         _ws_refreshing.discard(key)
             threading.Thread(target=_refresh, name=f"werkstatt-{host.name}", daemon=True).start()
         return cached[1]
-    data = _werkstatt_laden(host, work_dir, hide)
+    data = _werkstatt_laden(host, work_dir, hide, aktiv_tage)
     with _lock:
         _ws_cache[key] = (time.time(), data)
     return data

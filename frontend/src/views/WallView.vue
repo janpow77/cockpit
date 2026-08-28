@@ -6,14 +6,17 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { getOverview, startDemo } from '../api/overview'
+import { getOverview, getVerlauf, startDemo } from '../api/overview'
 import { extractError } from '../api/client'
 import { usePollStore } from '../stores/poll'
 import { useToastStore } from '../stores/toast'
-import type { Overview, WallHost, WallProject } from '../api/types'
+import type { Overview, VerlaufAntwort, WallHost, WallProject } from '../api/types'
 
 const REFRESH_MS = 30_000
+const VERLAUF_MS = 5 * 60_000
 const overview = ref<Overview | null>(null)
+const verlauf = ref<VerlaufAntwort | null>(null)
+const werkstattAlle = ref(false)
 const error = ref<string | null>(null)
 const ladeStand = ref(0) // 0..1 Fortschritt bis zum naechsten Refresh
 const uhr = ref('')
@@ -56,12 +59,14 @@ onMounted(() => {
     document.head.appendChild(l)
   }
   poll.start('wall', load, REFRESH_MS)
+  poll.start('wall-verlauf', async () => { try { verlauf.value = await getVerlauf(24) } catch { /* Verlauf ist Beiwerk */ } }, VERLAUF_MS)
   tick()
   uhrTimer = window.setInterval(tick, 1000)
   window.addEventListener('keydown', tasten)
 })
 onBeforeUnmount(() => {
   poll.stop('wall')
+  poll.stop('wall-verlauf')
   if (uhrTimer) window.clearInterval(uhrTimer)
   if (standTimer) window.clearInterval(standTimer)
   window.removeEventListener('keydown', tasten)
@@ -218,22 +223,49 @@ const tlsMin = computed(() => {
   return tage.length ? Math.min(...tage) : null
 })
 const werkstattHosts = computed(() => overview.value?.werkstatt ?? [])
-const werkstattRepos = computed(() =>
+const werkstattAlleRepos = computed(() =>
   werkstattHosts.value
     .flatMap((w) => w.repos.map((r) => ({ ...r, host: w.host })))
-    .sort((a, b) => aktivitaet(b) - aktivitaet(a))
-    .slice(0, 9),
+    .sort((a, b) => aktivitaet(b) - aktivitaet(a)),
 )
+const werkstattRepos = computed(() => {
+  const alle = werkstattAlleRepos.value
+  const aktive = alle.filter((r) => r.aktiv !== false)
+  return (werkstattAlle.value ? alle : aktive).slice(0, werkstattAlle.value ? 60 : 9)
+})
+const werkstattAeltere = computed(() => werkstattAlleRepos.value.filter((r) => r.aktiv === false).length)
+const naechsterSchritt = computed(() => werkstattAlleRepos.value.find((r) => r.pause && r.next_step) ?? null)
+/** tmux-Sitzungen aller Hosts, angehängte zuerst. */
+const sitzungen = computed(() =>
+  hosts.value
+    .flatMap((h) => (h.tmux ?? []).map((t) => ({ ...t, host: h.name })))
+    .sort((a, b) => Number(b.attached) - Number(a.attached) || (b.created ?? 0) - (a.created ?? 0)),
+)
+function reihe(key: string): number[] {
+  const s = verlauf.value?.series[key]
+  return s ? s.map((p) => p[1]) : []
+}
+/** Verlaufslinie als SVG-Pfad (0..100 × 0..30). */
+function linie(werte: number[]): string {
+  if (werte.length < 2) return ''
+  const min = Math.min(...werte); const max = Math.max(...werte); const span = max - min || 1
+  return werte.map((v, i) => `${i === 0 ? 'M' : 'L'} ${((i / (werte.length - 1)) * 100).toFixed(1)} ${(28 - ((v - min) / span) * 26 + 1).toFixed(1)}`).join(' ')
+}
+function kpiKey(label: string): string {
+  return 'hero.' + label.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+}
+function seit(created: number | null): string {
+  return created ? relativ(new Date(created * 1000).toISOString()) : ''
+}
 function aktivitaet(r: { last_commit: string | null; pause: string | null }): number {
   return Math.max(r.last_commit ? new Date(r.last_commit).getTime() : 0, r.pause ? new Date(r.pause).getTime() : 0)
 }
 const werkstattSumme = computed(() => {
   const w = werkstattHosts.value
   if (!w.length) return 'kein Projektverzeichnis'
-  const repos = w.reduce((n, h) => n + (h.repo_count ?? h.repos.length), 0)
-  const dirty = w.reduce((n, h) => n + h.dirty, 0)
+  const aktiv = werkstattAlleRepos.value.filter((r) => r.aktiv !== false).length
   const pausen = w.reduce((n, h) => n + h.pausen, 0)
-  return `${repos} Repos · ${dirty} mit Änderungen · ${pausen} ${pausen === 1 ? 'Pause' : 'Pausen'}`
+  return `${aktiv} aktiv in 14 Tagen · ${pausen} ${pausen === 1 ? 'Pause' : 'Pausen'} · ${werkstattAlleRepos.value.length} Repos`
 })
 const kira = computed(() => overview.value?.kira ?? null)
 const KATEGORIE: Record<string, string> = { architecture: 'Architektur', solution: 'Lösung', problem: 'Problem', reference: 'Referenz', pattern: 'Muster', workflow: 'Ablauf', preference: 'Präferenz', feedback: 'Feedback' }
@@ -297,6 +329,7 @@ async function demo(neu = false) {
         <span class="live" :title="`Alle ${REFRESH_MS / 1000} s aktualisiert · R = sofort`"><i :class="['punkt', error ? 'krit' : 'ok']" />{{ error ? 'GESTÖRT' : 'LIVE' }}<em>· {{ seitLoad }} s</em></span>
         <span class="mono uhr">{{ uhr }}</span>
         <RouterLink to="/chat" class="knopf klein">KI-Konsole</RouterLink>
+        <RouterLink to="/kompakt" class="knopf klein ghost" title="Handy-Ansicht">Kompakt</RouterLink>
         <RouterLink to="/" class="knopf klein ghost">Admin</RouterLink>
         <button class="knopf klein ghost" title="Vollbild (F)" @click="vollbild">⛶</button>
       </div>
@@ -384,6 +417,7 @@ async function demo(neu = false) {
           <template v-for="(k, i) in heroKpis.slice(0, 4)" :key="k.label">
             <text class="kpi" :x="466 + i * 165" y="790"><tspan :key="String(k.value)" class="blitz">{{ zahl(kpiWerte[i].value ?? k.value) }}</tspan></text>
             <text class="sub" :x="466 + i * 165" y="812">{{ k.label }}</text>
+            <svg v-if="reihe(kpiKey(k.label)).length > 1" :x="466 + i * 165" y="818" width="140" height="18" viewBox="0 0 100 30" preserveAspectRatio="none"><path :d="linie(reihe(kpiKey(k.label)))" class="verlauf" /></svg>
           </template>
           <text v-if="!heroKpis.length" class="sub" x="466" y="790">{{ hero.probe_note ? `Kennzahlen: ${hero.probe_note}` : 'Kennzahlen folgen mit der Sonde' }}</text>
           <a :href="hero.url" target="_blank" rel="noopener"><rect x="1010" y="690" width="126" height="36" rx="6" class="knopf-svg ghost" /><text x="1073" y="714" text-anchor="middle" class="knopf-text ghost">Öffnen ↗</text></a>
@@ -425,6 +459,7 @@ async function demo(neu = false) {
 
       <div class="kachel werkstatt einblenden" style="--i: 2">
         <h4>Werkstatt <span class="dim">· {{ werkstattSumme }}</span></h4>
+        <div v-if="naechsterSchritt" class="weiter"><span class="chip pause">⏸ {{ naechsterSchritt.name }}</span><b>Nächster Schritt:</b> {{ naechsterSchritt.next_step }}</div>
         <TransitionGroup name="liste" tag="div">
           <div v-for="r in werkstattRepos" :key="r.host + '/' + r.name" class="repo-zeile">
             <div class="r-kopf">
@@ -438,9 +473,19 @@ async function demo(neu = false) {
           </div>
         </TransitionGroup>
         <div v-if="!werkstattRepos.length" class="dim">Kein Projektverzeichnis erreichbar.</div>
+        <button v-if="werkstattAeltere" class="knopf klein ghost schalter" @click="werkstattAlle = !werkstattAlle">{{ werkstattAlle ? 'nur aktive zeigen' : `+ ${werkstattAeltere} ältere zeigen` }}</button>
       </div>
 
-      <div class="kachel hosts einblenden" style="--i: 3">
+      <div class="kachel sitzungen einblenden" style="--i: 3">
+        <h4>Sitzungen <span class="dim">· tmux · {{ sitzungen.length }} {{ sitzungen.length === 1 ? 'Sitzung' : 'Sitzungen' }}</span></h4>
+        <div v-for="t in sitzungen.slice(0, 10)" :key="t.host + '/' + t.name" class="sitzung">
+          <div class="s-kopf"><i :class="['punkt', t.attached ? 'ok' : 'unbekannt']" /><b>{{ t.name }}</b><span class="mono dim">{{ t.host }} · {{ t.windows.length }} {{ t.windows.length === 1 ? 'Fenster' : 'Fenster' }}{{ t.created ? ` · seit ${seit(t.created)}` : '' }}{{ t.attached ? ' · verbunden' : '' }}</span></div>
+          <div class="fenster mono"><span v-for="f in t.windows.slice(0, 8)" :key="f.name" :class="['chip', { aktiv: f.active }]">{{ f.name }}<em v-if="f.cmd && f.cmd !== 'bash' && f.cmd !== 'zsh'"> · {{ f.cmd }}</em></span></div>
+        </div>
+        <div v-if="!sitzungen.length" class="dim">Keine tmux-Sitzungen sichtbar (Loopback-SSH des Self-Hosts nötig).</div>
+      </div>
+
+      <div class="kachel hosts einblenden" style="--i: 4">
         <h4>Hosts</h4>
         <div v-for="h in hosts" :key="h.name" class="host-zeile">
           <div class="hz-kopf"><span><i :class="['punkt', statusKlasse(h.status)]" /><b>{{ h.name }}</b> <span class="mono dim">{{ h.ip }}</span></span><span class="mono">{{ h.stats.containers != null ? `${h.stats.containers} Container` : statusText(h.status) }}</span></div>
@@ -450,13 +495,14 @@ async function demo(neu = false) {
             <span class="mono dim">RAM</span><div class="balken"><i :style="{ width: `${h.stats.mem_pct ?? 0}%` }" /></div>
             <span class="mono dim">Disk</span><div class="balken"><i :class="{ warn: (h.stats.disk_pct ?? 0) > 80 }" :style="{ width: `${h.stats.disk_pct ?? 0}%` }" /></div>
           </div>
+          <svg v-if="reihe(`host.${h.name}.load1`).length > 1" class="host-verlauf" viewBox="0 0 100 30" preserveAspectRatio="none"><path :d="linie(reihe(`host.${h.name}.load1`))" class="verlauf" /></svg>
           <div v-if="h.stats.gpus?.length" class="balken-reihe gpu">
             <template v-for="(g, gi) in h.stats.gpus" :key="gi"><span class="mono dim">GPU{{ h.stats.gpus!.length > 1 ? gi + 1 : '' }}</span><div class="balken" :title="g.mem_total_mb ? `${gb(g.mem_used_mb)} / ${gb(g.mem_total_mb)} VRAM` : ''"><i class="gpu" :style="{ width: `${g.util_pct}%` }" /></div></template>
           </div>
         </div>
       </div>
 
-      <div class="kachel projekte einblenden" style="--i: 4">
+      <div class="kachel projekte einblenden" style="--i: 5">
         <h4>Projekte je Host <span class="dim">· automatisch aus Docker</span></h4>
         <div class="projekt-grid">
           <div v-for="p in projekte" :key="p.host + '/' + p.name" class="projekt" :title="(p.names || []).join(', ')">
@@ -470,7 +516,7 @@ async function demo(neu = false) {
         </div>
       </div>
 
-      <div class="kachel einblenden" style="--i: 5">
+      <div class="kachel einblenden" style="--i: 6">
         <h4>Sonden</h4>
         <div v-for="s in overview.probes" :key="s.id" class="sonde">
           <div class="s-kopf"><i :class="['punkt', s.ok ? 'ok' : 'warn']" /><b>{{ s.label }}</b><span v-if="s.note" class="mono dim">{{ s.note }}</span></div>
@@ -479,7 +525,7 @@ async function demo(neu = false) {
         <div v-if="!overview.probes.length" class="dim">Keine Sonden konfiguriert.</div>
       </div>
 
-      <div class="kachel einblenden" style="--i: 6">
+      <div class="kachel einblenden" style="--i: 7">
         <h4>Sicherungen</h4>
         <div v-for="b in overview.backups" :key="b.name" class="zeile"><span><i :class="['punkt', b.status]" /><b>{{ b.name }}</b></span><span class="mono">{{ stundeMinute(b.mtime) }} · {{ bytes(b.size_bytes) }} · {{ relativ(b.mtime) }}</span></div>
         <div v-if="!overview.backups.length" class="dim">Kein Sicherungsverzeichnis eingebunden.</div>
@@ -689,6 +735,16 @@ async function demo(neu = false) {
 .r-kopf .mono { font-size: 11px; white-space: nowrap; }
 .r-sub { font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kachel.kira { grid-column: span 2; }
+.kachel.sitzungen { grid-column: 1 / -1; }
+.sitzung { padding: 6px 0; border-bottom: 1px solid var(--linie); font-size: 13px; }
+.sitzung:last-of-type { border-bottom: 0; }
+.fenster { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip.aktiv { border-color: var(--ok); color: var(--ok); }
+.chip em { font-style: normal; color: var(--text-3); }
+.weiter { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; padding: 6px 8px; margin-bottom: 6px; border-radius: 6px; background: rgba(242,184,75,.08); border: 1px solid rgba(242,184,75,.35); }
+.schalter { margin-top: 8px; }
+.verlauf { fill: none; stroke: var(--info); stroke-width: 1.6; vector-effect: non-scaling-stroke; opacity: .85; }
+.host-verlauf { width: 100%; height: 22px; margin-top: 4px; display: block; }
 .kira-zeile { display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--linie); font-size: 12.5px; align-items: center; }
 .kira-zeile:last-child { border-bottom: 0; }
 .kira-zeile .mono { font-size: 11px; white-space: nowrap; }
@@ -707,6 +763,7 @@ async function demo(neu = false) {
 .wand.reduziert .liste-enter-active, .wand.reduziert .liste-leave-active, .wand.reduziert .liste-move, .wand.reduziert .funken rect, .wand.reduziert .balken i { transition: none; }
 @media (max-width: 1100px) {
   .leitstand { grid-template-columns: 1fr 1fr; }
+  .kachel.sitzungen { grid-column: 1 / -1; }
   .kachel.projekte, .kachel.hosts { grid-row: auto; }
   .kachel.kira { grid-column: auto; }
   .wand-kopf { grid-template-columns: 1fr; }

@@ -308,8 +308,8 @@ def _zugriffe_24h(session: Session, server_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.get("")
-async def overview(_=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+async def build_overview(session: Session) -> dict:
+    """Ermittelt den kompletten Stand der Wand (wird vom Hintergrundlauf und bei Bedarf von der API genutzt)."""
     cfg = wc.load(session)
     hosts = [
         h for h in crud_hosts.list_hosts(session)
@@ -352,6 +352,7 @@ async def overview(_=Depends(require_auth), session: Session = Depends(get_sessi
             "status": h.last_status,
             "last_check_at": h.last_check_at,
             "stats": stats,
+            "tmux": stats.get("tmux") or [],
             "projects": [p["name"] for p in projekte],
             "project_count": len(projekte),
         })
@@ -361,7 +362,7 @@ async def overview(_=Depends(require_auth), session: Session = Depends(get_sessi
     host_by_name = {h.name: h for h in hosts}
     erreichbar = {h["name"] for h in hosts_out if (h["stats"] or {}).get("ok")}
     werkstatt_tasks = [
-        asyncio.to_thread(wx.werkstatt, host_by_name[name], work_dir, cfg.hide)
+        asyncio.to_thread(wx.werkstatt, host_by_name[name], work_dir, cfg.hide, int(cfg.werkstatt_aktiv_tage))
         for name, work_dir in cfg.work_dirs.items()
         if name in host_by_name and name in erreichbar and work_dir
     ]
@@ -455,6 +456,54 @@ async def overview(_=Depends(require_auth), session: Session = Depends(get_sessi
         "events": _events(session, commits),
         "links": cfg.links,
     }
+
+
+@router.get("")
+async def overview(
+    frisch: bool = False, _=Depends(require_auth), session: Session = Depends(get_session)
+) -> dict:
+    """Letzter Stand des Hintergrundlaufs (sofort); mit ?frisch=1 oder ohne Stand wird neu ermittelt."""
+    from ..services import wall_loop
+
+    stand = None if frisch else wall_loop.letzter_stand(max_alter_s=150)
+    if stand is None:
+        stand = await wall_loop.stand_ermitteln()
+    return stand
+
+
+@router.get("/verlauf")
+async def verlauf_lesen(
+    hours: int = 24, keys: str | None = None, _=Depends(require_auth), session: Session = Depends(get_session)
+) -> dict:
+    """Zeitreihen der Wand: keys kommagetrennt (Vorgabe: Hero-Kennzahlen, Alarme, Host-Last)."""
+    from ..services import verlauf
+
+    hours = max(1, min(24 * 31, hours))
+    if keys:
+        wanted = [k.strip() for k in keys.split(",") if k.strip()][:60]
+    else:
+        alle = verlauf.keys(session)
+        wanted = [k for k in alle if k.startswith("hero.") or k.startswith("alerts.") or k.endswith(".load1") or k.endswith(".gpu_pct") or k == "kira.total"]
+    return {"hours": hours, "series": verlauf.series(session, wanted, hours=hours)}
+
+
+@router.post("/push-test")
+async def push_test(_=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    """Schickt eine Testnachricht ueber den Push-Kanal (Telegram) – prueft Token, Chat und Weg."""
+    from ..services import push
+
+    cfg = wc.load(session)
+    pcfg = cfg.push or {}
+    token = _secret_value(session, str(pcfg.get("token_secret") or "telegram_bot_token"))
+    chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
+    if not token or not chat_id:
+        raise HTTPException(status_code=409, detail="telegram_bot_token / telegram_chat_id fehlen im Vault")
+    instanz = str(pcfg.get("instanz") or next((h.name for h in crud_hosts.list_hosts(session) if h.is_self), "Wand"))
+    ok = await push.telegram_senden(token, chat_id, f"Cockpit {instanz}: Testnachricht – Push-Alarme sind eingerichtet ✅")
+    crud_audit.write(session, action="wall.push_test", target="telegram", after={"ok": ok})
+    if not ok:
+        raise HTTPException(status_code=502, detail="Telegram hat die Nachricht nicht angenommen (siehe Log)")
+    return {"ok": True}
 
 
 @router.get("/config")

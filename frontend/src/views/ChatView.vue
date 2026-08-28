@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowLeft, ChevronDown, Copy, RotateCcw, Send, Square } from 'lucide-vue-next'
-import { listChatModels, streamChat } from '../api/chat'
+import { ArrowLeft, BookmarkPlus, ChevronDown, Copy, RotateCcw, Send, Square } from 'lucide-vue-next'
+import { listChatModels, merken, streamChat } from '../api/chat'
 import { extractError } from '../api/client'
 import type { ChatModel, ChatSource, ChatStreamChunk } from '../api/types'
 import { useToastStore } from '../stores/toast'
@@ -27,6 +27,14 @@ interface ChatMessage {
   error?: string
   sources?: ChatSource[]
   ragNote?: string
+  gemerktId?: string
+}
+
+interface MerkenDraft {
+  category: string
+  project: string
+  tags: string
+  content: string
 }
 
 interface PersistedChat {
@@ -52,6 +60,17 @@ const ragModes: { value: RagMode; label: string }[] = [
   { value: 'both', label: 'Beides' },
 ]
 
+const memoryCategories = [
+  { value: 'solution', label: 'Lösung' },
+  { value: 'architecture', label: 'Architektur' },
+  { value: 'reference', label: 'Referenz' },
+  { value: 'pattern', label: 'Muster' },
+  { value: 'workflow', label: 'Ablauf' },
+  { value: 'preference', label: 'Präferenz' },
+  { value: 'feedback', label: 'Feedback' },
+  { value: 'problem', label: 'Problem' },
+]
+
 const toast = useToastStore()
 const messages = ref<ChatMessage[]>([])
 const models = ref<ChatModel[]>([])
@@ -73,6 +92,9 @@ const autoScroll = ref(true)
 const kiraPendingMessageId = ref<string | null>(null)
 const openSourceMessages = ref<string[]>([])
 const openSourceRows = ref<string[]>([])
+const memoryMessageId = ref<string | null>(null)
+const memoryDraft = ref<MerkenDraft | null>(null)
+const memorySaving = ref(false)
 let abortController: AbortController | null = null
 let hasStoredSystem = false
 let hasStoredModel = false
@@ -108,6 +130,7 @@ function isChatMessage(value: unknown): value is ChatMessage {
     && typeof value.createdAt === 'string'
     && (value.sources === undefined || (Array.isArray(value.sources) && value.sources.every(isChatSource)))
     && (value.ragNote === undefined || typeof value.ragNote === 'string')
+    && (value.gemerktId === undefined || typeof value.gemerktId === 'string')
 }
 
 function isRagMode(value: unknown): value is RagMode {
@@ -232,6 +255,54 @@ function toggleSourceRow(messageId: string, index: number): void {
   openSourceRows.value = openSourceRows.value.includes(key)
     ? openSourceRows.value.filter((id) => id !== key)
     : [...openSourceRows.value, key]
+}
+
+function questionFor(messageId: string): string {
+  const index = messages.value.findIndex((message) => message.id === messageId)
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const message = messages.value[i]
+    if (message?.role === 'user') return message.content
+  }
+  return ''
+}
+
+function openMemoryPanel(message: ChatMessage): void {
+  memoryMessageId.value = message.id
+  memoryDraft.value = {
+    category: 'solution',
+    project: ragProject.value.trim(),
+    tags: '',
+    content: `FRAGE: ${questionFor(message.id)}\nANTWORT: ${message.content}`.slice(0, 4000),
+  }
+}
+
+function closeMemoryPanel(): void {
+  if (memorySaving.value) return
+  memoryMessageId.value = null
+  memoryDraft.value = null
+}
+
+async function saveMemory(message: ChatMessage): Promise<void> {
+  const draft = memoryDraft.value
+  if (!draft || memorySaving.value || !draft.content.trim()) return
+  memorySaving.value = true
+  try {
+    const result = await merken({
+      content: draft.content.trim(),
+      category: draft.category,
+      project: draft.project.trim() || null,
+      tags: draft.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+    })
+    if (!result.ok) throw new Error(result.hinweis || 'Speichern fehlgeschlagen.')
+    message.gemerktId = result.id ?? 'gespeichert'
+    memoryMessageId.value = null
+    memoryDraft.value = null
+    toast.success(`Im Gedächtnis gespeichert (${result.id ?? 'ohne ID'})`)
+  } catch (error) {
+    toast.error(extractError(error))
+  } finally {
+    memorySaving.value = false
+  }
 }
 
 function tokensPerSecond(stats: ChatStats | undefined): string {
@@ -455,6 +526,8 @@ function newConversation(): void {
   kiraPendingMessageId.value = null
   openSourceMessages.value = []
   openSourceRows.value = []
+  memoryMessageId.value = null
+  memoryDraft.value = null
   autoScroll.value = true
   toast.info('Neues Gespräch begonnen.')
   nextTick(() => inputElement.value?.focus())
@@ -629,7 +702,45 @@ onBeforeUnmount(() => abortController?.abort())
                 <Copy :size="13" aria-hidden="true" />
                 Kopieren
               </button>
+              <span v-if="message.gemerktId" class="remembered-mark">gemerkt</span>
+              <button class="copy-button" type="button" :disabled="!message.content" @click="openMemoryPanel(message)">
+                <BookmarkPlus :size="13" aria-hidden="true" />
+                Ins Gedächtnis
+              </button>
             </div>
+            <form
+              v-if="message.role === 'assistant' && memoryMessageId === message.id && memoryDraft"
+              class="memory-panel"
+              @submit.prevent="saveMemory(message)"
+            >
+              <div class="memory-fields">
+                <label>
+                  <span>Kategorie</span>
+                  <select v-model="memoryDraft.category" :disabled="memorySaving">
+                    <option v-for="category in memoryCategories" :key="category.value" :value="category.value">{{ category.label }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Projekt</span>
+                  <input v-model="memoryDraft.project" type="text" :disabled="memorySaving">
+                </label>
+                <label class="memory-tags">
+                  <span>Tags <b>kommagetrennt</b></span>
+                  <input v-model="memoryDraft.tags" type="text" placeholder="z. B. api, lösung" :disabled="memorySaving">
+                </label>
+              </div>
+              <label class="memory-content">
+                <span>Inhalt</span>
+                <textarea v-model="memoryDraft.content" maxlength="4000" rows="7" :disabled="memorySaving"></textarea>
+                <small class="mono">{{ memoryDraft.content.length }}/4000</small>
+              </label>
+              <div class="memory-actions">
+                <button class="button ghost" type="button" :disabled="memorySaving" @click="closeMemoryPanel">Abbrechen</button>
+                <button class="button memory-save" type="submit" :disabled="memorySaving || !memoryDraft.content.trim()">
+                  {{ memorySaving ? 'Speichert …' : 'Speichern' }}
+                </button>
+              </div>
+            </form>
           </div>
         </article>
       </TransitionGroup>
@@ -834,6 +945,22 @@ input[type='range'] { height: 17px; accent-color: var(--akzent); cursor: pointer
 .copy-button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 3px 5px; border: 0; background: transparent; color: var(--text-3); font: 10px var(--body); cursor: pointer; }
 .copy-button:hover { color: var(--akzent); }
 .copy-button:disabled { opacity: .45; cursor: not-allowed; }
+.remembered-mark { margin-left: auto; padding: 2px 6px; border: 1px solid rgba(76, 195, 138, .4); border-radius: 999px; color: var(--ok); font: 9px var(--mono); }
+.memory-panel { margin-top: 10px; padding: 11px; border: 1px solid #3b496f; border-radius: 6px; background: #0d1426; }
+.memory-fields { display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 9px; }
+.memory-panel label { min-width: 0; display: flex; flex-direction: column; gap: 5px; color: var(--text-3); font: 600 10px var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.memory-panel label b { margin-left: 3px; color: var(--text-3); font-size: 8px; }
+.memory-panel select,
+.memory-panel input,
+.memory-panel textarea { width: 100%; border: 1px solid var(--linie); border-radius: 5px; outline: 0; background: var(--flaeche); color: var(--text); font: 12px var(--body); text-transform: none; }
+.memory-panel select,
+.memory-panel input { height: 34px; padding: 0 8px; }
+.memory-content { position: relative; margin-top: 9px; }
+.memory-panel textarea { min-height: 130px; padding: 9px 10px 22px; resize: vertical; line-height: 1.45; }
+.memory-content small { position: absolute; right: 8px; bottom: 6px; color: var(--text-3); font-size: 8px; font-weight: 400; letter-spacing: 0; }
+.memory-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 9px; }
+.memory-actions .button { height: 32px; }
+.memory-actions .memory-save { border-color: var(--akzent); background: var(--akzent); color: #1a1200; }
 .console-error { margin: 9px 0 0; color: var(--krit); font: 11px/1.5 var(--mono); }
 
 .empty-state { height: 100%; min-height: 260px; display: grid; place-content: center; justify-items: center; padding: 30px; text-align: center; color: var(--text-3); }
@@ -888,6 +1015,10 @@ input[type='range'] { height: 17px; accent-color: var(--akzent); cursor: pointer
   .send-button { width: 39px; padding: 0; justify-content: center; font-size: 0; }
   .source-heading { flex-wrap: wrap; }
   .source-title { order: 3; width: 100%; white-space: normal; }
+  .assistant-footer { flex-wrap: wrap; }
+  .stats { width: 100%; }
+  .remembered-mark { margin-left: 0; }
+  .memory-fields { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

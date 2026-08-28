@@ -46,7 +46,11 @@ _CMD = (
     # GPUs: NVIDIA ueber nvidia-smi, AMD ueber sysfs (nur Auslastung)
     "if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null "
     "| awk -F', *' '{print \"gpu\", $1, $2, $3}'; "
-    "else for f in /sys/class/drm/card*/device/gpu_busy_percent; do [ -r \"$f\" ] && echo gpu $(cat \"$f\") 0 0; done 2>/dev/null; fi"
+    "else for d in /sys/class/drm/card*/device; do [ -r \"$d/gpu_busy_percent\" ] || continue; "
+    "u=$(cat \"$d/mem_info_vram_used\" 2>/dev/null || echo 0); t=$(cat \"$d/mem_info_vram_total\" 2>/dev/null || echo 0); "
+    "echo gpu $(cat \"$d/gpu_busy_percent\") $((u/1048576)) $((t/1048576)); done 2>/dev/null; fi; "
+    # tmux-Sitzungen des SSH-Nutzers: je Fenster eine Tab-getrennte Zeile
+    "tmux list-windows -a -F 'tmuxw\t#{session_name}\t#{window_name}\t#{window_active}\t#{pane_current_command}\t#{session_attached}\t#{session_created}' 2>/dev/null"
 )
 
 
@@ -55,9 +59,22 @@ def _parse(stdout: str) -> dict:
         "load1": None, "load5": None, "load15": None, "cpus": None,
         "mem_total_mb": None, "mem_used_mb": None, "mem_pct": None,
         "disk_total_kb": None, "disk_used_kb": None, "disk_pct": None,
-        "uptime_s": None, "containers": None, "gpus": [],
+        "uptime_s": None, "containers": None, "gpus": [], "tmux": [],
     }
+    sitzungen: dict[str, dict] = {}
     for line in stdout.splitlines():
+        if line.startswith("tmuxw\t"):
+            teile = line.split("\t")
+            if len(teile) >= 7:
+                _, sitzung, fenster, aktiv, cmd, attached, created = teile[:7]
+                eintrag = sitzungen.setdefault(sitzung, {"name": sitzung, "attached": False, "created": None, "windows": []})
+                eintrag["attached"] = eintrag["attached"] or attached not in ("", "0")
+                try:
+                    eintrag["created"] = int(created)
+                except ValueError:
+                    pass
+                eintrag["windows"].append({"name": fenster, "active": aktiv == "1", "cmd": cmd})
+            continue
         parts = line.split()
         if not parts:
             continue
@@ -86,7 +103,18 @@ def _parse(stdout: str) -> dict:
                 })
         except ValueError:
             continue
+    out["tmux"] = list(sitzungen.values())
     return out
+
+
+def _ziel(host: HostRow) -> HostRow:
+    """Self-Host mit SSH-Zugang: per Loopback-SSH abfragen, damit tmux und Nutzerumgebung
+    des Hosts sichtbar sind (im Container gibt es beides nicht)."""
+    if host.is_self and getattr(host, "ssh_user", None) and getattr(host, "tailscale_ip", None):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(**{k: getattr(host, k) for k in ("id", "name", "tailscale_ip", "ssh_user", "ssh_key_path")}, is_self=0)  # type: ignore[return-value]
+    return host
 
 
 def collect(host: HostRow, *, refresh: bool = False) -> dict:
@@ -97,7 +125,15 @@ def collect(host: HostRow, *, refresh: bool = False) -> dict:
     if cached and not refresh and now - cached[0] < CACHE_TTL_S:
         return cached[1]
     try:
-        result = run_on_host(host, _CMD, timeout=12)
+        ziel = _ziel(host)
+        try:
+            result = run_on_host(ziel, _CMD, timeout=12)
+            if not result.ok and ziel is not host:
+                raise RuntimeError(result.stderr or f"rc={result.exit_code}")
+        except Exception:
+            if ziel is host:
+                raise
+            result = run_on_host(host, _CMD, timeout=12)  # Loopback nicht moeglich: lokal im Container
     except Exception as exc:  # noqa: BLE001 - Wand darf nie an einem Host scheitern
         data = {**_parse(""), "ok": False, "error": str(exc)[:160], "ms": None}
     else:

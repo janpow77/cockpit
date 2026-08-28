@@ -37,7 +37,7 @@ from .routes.overview import router as overview_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
 from .routes.traffic import router as traffic_router
-from .services import bootstrap, health_check, traffic_collector
+from .services import bootstrap, health_check, traffic_collector, wall_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -83,6 +83,9 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    wall_interval = int(os.environ.get("COCKPIT_WALL_INTERVAL", "90"))
+    wall_task = asyncio.create_task(wall_loop.wall_loop(_APP_STATE["stop_event"], interval_s=wall_interval))
+    _APP_STATE["wall_task"] = wall_task
     health_task = asyncio.create_task(
         health_check.health_loop(_APP_STATE["stop_event"], interval_s=interval)
     )

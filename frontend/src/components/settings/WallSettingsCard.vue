@@ -8,7 +8,7 @@ import { onMounted, ref } from 'vue'
 import { Save, Radar } from 'lucide-vue-next'
 import Card from '../shared/Card.vue'
 import Spinner from '../shared/Spinner.vue'
-import { getWallConfig, patchWallConfig } from '../../api/overview'
+import { getWallConfig, patchWallConfig, pushTest } from '../../api/overview'
 import { useToastStore } from '../../stores/toast'
 import { extractError } from '../../api/client'
 import type { WallConfig } from '../../api/types'
@@ -30,6 +30,11 @@ const chatModels = ref('')
 const chatSystem = ref('')
 const chatNumCtx = ref(12288)
 const chatThink = ref(false)
+const push = ref('')
+const werkstattTage = ref(14)
+const verlaufTage = ref(30)
+const chatMaxTokens = ref(900)
+const pushBusy = ref(false)
 const mcpServers = ref('')
 const workDirs = ref('')
 const kira = ref('')
@@ -56,6 +61,10 @@ async function load() {
     chatSystem.value = c.chat_system
     chatNumCtx.value = c.chat_num_ctx ?? 12288
     chatThink.value = !!c.chat_think
+    push.value = json(c.push ?? {})
+    werkstattTage.value = c.werkstatt_aktiv_tage ?? 14
+    verlaufTage.value = c.verlauf_tage ?? 30
+    chatMaxTokens.value = c.chat_max_tokens ?? 900
     mcpServers.value = json(c.mcp_servers)
     workDirs.value = json(c.work_dirs)
     kira.value = json(c.kira)
@@ -89,7 +98,11 @@ async function save() {
     chat_system: chatSystem.value,
     chat_num_ctx: Math.max(2048, Math.min(131072, Math.round(Number(chatNumCtx.value) || 12288))),
     chat_think: chatThink.value,
+    werkstatt_aktiv_tage: Math.max(1, Math.min(365, Math.round(Number(werkstattTage.value) || 14))),
+    verlauf_tage: Math.max(1, Math.min(365, Math.round(Number(verlaufTage.value) || 30))),
+    chat_max_tokens: Math.max(100, Math.min(8000, Math.round(Number(chatMaxTokens.value) || 900))),
   }
+  const pu = parse<Record<string, unknown>>('push', push.value, 'object'); if (pu) patch.push = pu
   const l = parse<Record<string, string>>('links', links.value, 'object'); if (l) patch.links = l
   const la = parse<WallConfig['labels']>('labels', labels.value, 'object'); if (la) patch.labels = la
   const h = parse<Record<string, string>>('hero', hero.value, 'object'); if (h) patch.hero = h
@@ -108,6 +121,11 @@ async function save() {
   finally { saving.value = false }
 }
 
+async function pushTesten() {
+  pushBusy.value = true
+  try { await pushTest(); toast.success('Testnachricht per Telegram gesendet') } catch (err) { toast.error(extractError(err)) } finally { pushBusy.value = false }
+}
+
 const felder: { key: string; label: string; hint: string; model: typeof links; rows: number }[] = [
   { key: 'links', label: 'Öffentliche Adressen (Projekt → URL)', hint: 'Compose-Projekt oder Container-Präfix als Schlüssel', model: links, rows: 8 },
   { key: 'labels', label: 'Anzeigenamen (Projekt → {title, sub})', hint: 'Sprechende Titel für die Wand', model: labels, rows: 8 },
@@ -118,6 +136,7 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
   { key: 'mcp_servers', label: 'MCP-Server', hint: 'id, name, transport, url|command, secret_key, header, header_prefix, health_url, skills_tool', model: mcpServers, rows: 14 },
   { key: 'work_dirs', label: 'Werkstatt (Host → Projektverzeichnis)', hint: 'git-Stand, uncommittete Änderungen und Pausen (.session_resume.md) je Host', model: workDirs, rows: 6 },
   { key: 'kira', label: 'Kira-Memory', hint: 'host, url, env_file, env_key – der Schlüssel wird auf dem Host aus der .env gelesen', model: kira, rows: 6 },
+  { key: 'push', label: 'Push-Alarme (Telegram)', hint: 'aktiv, min_level (warn|krit), ruhe_von/ruhe_bis (nachts nur Kritisches), token_secret, chat_secret, instanz', model: push, rows: 8 },
 ]
 </script>
 
@@ -155,6 +174,25 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
           <input v-model="chatThink" type="checkbox" class="mt-1" />
           <span><span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Denkmodus des Modells</span><br /><span class="text-[11px] text-slate-400">Aus (Vorgabe): Antwort in Sekunden. An: Qwen „denkt“ vor der Antwort – bis zu einige Tausend versteckte Tokens, Minuten Wartezeit.</span></span>
         </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Antwortlänge der Konsole (max. Tokens)</span>
+          <input v-model.number="chatMaxTokens" type="number" min="100" max="8000" step="100" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
+          <span class="text-[11px] text-slate-400">Ollama num_predict. Vorgabe 900 – bei ~11 Tokens/s etwa 80 s Obergrenze.</span>
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Werkstatt: „aktiv“ = Commit oder Pause in den letzten … Tagen</span>
+          <input v-model.number="werkstattTage" type="number" min="1" max="365" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Verlauf aufbewahren (Tage)</span>
+          <input v-model.number="verlaufTage" type="number" min="1" max="365" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
+          <span class="text-[11px] text-slate-400">Kennzahlen je Lauf (alle 90 s) für die Verlaufslinien der Wand.</span>
+        </label>
+        <div class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Push-Kanal prüfen</span><br />
+          <button class="mt-1 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50" :disabled="pushBusy" @click="pushTesten">Testnachricht senden</button>
+          <span class="block text-[11px] text-slate-400">Nutzt telegram_bot_token und telegram_chat_id aus dem Vault.</span>
+        </div>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Sicherungsverzeichnis (im Container)</span>
           <input v-model="backupDir" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />

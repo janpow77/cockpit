@@ -1,5 +1,7 @@
 import { API_BASE, client, getToken, USE_MOCKS } from './client'
-import type { ChatModelsResponse, ChatStreamChunk } from './types'
+import type { ChatModelsResponse, ChatStreamChunk, MerkenRequest, MerkenResult } from './types'
+
+export type { MerkenRequest, MerkenResult } from './types'
 
 export async function listChatModels(): Promise<ChatModelsResponse> {
   if (USE_MOCKS) {
@@ -13,6 +15,12 @@ export async function listChatModels(): Promise<ChatModelsResponse> {
     }
   }
   const { data } = await client.get<ChatModelsResponse>('/chat/models')
+  return data
+}
+
+export async function merken(req: MerkenRequest): Promise<MerkenResult> {
+  if (USE_MOCKS) return { ok: true, id: 'mock', weg: 'mcp' }
+  const { data } = await client.post<MerkenResult>('/chat/merken', req)
   return data
 }
 

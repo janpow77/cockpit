@@ -210,6 +210,26 @@ def _memory_api_suche(host: HostRow, kira_cfg: dict, query: str, limit: int, pro
         return None
 
 
+def _memory_api_schreiben(host: HostRow, kira_cfg: dict, body: dict) -> Any:
+    """Eintrag ueber die Memory-API auf dem Kira-Host anlegen (POST /entries), Schluessel aus dessen .env."""
+    base = str(kira_cfg.get("url") or "http://127.0.0.1:8003/api/memory").rstrip("/")
+    env_file = str(kira_cfg.get("env_file") or "")
+    env_key = str(kira_cfg.get("env_key") or "MEMORY_API_KEY")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_key):
+        env_key = "MEMORY_API_KEY"
+    key = f"$(sed -n 's/^{env_key}=//p' {shlex.quote(env_file)} | head -1 | tr -d '\\r\"')" if env_file else ""
+    header = f'-H "X-Memory-API-Key: {key}"' if key else ""
+    cmd = (
+        f"curl -s -m 20 {header} -H 'Content-Type: application/json' -d {shlex.quote(json.dumps(body, ensure_ascii=False))} "
+        f"{shlex.quote(base + '/entries')}"
+    )
+    result = run_on_host(host, cmd, timeout=30)
+    try:
+        return json.loads(result.stdout or "null")
+    except json.JSONDecodeError:
+        return {"fehler": (result.stdout or result.stderr)[:160]}
+
+
 async def suchen(
     *,
     query: str,

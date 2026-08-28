@@ -239,6 +239,7 @@ export interface HostStats {
   uptime_s: number | null
   containers: number | null
   gpus?: { util_pct: number; mem_used_mb: number | null; mem_total_mb: number | null }[]
+  tmux?: TmuxSitzung[]
   ok: boolean
   error: string | null
   ms: number | null
@@ -252,6 +253,7 @@ export interface WallHost {
   status: string
   last_check_at: string | null
   stats: HostStats
+  tmux?: TmuxSitzung[]
   projects: string[]
   project_count: number
 }
@@ -311,6 +313,8 @@ export interface Overview {
   kira: KiraStand
 }
 
+export interface TmuxSitzung { name: string; attached: boolean; created: number | null; windows: { name: string; active: boolean; cmd: string }[] }
+export interface VerlaufAntwort { hours: number; series: Record<string, [string, number][]> }
 export interface WallAlert { level: 'krit' | 'warn' | 'info'; text: string; host: string | null; hint: string | null; url: string | null }
 export interface WallDienst {
   url: string; host: string; ok: boolean; status_code: number | null; ms: number | null; note: string | null
@@ -319,9 +323,9 @@ export interface WallDienst {
 }
 export interface WerkstattRepo {
   name: string; branch: string; dirty: number; ahead: number | null; last_commit: string | null; age_h: number | null
-  message: string; pause: string | null; next_step: string | null
+  message: string; pause: string | null; next_step: string | null; aktiv?: boolean
 }
-export interface WerkstattHost { host: string; ok: boolean; error: string | null; repos: WerkstattRepo[]; repo_count?: number; dirty: number; pausen: number; ms: number | null; collected_at: string | null }
+export interface WerkstattHost { host: string; ok: boolean; error: string | null; repos: WerkstattRepo[]; repo_count?: number; aktiv?: number; dirty: number; pausen: number; ms: number | null; collected_at: string | null }
 export interface KiraEintrag { id: string | null; category: string | null; project: string | null; text: string; tags: string[]; created_at: string | null }
 export interface KiraStand { ok: boolean; total: number | null; entries: KiraEintrag[]; note: string | null; host?: string | null }
 
@@ -342,12 +346,28 @@ export interface WallConfig {
   work_dirs: Record<string, string>
   kira: Record<string, string>
   prod_hosts?: string[]
+  push?: Record<string, unknown>
+  werkstatt_aktiv_tage?: number
+  verlauf_tage?: number
+  chat_max_tokens?: number
 }
 
 export interface DemoStartResult { ok: boolean; uebersprungen?: boolean; faelle: { aktenzeichen: string; schritte: number; fehler: string | null }[]; url: string }
 
 export interface ChatModel { tag: string; label: string; parameter_size: string; size_bytes: number }
 export interface ChatModelsResponse { router: string; router_ok: boolean; models: ChatModel[]; system: string }
+export interface MerkenRequest {
+  content: string
+  category: string
+  project?: string | null
+  tags?: string[]
+}
+export interface MerkenResult {
+  ok: boolean
+  id: string | null
+  weg: 'mcp' | 'api'
+  hinweis?: string | null
+}
 export interface ChatSource {
   quelle: 'memory' | 'knowledge'
   titel: string
