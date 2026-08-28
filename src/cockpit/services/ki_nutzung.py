@@ -161,7 +161,11 @@ def abfragen(host: HostRow, cfg: dict, *, refresh: bool = False) -> dict:
     if cached and not refresh and now - cached[0] < CACHE_TTL_S:
         return cached[1]
     try:
-        result = run_on_host(host, _befehl(cfg), timeout=60)
+        from .host_stats import (
+            _ziel,  # Self-Host per Loopback-SSH: die Dateien liegen beim Nutzer, nicht im Container
+        )
+
+        result = run_on_host(_ziel(host), _befehl(cfg), timeout=60)
         daten = json.loads(result.stdout or "{}")
         daten["ok"] = bool(daten)
         if not daten.get("ok"):

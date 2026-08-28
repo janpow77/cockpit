@@ -326,3 +326,12 @@ gemeldete `rate_limits` (Wochenfenster, Plan) und Tokenzähler aus `~/.codex/ses
 Limit-Prozente und Tages-Tokens landen im Verlauf (`ki.claude.seven_day`, …). Für die
 Abo-Konten gibt es keine offiziellen Nutzungs-APIs – die Werte kommen genau aus den
 Quellen, die auch die Apps selbst anzeigen.
+
+**v0.3.21:** KI-Nutzung als eigene Seite `/ki` (Halbkreis-Anzeigen je Limit mit Reset-Zeit,
+Tokens je Tag, Modelle heute, Auslastung 7 Tage); Kopfzeile ohne Zählerzeile, dafür Link
+„KI-Nutzung · Claude n %“. **Sitzungen:** Fenster aufklappen zeigt die letzten 40
+Terminalzeilen (`tmux capture-pane`), darunter „Arbeitspaket“ – Text wird per
+`tmux send-keys -l` in das Fenster getippt und mit Enter abgeschickt (Bestätigung durch
+zweiten Klick, Audit-Eintrag `wall.tmux_senden`). Ziel-Form `sitzung:fenster`, Text ≤ 2000
+Zeichen; Self-Hosts über Loopback-SSH. KI-Sonde nutzt denselben Loopback (die Dateien
+liegen beim Nutzer, nicht im Container).

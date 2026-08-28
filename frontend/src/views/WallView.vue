@@ -6,7 +6,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { getOverview, getVerlauf, startDemo } from '../api/overview'
+import { getOverview, getVerlauf, startDemo, tmuxAusgabe, tmuxSenden } from '../api/overview'
 import { extractError } from '../api/client'
 import { usePollStore } from '../stores/poll'
 import { useToastStore } from '../stores/toast'
@@ -254,6 +254,43 @@ function linie(werte: number[]): string {
 function kpiKey(label: string): string {
   return 'hero.' + label.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 }
+// Sitzungen: aufgeklapptes Fenster mit Terminalausgabe und Arbeitspaket-Versand
+const offenesFenster = ref<string | null>(null)
+const fensterAusgabe = ref('')
+const fensterLaden = ref(false)
+const paket = ref('')
+const paketBestaetigen = ref(false)
+const paketBusy = ref(false)
+let paketTimer: number | undefined
+async function fensterOeffnen(host: string, ziel: string) {
+  const key = `${host}|${ziel}`
+  if (offenesFenster.value === key) { offenesFenster.value = null; return }
+  offenesFenster.value = key
+  paketBestaetigen.value = false
+  await ausgabeLaden(host, ziel)
+}
+async function ausgabeLaden(host: string, ziel: string) {
+  fensterLaden.value = true
+  try { fensterAusgabe.value = (await tmuxAusgabe(host, ziel)).text } catch (err) { fensterAusgabe.value = `Ausgabe nicht abrufbar: ${extractError(err)}` } finally { fensterLaden.value = false }
+}
+async function paketSenden(host: string, ziel: string) {
+  const text = paket.value.trim()
+  if (!text) return
+  if (!paketBestaetigen.value) {
+    paketBestaetigen.value = true
+    window.clearTimeout(paketTimer)
+    paketTimer = window.setTimeout(() => { paketBestaetigen.value = false }, 5000)
+    return
+  }
+  paketBusy.value = true
+  try {
+    await tmuxSenden(host, ziel, text)
+    toast.success(`Arbeitspaket an ${ziel} auf ${host} gesendet`)
+    paket.value = ''
+    paketBestaetigen.value = false
+    window.setTimeout(() => void ausgabeLaden(host, ziel), 1500)
+  } catch (err) { toast.error(extractError(err)) } finally { paketBusy.value = false }
+}
 function seit(created: number | null): string {
   return created ? relativ(new Date(created * 1000).toISOString()) : ''
 }
@@ -269,26 +306,11 @@ const werkstattSumme = computed(() => {
 })
 const kira = computed(() => overview.value?.kira ?? null)
 const ki = computed(() => overview.value?.ki_nutzung ?? null)
-const KI_DIENSTE = [
-  { key: 'claude', titel: 'Claude', sub: 'Claude Code · Max' },
-  { key: 'codex', titel: 'Codex', sub: 'ChatGPT' },
-  { key: 'gemini', titel: 'Gemini', sub: 'Gemini CLI' },
-] as const
-function kTokens(n: number | undefined): string {
-  if (n == null) return '–'
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1).replace('.', ',')} Mrd.`
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace('.', ',')} Mio.`
-  if (n >= 1e3) return `${Math.round(n / 1e3)} k`
-  return String(n)
-}
-function resetText(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const tage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
-  return `Reset ${tage[d.getDay()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-function limitKlasse(p: number): string { return p >= 97 ? 'krit' : p >= 85 ? 'warn' : 'ok' }
-function tagKurz(tag: string): string { return tag.slice(8, 10) + '.' + tag.slice(5, 7) + '.' }
+/** Kurzform für die Kopfzeile: Claude-Wochenlimit in Prozent. */
+const kiKurz = computed(() => {
+  const l = ki.value?.claude?.limits?.seven_day
+  return l ? `Claude ${Math.round(l.prozent)} %` : ''
+})
 const KATEGORIE: Record<string, string> = { architecture: 'Architektur', solution: 'Lösung', problem: 'Problem', reference: 'Referenz', pattern: 'Muster', workflow: 'Ablauf', preference: 'Präferenz', feedback: 'Feedback' }
 function kategorie(k: string | null): string { return (k && KATEGORIE[k]) || k || '–' }
 function gpuLast(gpus: { util_pct: number }[]): number {
@@ -343,13 +365,13 @@ async function demo(neu = false) {
         <span class="untertitel">Cockpit</span>
       </div>
       <div class="kopf-mitte">
-        <span v-if="overview" class="mono dim">{{ hosts.length }} Hosts · {{ projekte.length }} Projekte · {{ zahl(gesamtContainer) }} Container</span>
         <span v-if="error" class="fehler">{{ error }}</span>
       </div>
       <div class="kopf-rechts">
         <span class="live" :title="`Alle ${REFRESH_MS / 1000} s aktualisiert · R = sofort`"><i :class="['punkt', error ? 'krit' : 'ok']" />{{ error ? 'GESTÖRT' : 'LIVE' }}<em>· {{ seitLoad }} s</em></span>
         <span class="mono uhr">{{ uhr }}</span>
         <RouterLink to="/chat" class="knopf klein">KI-Konsole</RouterLink>
+        <RouterLink to="/ki" class="knopf klein ghost" :title="kiKurz">KI-Nutzung{{ kiKurz ? ` · ${kiKurz}` : '' }}</RouterLink>
         <RouterLink to="/kompakt" class="knopf klein ghost" title="Handy-Ansicht">Kompakt</RouterLink>
         <RouterLink to="/" class="knopf klein ghost">Admin</RouterLink>
         <button class="knopf klein ghost" title="Vollbild (F)" @click="vollbild">⛶</button>
@@ -501,7 +523,19 @@ async function demo(neu = false) {
         <h4>Sitzungen <span class="dim">· tmux · {{ sitzungen.length }} {{ sitzungen.length === 1 ? 'Sitzung' : 'Sitzungen' }}</span></h4>
         <div v-for="t in sitzungen.slice(0, 10)" :key="t.host + '/' + t.name" class="sitzung">
           <div class="s-kopf"><i :class="['punkt', t.attached ? 'ok' : 'unbekannt']" /><b>{{ t.name }}</b><span class="mono dim">{{ t.host }} · {{ t.windows.length }} {{ t.windows.length === 1 ? 'Fenster' : 'Fenster' }}{{ t.created ? ` · seit ${seit(t.created)}` : '' }}{{ t.attached ? ' · verbunden' : '' }}</span></div>
-          <div class="fenster mono"><span v-for="f in t.windows.slice(0, 8)" :key="f.name" :class="['chip', { aktiv: f.active }]">{{ f.name }}<em v-if="f.cmd && f.cmd !== 'bash' && f.cmd !== 'zsh'"> · {{ f.cmd }}</em></span></div>
+          <div class="fenster mono">
+            <button v-for="f in t.windows.slice(0, 12)" :key="f.name" :class="['chip', 'klick', { aktiv: f.active, offen: offenesFenster === `${t.host}|${t.name}:${f.name}` }]" :title="`Fenster ${f.name} öffnen: Ausgabe und Arbeitspaket`" @click="fensterOeffnen(t.host, `${t.name}:${f.name}`)">{{ f.name }}<em v-if="f.cmd && f.cmd !== 'bash' && f.cmd !== 'zsh'"> · {{ f.cmd }}</em> ▸</button>
+          </div>
+          <template v-for="f in t.windows" :key="'p' + f.name">
+            <div v-if="offenesFenster === `${t.host}|${t.name}:${f.name}`" class="terminal">
+              <div class="t-kopf mono dim"><span>{{ t.host }} · {{ t.name }}:{{ f.name }}{{ f.cmd ? ` · ${f.cmd}` : '' }}</span><button class="knopf klein ghost" :disabled="fensterLaden" @click="ausgabeLaden(t.host, `${t.name}:${f.name}`)">{{ fensterLaden ? 'lädt …' : 'Ausgabe neu laden' }}</button></div>
+              <pre class="t-ausgabe mono">{{ fensterAusgabe || '(leer)' }}</pre>
+              <form class="t-senden" @submit.prevent="paketSenden(t.host, `${t.name}:${f.name}`)">
+                <input v-model="paket" class="t-eingabe mono" placeholder="Arbeitspaket – wird in diesem Fenster eingetippt und mit Enter abgeschickt …" maxlength="2000" />
+                <button type="submit" class="knopf klein" :class="{ warn: paketBestaetigen }" :disabled="paketBusy || !paket.trim()">{{ paketBusy ? 'sendet …' : paketBestaetigen ? 'Wirklich senden?' : 'Senden' }}</button>
+              </form>
+            </div>
+          </template>
         </div>
         <div v-if="!sitzungen.length" class="dim">Keine tmux-Sitzungen sichtbar (Loopback-SSH des Self-Hosts nötig).</div>
       </div>
@@ -557,28 +591,6 @@ async function demo(neu = false) {
         <div class="zeile"><span><i :class="['punkt', overview.ai_router.ok ? 'ok' : 'krit']" /><b>{{ overview.ai_router.freigegeben.length }} für die Konsole freigegeben</b></span><span class="mono dim">{{ overview.ai_router.model_count }} geladen · {{ overview.ai_router.url.replace(/^https?:\/\//, '') }}</span></div>
         <div class="modelle mono">{{ overview.ai_router.freigegeben.join(' · ') || 'Whitelist leer – in den Einstellungen freigeben' }}</div>
         <RouterLink to="/chat" class="knopf klein" style="margin-top: 8px; display: inline-block">KI-Konsole öffnen</RouterLink>
-      </div>
-
-      <div v-if="ki" class="kachel ki einblenden" style="--i: 8">
-        <h4>KI-Nutzung <span class="dim">· Limits und Tokens{{ ki.host ? ` · ${ki.host}` : '' }}{{ !ki.ok && ki.hinweis ? ` · ${ki.hinweis}` : '' }}</span></h4>
-        <div class="ki-grid">
-          <div v-for="d in KI_DIENSTE" :key="d.key" class="ki-dienst">
-            <div class="ki-kopf"><b>{{ d.titel }}</b><span class="mono dim">{{ ki[d.key]?.plan ? `${d.sub} · ${ki[d.key]?.plan}` : d.sub }}</span></div>
-            <template v-if="ki[d.key]?.verfuegbar">
-              <div v-for="(lim, lk) in ki[d.key]?.limits ?? {}" :key="lk" class="ki-limit">
-                <div class="ki-limit-kopf"><span>{{ lim.label }}</span><span class="mono" :class="limitKlasse(lim.prozent)">{{ Math.round(lim.prozent) }} %</span></div>
-                <div class="balken"><i :class="limitKlasse(lim.prozent)" :style="{ width: `${Math.min(100, lim.prozent)}%` }" /></div>
-                <div class="mono dim ki-reset">{{ resetText(lim.reset) }}</div>
-              </div>
-              <div v-if="!Object.keys(ki[d.key]?.limits ?? {}).length" class="dim ki-hinweis">{{ ki[d.key]?.hinweis || 'Keine Limitdaten' }}</div>
-              <div v-if="ki[d.key]?.heute" class="ki-heute"><em class="kpi-klein">{{ kTokens(ki[d.key]?.heute?.out) }}</em><small>Tokens heute (Ausgabe) · {{ kTokens(ki[d.key]?.heute?.kontext) }} Kontext{{ ki[d.key]?.heute?.sitzungen != null ? ` · ${ki[d.key]?.heute?.sitzungen} Sitzungen` : '' }}</small></div>
-              <div v-if="ki[d.key]?.tage?.length" class="ki-tage" :title="(ki[d.key]?.tage ?? []).map((t) => `${tagKurz(t.tag)}: ${kTokens(t.out)}`).join(' · ')">
-                <div v-for="t in ki[d.key]?.tage" :key="t.tag" class="ki-tag"><i :style="{ height: `${Math.max(4, Math.round((t.out / Math.max(1, ...(ki[d.key]?.tage ?? []).map((x) => x.out))) * 100))}%` }" /><span class="mono dim">{{ t.tag.slice(8, 10) }}</span></div>
-              </div>
-            </template>
-            <div v-else class="dim ki-hinweis">{{ ki[d.key]?.hinweis || 'keine Daten' }}</div>
-          </div>
-        </div>
       </div>
 
       <div v-if="kira" class="kachel kira einblenden" style="--i: 9">
@@ -800,6 +812,15 @@ async function demo(neu = false) {
 .sitzung:last-of-type { border-bottom: 0; }
 .fenster { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .chip.aktiv { border-color: var(--ok); color: var(--ok); }
+.chip.klick { cursor: pointer; background: transparent; }
+.chip.klick:hover, .chip.offen { border-color: var(--akzent); color: var(--akzent); }
+.terminal { margin: 8px 0 4px; border: 1px solid var(--linie); border-radius: 6px; background: #070B18; overflow: hidden; }
+.t-kopf { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 11px; border-bottom: 1px solid var(--linie); }
+.t-ausgabe { margin: 0; padding: 10px 12px; max-height: 280px; overflow: auto; font-size: 11.5px; line-height: 1.45; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+.t-senden { display: flex; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--linie); background: var(--flaeche); }
+.t-eingabe { flex: 1; background: #0B1020; border: 1px solid var(--linie); color: var(--text); border-radius: 5px; padding: 7px 10px; font-size: 12.5px; }
+.t-eingabe:focus { outline: 2px solid var(--akzent); outline-offset: 0; }
+.knopf.warn { background: var(--krit); border-color: var(--krit); color: #fff; }
 .chip em { font-style: normal; color: var(--text-3); }
 .weiter { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; padding: 6px 8px; margin-bottom: 6px; border-radius: 6px; background: rgba(242,184,75,.08); border: 1px solid rgba(242,184,75,.35); }
 .schalter { margin-top: 8px; }

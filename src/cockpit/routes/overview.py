@@ -11,13 +11,14 @@ import asyncio
 import logging
 import os
 import re
+import shlex
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..auth import require_auth
@@ -497,6 +498,62 @@ async def verlauf_lesen(
         alle = verlauf.keys(session)
         wanted = [k for k in alle if k.startswith("hero.") or k.startswith("alerts.") or k.endswith(".load1") or k.endswith(".gpu_pct") or k == "kira.total"]
     return {"hours": hours, "series": verlauf.series(session, wanted, hours=hours)}
+
+
+_TMUX_ZIEL = re.compile(r"^[A-Za-z0-9_.-]{1,64}:[A-Za-z0-9_.-]{1,64}$")
+
+
+class TmuxSenden(BaseModel):
+    host: str = Field(min_length=1, max_length=64)
+    ziel: str = Field(min_length=3, max_length=130)
+    text: str = Field(min_length=1, max_length=2000)
+
+
+def _tmux_host(session: Session, name: str) -> HostRow:
+    from ..services.host_stats import _ziel
+
+    host = next((h for h in crud_hosts.list_hosts(session) if h.name == name and h.enabled), None)
+    if host is None:
+        raise HTTPException(status_code=404, detail=f"Host „{name}“ unbekannt")
+    return _ziel(host)
+
+
+@router.get("/tmux/ausgabe")
+async def tmux_ausgabe(
+    host: str, ziel: str, zeilen: int = 40, _=Depends(require_auth), session: Session = Depends(get_session)
+) -> dict:
+    """Letzte Zeilen eines tmux-Fensters (capture-pane), nur lesend."""
+    if not _TMUX_ZIEL.match(ziel):
+        raise HTTPException(status_code=422, detail="Ziel muss die Form sitzung:fenster haben")
+    zeilen = max(5, min(200, zeilen))
+    h = _tmux_host(session, host)
+    from ..services.ssh_runner import run_on_host
+
+    cmd = f"tmux capture-pane -p -t {shlex.quote(ziel)} -S -{zeilen} 2>&1 | sed -e :a -e '/^\n*$/{{$d;N;ba' -e '}}'"
+    res = await asyncio.to_thread(run_on_host, h, cmd, timeout=15)
+    return {"text": (res.stdout or res.stderr or "")[-12000:], "ok": res.ok}
+
+
+@router.post("/tmux/senden")
+async def tmux_senden(
+    req: TmuxSenden, _=Depends(require_auth), session: Session = Depends(get_session)
+) -> dict:
+    """Arbeitspaket in ein tmux-Fenster tippen (send-keys) und mit Enter abschicken."""
+    if not _TMUX_ZIEL.match(req.ziel):
+        raise HTTPException(status_code=422, detail="Ziel muss die Form sitzung:fenster haben")
+    text = "".join(ch for ch in req.text if ch == "\n" or ch >= " ").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="Leeres Arbeitspaket")
+    h = _tmux_host(session, req.host)
+    from ..services.ssh_runner import run_on_host
+
+    # -l: Text woertlich (keine Tastennamen), danach Enter
+    cmd = f"tmux send-keys -t {shlex.quote(req.ziel)} -l {shlex.quote(text)} && tmux send-keys -t {shlex.quote(req.ziel)} Enter"
+    res = await asyncio.to_thread(run_on_host, h, cmd, timeout=15)
+    crud_audit.write(session, action="wall.tmux_senden", target=f"{req.host}:{req.ziel}", after={"zeichen": len(text), "text": text[:300], "ok": res.ok})
+    if not res.ok:
+        raise HTTPException(status_code=502, detail=f"tmux: {(res.stderr or res.stdout or 'Fehler')[:160]}")
+    return {"ok": True}
 
 
 @router.post("/push-test")

@@ -125,3 +125,15 @@ export async function pushTest(): Promise<{ ok: boolean }> {
   const { data } = await client.post<{ ok: boolean }>('/overview/push-test', {}, { timeout: 30_000 })
   return data
 }
+
+export async function tmuxAusgabe(host: string, ziel: string, zeilen = 40): Promise<{ text: string }> {
+  if (USE_MOCKS) return { text: '$ claude\n> Arbeitspaket: Tests reparieren …\n' }
+  const { data } = await client.get<{ text: string }>('/overview/tmux/ausgabe', { params: { host, ziel, zeilen }, timeout: 30_000 })
+  return data
+}
+
+export async function tmuxSenden(host: string, ziel: string, text: string): Promise<{ ok: boolean }> {
+  if (USE_MOCKS) return { ok: true }
+  const { data } = await client.post<{ ok: boolean }>('/overview/tmux/senden', { host, ziel, text }, { timeout: 30_000 })
+  return data
+}

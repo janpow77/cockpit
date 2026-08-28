@@ -121,3 +121,10 @@ def test_ki_nutzung_alarme_und_verlauf():
     assert a[0]["hint"] == "Reset 2026-09-01 18:00 UTC"
     w = verlauf.werte_aus_stand({"ki_nutzung": daten})
     assert w["ki.claude.seven_day"] == 91.0 and w["ki.codex.primary"] == 98.0 and w["ki.claude.out_heute"] == 300
+
+
+def test_tmux_zielmuster():
+    from cockpit.routes.overview import _TMUX_ZIEL
+
+    assert _TMUX_ZIEL.match("projekte:flowinvoice") and _TMUX_ZIEL.match("claude:1")
+    assert not _TMUX_ZIEL.match("projekte") and not _TMUX_ZIEL.match("a:b; rm -rf /") and not _TMUX_ZIEL.match("a b:c")
