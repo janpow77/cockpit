@@ -227,3 +227,4 @@ def test_abschluss_ohne_hook_artefakte():
     cmd = svc.abschluss_befehl(_auftrag())
     assert "':!ARCHITEKTUR.md'" in cmd and "git checkout -q -- ARCHITEKTUR.md" in cmd
     assert "-c core.hooksPath=/dev/null" in cmd and "git add -A -- ." in cmd
+    assert "keine Änderungen im Branch" in cmd and "git diff --shortstat master HEAD" in cmd

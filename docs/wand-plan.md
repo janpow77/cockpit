@@ -483,3 +483,21 @@ Tailscale), `agent_bins.gemini` → agy. Ablauf: Image `docker save | ssh janpow
 ein Aufruf auf dem NUC mit `janpow-ai` als Argument rollt auf den NUC aus). SSH von janpow-ai zu
 NUC (`janpow@`) und Hetzner (`deploy@`) funktioniert. Desktop-Verknüpfung
 `~/Schreibtisch/Cockpit.desktop` (xdg-open auf die Wand).
+
+**Prüfstand 28.08. (echte Aufgabe, v0.4.11–0.4.13):** Auftrag „README: Abschnitt Aufträge
+(Kanban) ergänzen“ auf dem Cockpit-Repo (Claude, Plan mit Freigabe): Plan in 75 s, Umsetzung
+in 129 s, Commit `c233939` auf `auftrag/a_323013db73` (25 Zeilen, sachlich, Umlaute korrekt).
+Befund: der `post-commit`-Hook des Nutzers (graphify) erzeugte im Worktree eine neue
+`ARCHITEKTUR.md`, die der Abschluss-Commit mitnahm → `abschluss_befehl` setzt
+`HOOK_ARTEFAKTE` (ARCHITEKTUR.md, ARCHITECTURE.md, graphify-out) vor dem Commit zurück,
+schließt sie aus und committet mit `core.hooksPath=/dev/null`; „Letzte Zeile“ zeigt nur bei
+eigenem Commit den Diff-Umfang (sonst „keine Änderungen im Branch“ statt des Stats des
+Vorgänger-Commits). Frontend-Test per Playwright (Token in `localStorage`
+`cockpit_admin_token`): Formular → „Sofort planen“ → Läuft → Fertig, Detailpanel mit Bericht
+(Codex, „Nur berichten“, vier Umlaut-Fundstellen in der README). Beobachtet: beim Spaltenwechsel
+erscheint die Karte für einen Poll-Zyklus in zwei Spalten (Anzeige, kein Datenfehler).
+
+**v0.4.12:** „KI-Nutzung“ ist kein eigener Tab mehr – Kopfzeilen-Link der Wand und Sidebar-
+Eintrag entfernt (`/ki` leitet auf `/kanban`), die Anzeige lebt als einklappbarer Bereich
+(`components/kanban/KiNutzungPanel.vue`) unter der Kapazitätsleiste des Kanbans; Zustand in
+`localStorage`.

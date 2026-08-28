@@ -320,7 +320,8 @@ def abschluss_befehl(a: AuftragRow) -> str:
         f"cd {shlex.quote(p['worktree'])} && git checkout -q -- {zuruecksetzen} 2>/dev/null; git add -A -- . {ausnahmen} && "
         f"(git diff --cached --quiet || git -c core.hooksPath=/dev/null -c user.name=cockpit -c user.email=cockpit@flowaudit.de commit -q -m {shlex.quote(msg)}) ; "
         "echo \"COMMITS=$(git rev-list --count HEAD ^$(git merge-base HEAD $(git rev-parse --abbrev-ref HEAD@{upstream} 2>/dev/null || echo master) 2>/dev/null || echo HEAD) 2>/dev/null)\"; "
-        "echo \"HEAD=$(git rev-parse --short HEAD)\"; git diff --shortstat HEAD~1 HEAD 2>/dev/null | head -1"
+        "echo \"HEAD=$(git rev-parse --short HEAD)\"; "
+        "if [ \"$(git rev-list --count master..HEAD 2>/dev/null || echo 0)\" -gt 0 ]; then git diff --shortstat master HEAD 2>/dev/null | head -1; else echo 'keine Änderungen im Branch'; fi"
     )
 
 
