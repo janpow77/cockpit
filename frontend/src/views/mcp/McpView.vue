@@ -83,7 +83,7 @@ const gesamt = computed(() => ({
       <div v-else-if="error" class="rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-4 text-sm text-red-800 dark:text-red-200">
         <p class="font-semibold flex items-center gap-2"><AlertTriangle :size="16" /> Fehler beim Laden</p><p class="mt-1">{{ error }}</p>
       </div>
-      <div v-else-if="!servers.length" class="py-6"><EmptyState title="Keine MCP-Server konfiguriert" message="Server werden in den Einstellungen unter „Wand & KI-Konsole“ (mcp_servers) gepflegt." /></div>
+      <div v-else-if="!servers.length" class="py-6"><EmptyState title="Keine MCP-Server konfiguriert" message="Server werden in den Einstellungen unter „Cockpit & LLM-Konsole“ (mcp_servers) gepflegt." /></div>
       <div v-else class="grid grid-cols-3 gap-4 mb-2">
         <div class="rounded-lg border border-slate-200/70 dark:border-slate-800/70 p-3"><p class="text-xs uppercase tracking-wider text-slate-500">Server</p><p class="text-2xl font-bold tabular-nums">{{ gesamt.server }}</p></div>
         <div class="rounded-lg border border-slate-200/70 dark:border-slate-800/70 p-3"><p class="text-xs uppercase tracking-wider text-slate-500">Erreichbar</p><p class="text-2xl font-bold tabular-nums">{{ gesamt.verbunden }}</p></div>

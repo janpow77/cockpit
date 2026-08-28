@@ -10,21 +10,24 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from . import __version__
+from . import __version__, auth
 from .config import load_config
 from .db import get_session_factory, init_db
 from .routes.apps import router as apps_router
 from .routes.audit import router as audit_router
+from .routes.auftraege import router as auftraege_router
 from .routes.auth import router as auth_router
 from .routes.backups import router as backups_router
 from .routes.chat import router as chat_router
@@ -37,12 +40,42 @@ from .routes.overview import router as overview_router
 from .routes.secrets import router as secrets_router
 from .routes.settings import router as settings_router
 from .routes.traffic import router as traffic_router
-from .services import bootstrap, health_check, traffic_collector, wall_loop
+from .services import (
+    auftrag_runner,
+    bootstrap,
+    health_check,
+    leitinstanz,
+    telegram_dialog,
+    traffic_collector,
+    wall_loop,
+)
+from .services import wall_config as wc
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(name)s  %(message)s",
 )
+
+
+class _TokenFilter(logging.Filter):
+    """Bot-Tokens (Telegram: bot<id>:<secret>) und Bearer-Werte nie in Logzeilen – httpx protokolliert volle URLs."""
+
+    MUSTER = re.compile(r"bot\d+:[A-Za-z0-9_-]{20,}")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001
+            return True
+        if self.MUSTER.search(msg):
+            record.msg = self.MUSTER.sub("bot<token>", msg)
+            record.args = ()
+        return True
+
+
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_TokenFilter())
+logging.getLogger("httpx").setLevel(logging.WARNING)  # Request-Zeilen mit vollständiger URL sind hier nur Rauschen
 log = logging.getLogger("cockpit")
 
 
@@ -86,6 +119,8 @@ async def lifespan(app: FastAPI):
     wall_interval = int(os.environ.get("COCKPIT_WALL_INTERVAL", "90"))
     wall_task = asyncio.create_task(wall_loop.wall_loop(_APP_STATE["stop_event"], interval_s=wall_interval))
     _APP_STATE["wall_task"] = wall_task
+    _APP_STATE["auftrag_task"] = asyncio.create_task(auftrag_runner.runner_loop(_APP_STATE["stop_event"], interval_s=20))
+    _APP_STATE["telegram_task"] = asyncio.create_task(telegram_dialog.dialog_loop(_APP_STATE["stop_event"]))
     health_task = asyncio.create_task(
         health_check.health_loop(_APP_STATE["stop_event"], interval_s=interval)
     )
@@ -124,6 +159,46 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class LeitinstanzMiddleware(BaseHTTPMiddleware):
+    """Reicht /admin/api/auftraege an die Leitinstanz durch (Einstellung leitinstanz.url), nach lokaler Anmeldeprüfung."""
+
+    async def dispatch(self, request: Request, call_next):
+        if not leitinstanz.betrifft(request.url.path):
+            return await call_next(request)
+        factory = get_session_factory()
+        session = factory()
+        try:
+            cfg = wc.load(session)
+            basis = leitinstanz.url_aus(cfg.leitinstanz)
+            if not basis:
+                return await call_next(request)
+            tok = auth._extract_token(request)
+            if not tok or auth.lookup_session(session, tok) is None:
+                return JSONResponse({"detail": "Authorization required"}, status_code=401)
+            from .routes.overview import _secret_value
+
+            benutzer = _secret_value(session, str(cfg.leitinstanz.get("benutzer_secret") or "leitinstanz_benutzer")) or "admin"
+            passwort = _secret_value(session, str(cfg.leitinstanz.get("passwort_secret") or "leitinstanz_passwort"))
+        finally:
+            session.close()
+        if not passwort:
+            return JSONResponse({"detail": "Leitinstanz konfiguriert, aber kein Passwort im Vault (leitinstanz_passwort)"}, status_code=502)
+        body = await request.body()
+        for versuch in (False, True):
+            token = await leitinstanz.token_holen(basis, benutzer, passwort, erneuern=versuch)
+            if not token:
+                return JSONResponse({"detail": "Leitinstanz nicht erreichbar oder Anmeldung fehlgeschlagen"}, status_code=502)
+            try:
+                r = await leitinstanz.weiterleiten(basis, token, request.method, request.url.path, request.url.query or None, body, request.headers.get("content-type"))
+            except Exception as exc:  # noqa: BLE001
+                return JSONResponse({"detail": f"Leitinstanz nicht erreichbar: {str(exc)[:120]}"}, status_code=502)
+            if r.status_code == 401 and not versuch:
+                continue
+            return Response(content=r.content, status_code=r.status_code, media_type=r.headers.get("content-type"))
+        return JSONResponse({"detail": "Leitinstanz: Anmeldung fehlgeschlagen"}, status_code=502)
+
+
+app.add_middleware(LeitinstanzMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -171,6 +246,7 @@ app.include_router(settings_router)
 app.include_router(traffic_router)
 app.include_router(deployments_router)
 app.include_router(overview_router)
+app.include_router(auftraege_router)
 app.include_router(chat_router)
 app.include_router(mcp_router)
 

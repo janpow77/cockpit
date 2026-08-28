@@ -5,7 +5,7 @@ Die Daten liegen auf dem Arbeitsplatz-Host (NUC): Claude Code haelt seine Anmeld
 Auslastung des 5-Stunden- und des 7-Tage-Fensters; die Sitzungsprotokolle unter
 ~/.claude/projects enthalten Tokens je Nachricht. Codex schreibt in jede Sitzung
 (~/.codex/sessions) die zuletzt gemeldeten Limits (rate_limits) und Tokenzaehler.
-Gemini CLI legt keine Nutzungsdaten ab.
+Gemini laeuft ueber die Antigravity CLI (agy), die keine Nutzungsdaten ablegt.
 
 Die Sonde laeuft als Python-Skript AUF dem Host (per SSH oder lokal); Zugangsdaten
 verlassen den Host nicht, zurueck kommt nur die Auswertung als JSON. 5 min Cache.
@@ -36,7 +36,7 @@ CFG = json.loads(os.environ.get("KI_CFG") or "{}")
 jetzt = datetime.now(timezone.utc)
 seit = jetzt - timedelta(days=7)
 tage = [(jetzt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
-out = {"claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False, "hinweis": "Gemini CLI legt keine Nutzungsdaten ab"}}
+out = {"claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False, "hinweis": "Läuft über Antigravity (agy) und das Google-Abo – Kontingent nur in agy selbst (/usage) einsehbar"}}
 
 # ---- Claude: Limits ueber die Anmeldung von Claude Code, Tokens aus den Protokollen
 cred = os.path.expanduser(CFG.get("claude_credentials") or "~/.claude/.credentials.json")

@@ -1,0 +1,34 @@
+.mono { font-family: var(--mono); }
+.dim { color: var(--text-3); }
+.einblenden { animation: einblenden .7s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes einblenden { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.kachel { background: var(--flaeche); border: 1px solid var(--linie); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.kachel h4 { margin: 0 0 10px; font-family: var(--display); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+.punkt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: #3A4463; }
+.punkt.ok { background: var(--ok); box-shadow: 0 0 0 0 rgba(76,195,138,.55); animation: puls 2.4s ease-out infinite; }
+.punkt.warn { background: var(--warn); }
+.punkt.krit { background: var(--krit); box-shadow: 0 0 0 0 rgba(242,109,109,.6); animation: puls 1.2s ease-out infinite; }
+@keyframes puls { 0% { box-shadow: 0 0 0 0 rgba(76,195,138,.55); } 70% { box-shadow: 0 0 0 8px rgba(76,195,138,0); } 100% { box-shadow: 0 0 0 0 rgba(76,195,138,0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.kachel.hosts { grid-row: span 2; }
+.host-zeile { padding: 8px 0; border-bottom: 1px solid var(--linie); font-size: 13px; }
+.host-zeile:last-child { border-bottom: 0; }
+.hz-kopf { display: flex; justify-content: space-between; gap: 8px; }
+.hz-sub { font-size: 11px; margin: 2px 0 6px; }
+.balken-reihe { display: grid; grid-template-columns: 34px 1fr 34px 1fr 34px 1fr; gap: 6px; align-items: center; font-size: 10px; }
+.balken { height: 6px; background: #1E2A4A; border-radius: 3px; overflow: hidden; }
+.balken i { display: block; height: 100%; background: var(--info); border-radius: 3px; transition: width 1.2s cubic-bezier(.2,.7,.2,1); }
+.balken i.warn { background: var(--warn); }
+.balken i.gpu { background: linear-gradient(90deg, #6FA8FF, #B58BFF); }
+.balken-reihe.gpu { grid-template-columns: 34px 1fr 34px 1fr; margin-top: 4px; }
+.verlauf { fill: none; stroke: var(--info); stroke-width: 1.6; vector-effect: non-scaling-stroke; opacity: .85; }
+.host-verlauf { width: 100%; height: 22px; margin-top: 4px; display: block; }
+@media (max-width: 1100px) {
+  .leitstand { grid-template-columns: 1fr 1fr; }
+  .kachel.sitzungen { grid-column: 1 / -1; }
+  .kachel.projekte, .kachel.hosts { grid-row: auto; }
+  .kachel.kira, .kachel.flow-agent { grid-column: auto; }
+  .wand-kopf { grid-template-columns: 1fr; }
+  .kopf-rechts { justify-content: flex-start; }
+}
+

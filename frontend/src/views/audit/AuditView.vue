@@ -4,6 +4,7 @@ import { History, Filter } from 'lucide-vue-next'
 import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import { listAudit } from '../../api/audit'
 import { useToastStore } from '../../stores/toast'
@@ -14,17 +15,19 @@ import type { AuditEntry } from '../../api/types'
 const toast = useToastStore()
 const entries = ref<AuditEntry[]>([])
 const loading = ref(true)
+const fehler = ref<string | null>(null)
 const filter = ref({ action: '', target: '' })
 
 async function load() {
   loading.value = true
+  fehler.value = null
   try {
     entries.value = await listAudit({
       action: filter.value.action || undefined,
       target: filter.value.target || undefined,
       limit: 500,
     })
-  } catch (err) { toast.error(extractError(err)) }
+  } catch (err) { fehler.value = extractError(err); toast.error(fehler.value) }
   finally { loading.value = false }
 }
 onMounted(load)
@@ -61,6 +64,7 @@ const grouped = computed(() => {
       </template>
 
       <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Audit...</div>
+      <ErrorState v-else-if="fehler" title="Audit-Log konnte nicht geladen werden" :message="fehler" @retry="load()" />
       <div v-else-if="!entries.length"><EmptyState title="Keine Eintraege" /></div>
       <div v-else class="space-y-6">
         <div v-for="(group, day) in grouped" :key="day">

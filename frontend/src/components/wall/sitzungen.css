@@ -1,0 +1,41 @@
+.mono { font-family: var(--mono); }
+.dim { color: var(--text-3); }
+.einblenden { animation: einblenden .7s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes einblenden { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.kachel { background: var(--flaeche); border: 1px solid var(--linie); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.kachel h4 { margin: 0 0 10px; font-family: var(--display); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+.punkt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: #3A4463; }
+.punkt.ok { background: var(--ok); box-shadow: 0 0 0 0 rgba(76,195,138,.55); animation: puls 2.4s ease-out infinite; }
+.punkt.warn { background: var(--warn); }
+.punkt.krit { background: var(--krit); box-shadow: 0 0 0 0 rgba(242,109,109,.6); animation: puls 1.2s ease-out infinite; }
+@keyframes puls { 0% { box-shadow: 0 0 0 0 rgba(76,195,138,.55); } 70% { box-shadow: 0 0 0 8px rgba(76,195,138,0); } 100% { box-shadow: 0 0 0 0 rgba(76,195,138,0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.knopf { font-family: var(--display); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--akzent); color: #1A1200; border: 1px solid var(--akzent); border-radius: 5px; padding: 8px 14px; font-size: 14px; cursor: pointer; text-decoration: none; }
+.knopf.klein { padding: 6px 12px; font-size: 13px; }
+.knopf.ghost { background: transparent; color: var(--text-2); border-color: var(--linie); }
+.knopf:hover { filter: brightness(1.08); }
+.chip { font-family: var(--mono); font-size: 10px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--linie); color: var(--text-2); white-space: nowrap; }
+.kachel.sitzungen { grid-column: 1 / -1; }
+.sitzung { padding: 6px 0; border-bottom: 1px solid var(--linie); font-size: 13px; }
+.sitzung:last-of-type { border-bottom: 0; }
+.fenster { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip.aktiv { border-color: var(--ok); color: var(--ok); }
+.chip.klick { cursor: pointer; background: transparent; }
+.chip.klick:hover, .chip.offen { border-color: var(--akzent); color: var(--akzent); }
+.terminal { margin: 8px 0 4px; border: 1px solid var(--linie); border-radius: 6px; background: #070B18; overflow: hidden; }
+.t-kopf { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 11px; border-bottom: 1px solid var(--linie); }
+.t-ausgabe { margin: 0; padding: 10px 12px; max-height: 280px; overflow: auto; font-size: 11.5px; line-height: 1.45; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+.t-senden { display: flex; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--linie); background: var(--flaeche); }
+.t-eingabe { flex: 1; background: #0B1020; border: 1px solid var(--linie); color: var(--text); border-radius: 5px; padding: 7px 10px; font-size: 12.5px; }
+.t-eingabe:focus { outline: 2px solid var(--akzent); outline-offset: 0; }
+.knopf.warn { background: var(--krit); border-color: var(--krit); color: #fff; }
+.chip em { font-style: normal; color: var(--text-3); }
+@media (max-width: 1100px) {
+  .leitstand { grid-template-columns: 1fr 1fr; }
+  .kachel.sitzungen { grid-column: 1 / -1; }
+  .kachel.projekte, .kachel.hosts { grid-row: auto; }
+  .kachel.kira, .kachel.flow-agent { grid-column: auto; }
+  .wand-kopf { grid-template-columns: 1fr; }
+  .kopf-rechts { justify-content: flex-start; }
+}
+

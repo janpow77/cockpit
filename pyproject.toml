@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cockpit"
-version = "0.3.24"
+version = "0.5.0"
 description = "Multi-App-Multi-Host-Cockpit fuer Workshop, audit_designer, llm-router etc."
 readme = "README.md"
 requires-python = ">=3.12"
