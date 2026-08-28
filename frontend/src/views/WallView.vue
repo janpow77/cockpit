@@ -415,14 +415,14 @@ async function demo(neu = false) {
           <text class="label" x="466" y="712" style="font-size: 30px">{{ hero.title }}</text>
           <text class="sub" x="466" y="734">{{ hero.url.replace(/^https?:\/\//, '') }} · {{ heroProjekt ? `${heroProjekt.running}/${heroProjekt.containers} Container · ${statusText(heroProjekt.status)}` : 'nicht entdeckt' }}{{ heroProjekt?.deploy ? ` · Deploy ${heroProjekt.deploy.git_sha} ${relativ(heroProjekt.deploy.ts)}` : '' }}</text>
           <template v-for="(k, i) in heroKpis.slice(0, 4)" :key="k.label">
-            <text class="kpi" :x="466 + i * 165" y="790"><tspan :key="String(k.value)" class="blitz">{{ zahl(kpiWerte[i].value ?? k.value) }}</tspan></text>
-            <text class="sub" :x="466 + i * 165" y="812">{{ k.label }}</text>
-            <svg v-if="reihe(kpiKey(k.label)).length > 1" :x="466 + i * 165" y="818" width="140" height="18" viewBox="0 0 100 30" preserveAspectRatio="none"><path :d="linie(reihe(kpiKey(k.label)))" class="verlauf" /></svg>
+            <text class="kpi" :x="466 + i * 138" y="790"><tspan :key="String(k.value)" class="blitz">{{ zahl(kpiWerte[i].value ?? k.value) }}</tspan></text>
+            <text class="sub" :x="466 + i * 138" y="812">{{ k.label }}</text>
+            <svg v-if="reihe(kpiKey(k.label)).length > 1" :x="466 + i * 138" y="818" width="118" height="18" viewBox="0 0 100 30" preserveAspectRatio="none"><path :d="linie(reihe(kpiKey(k.label)))" class="verlauf" /></svg>
           </template>
           <text v-if="!heroKpis.length" class="sub" x="466" y="790">{{ hero.probe_note ? `Kennzahlen: ${hero.probe_note}` : 'Kennzahlen folgen mit der Sonde' }}</text>
           <a :href="hero.url" target="_blank" rel="noopener"><rect x="1010" y="690" width="126" height="36" rx="6" class="knopf-svg ghost" /><text x="1073" y="714" text-anchor="middle" class="knopf-text ghost">Öffnen ↗</text></a>
           <g class="klickbar" @click="demo(false)"><rect x="1010" y="736" width="126" height="36" rx="6" :class="['knopf-svg', { busy: demoBusy }]" /><text x="1073" y="760" text-anchor="middle" class="knopf-text">{{ demoBusy ? `läuft · ${demoSekunden} s` : 'Demo starten' }}</text></g>
-          <text v-if="!demoBusy && !demoLink" class="sub klickbar" x="1073" y="792" text-anchor="middle" style="text-decoration: underline" @click="demo(true)">Demo zurücksetzen (neu aufbauen)</text>
+          <text v-if="!demoBusy && !demoLink" class="sub klickbar" x="1073" y="794" text-anchor="middle" style="text-decoration: underline" @click="demo(true)"><title>Demo zurücksetzen: alle fünf Fälle neu aufbauen (1–2 Minuten)</title>Zurücksetzen</text>
           <a v-if="demoLink && !demoBusy" :href="demoLink"><rect x="1010" y="782" width="126" height="32" rx="6" class="knopf-svg ghost" /><text x="1073" y="803" text-anchor="middle" class="knopf-text ghost">Portal öffnen</text></a>
           <text v-if="demoMeldung" class="sub" x="466" y="832">{{ demoMeldung }}{{ demoBusy ? ' (etwa 1–2 Minuten)' : '' }}</text>
         </g>
