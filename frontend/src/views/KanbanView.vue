@@ -137,7 +137,7 @@ async function vorlagenLaden() {
 function projektKey(projekt: Projekt): string { return `${projekt.host}\u0000${projekt.pfad}` }
 function projektAuswahl(key = neuForm.projektKey): Projekt | undefined { return projektListe.value.find((p) => projektKey(p) === key) }
 function projektOption(projekt: Projekt): string {
-  return `${projekt.name}${projekt.branch ? ` — ${projekt.branch}` : ''}${projekt.dirty ? ' · uncommittet' : ''}${projekt.ausfuehrbar ? '' : ' (kein SSH-Zugang)'}`
+  return `${projekt.name}${projekt.branch ? ` — ${projekt.branch}` : ''}${projekt.dirty ? ' · uncommittet' : ''}${projekt.ausfuehrbar ? '' : ` (${projekt.grund || 'nicht ausführbar'})`}`
 }
 function quellenLabel(quelle: Projekt['quelle']): string { return quelle === 'werkstatt' ? 'Werkstatt' : quelle }
 function graphifyDatum(iso: string | null | undefined): string {

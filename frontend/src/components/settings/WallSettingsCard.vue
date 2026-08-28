@@ -44,6 +44,7 @@ const auftragVorlagen = ref('')
 const auftragParallel = ref(3)
 const codexSandbox = ref<'danger-full-access' | 'workspace-write'>('danger-full-access')
 const flowAgent = ref('')
+const agentHosts = ref('')
 const fehler = ref<Record<string, string>>({})
 
 function zeilen(list: string[]): string { return list.join('\n') }
@@ -80,6 +81,7 @@ async function load() {
     auftragParallel.value = c.auftrag_parallel ?? 3
     codexSandbox.value = c.codex_sandbox ?? 'danger-full-access'
     flowAgent.value = json(c.flow_agent ?? {})
+    agentHosts.value = zeilen(c.agent_hosts ?? ['nuc'])
   } catch (err) { toast.error(extractError(err)) }
   finally { loading.value = false }
 }
@@ -115,6 +117,7 @@ async function save() {
     chat_max_tokens: Math.max(100, Math.min(8000, Math.round(Number(chatMaxTokens.value) || 900))),
     auftrag_parallel: Math.max(1, Math.min(8, Math.round(Number(auftragParallel.value) || 3))),
     codex_sandbox: codexSandbox.value,
+    agent_hosts: ausZeilen(agentHosts.value),
   }
   const pu = parse<Record<string, unknown>>('push', push.value, 'object'); if (pu) patch.push = pu
   const l = parse<Record<string, string>>('links', links.value, 'object'); if (l) patch.links = l
@@ -205,6 +208,11 @@ const felder: { key: string; label: string; hint: string; model: typeof links; r
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Aufträge: gleichzeitige Läufe (Basis)</span>
           <input v-model.number="auftragParallel" type="number" min="1" max="8" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
           <span class="text-[11px] text-slate-400">Wird nach Claude-Auslastung gedrosselt: ab 60 % des 5-Stunden-Fensters Basis − 1, ab 85 % ein Lauf, ab 95 % Pause.</span>
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Aufträge: Hosts mit angemeldeten Agenten (eine Zeile je Host)</span>
+          <textarea v-model="agentHosts" rows="3" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs p-2" />
+          <span class="text-[11px] text-slate-400">Nur dort sind claude, codex und agy installiert und angemeldet; Projekte auf anderen Hosts sind im Kanban nicht wählbar.</span>
         </label>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Aufträge: Codex-Sandbox</span>

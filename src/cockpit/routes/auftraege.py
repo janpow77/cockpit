@@ -119,6 +119,14 @@ async def projekte(_=Depends(require_auth), session: Session = Depends(get_sessi
     gesehen: set[tuple[str, str]] = set()
     url, token, hosts = _flow_agent_zugang(session, cfg)
     bekannte_hosts = {h.name for h in session.execute(select(HostRow)).scalars()}
+    agent_hosts = set(cfg.agent_hosts)
+
+    def grund(host: str) -> str | None:
+        if host not in bekannte_hosts:
+            return "kein SSH-Zugang"
+        if host not in agent_hosts:
+            return "keine Agenten auf diesem Host"
+        return None
     if token:
         graph = fa.graphify(url, token, hosts)
         for p in fa.projekte(url, token, hosts):
@@ -129,7 +137,7 @@ async def projekte(_=Depends(require_auth), session: Session = Depends(get_sessi
             g = graph.get((p["host"], p["name"])) or {}
             out.append({
                 "host": p["host"], "pfad": p["pfad"], "name": p["name"], "aktiv": p.get("status") in ("healthy", "ok", "degraded") or bool(p.get("dirty")),
-                "quelle": "flow-agent", "ausfuehrbar": p["host"] in bekannte_hosts, "branch": p.get("branch"), "dirty": p.get("dirty"),
+                "quelle": "flow-agent", "ausfuehrbar": grund(p["host"]) is None, "grund": grund(p["host"]), "branch": p.get("branch"), "dirty": p.get("dirty"),
                 "technologien": p.get("technologien"), "graphify_stand": g.get("generiert"),
             })
     for w in stand.get("werkstatt") or []:
@@ -142,10 +150,10 @@ async def projekte(_=Depends(require_auth), session: Session = Depends(get_sessi
             if key in gesehen:
                 continue
             gesehen.add(key)
-            out.append({"host": w["host"], "pfad": pfad, "name": r.get("name"), "aktiv": bool(r.get("aktiv")), "quelle": "werkstatt", "ausfuehrbar": True})
+            out.append({"host": w["host"], "pfad": pfad, "name": r.get("name"), "aktiv": bool(r.get("aktiv")), "quelle": "werkstatt", "ausfuehrbar": grund(w["host"]) is None, "grund": grund(w["host"])})
     if not out:
         for host, basis in cfg.work_dirs.items():
-            out.append({"host": host, "pfad": basis, "name": _projekt_name(basis), "aktiv": True, "quelle": "work_dirs", "ausfuehrbar": True})
+            out.append({"host": host, "pfad": basis, "name": _projekt_name(basis), "aktiv": True, "quelle": "work_dirs", "ausfuehrbar": grund(host) is None, "grund": grund(host)})
     out.sort(key=lambda p: (not p.get("ausfuehrbar", True), not p.get("aktiv"), p["host"], p["name"].lower()))
     return out
 
@@ -166,6 +174,7 @@ class VorschlaegeAnfrage(BaseModel):
 async def vorschlaege_einholen(req: VorschlaegeAnfrage, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     """Vorschlags-Lauf für ein Projekt anlegen (geplant, sofort): Ergebnis landet als Karten im Eingang."""
     cfg = wc.load(session)
+    _agent_host_pruefen(cfg, req.host)
     vorlage = next((x for x in auftrag_vorlagen.vorlagen(cfg.auftrag_vorlagen) if x["id"] == "vorschlaege"), None)
     if vorlage is None:
         raise HTTPException(status_code=404, detail="Vorlage »vorschlaege« fehlt")
@@ -178,8 +187,14 @@ async def vorschlaege_einholen(req: VorschlaegeAnfrage, _=Depends(require_auth),
     return svc.as_dict(a)
 
 
+def _agent_host_pruefen(cfg: wc.WallConfig, host: str) -> None:
+    if host not in cfg.agent_hosts:
+        raise HTTPException(status_code=422, detail=f"Auf Host »{host}« sind keine Agenten installiert – bitte die Kopie des Projekts auf {', '.join(cfg.agent_hosts) or 'einem Agenten-Host'} wählen")
+
+
 @router.post("", status_code=201)
 async def anlegen(req: AuftragNeu, _=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
+    _agent_host_pruefen(wc.load(session), req.host)
     a = svc.anlegen(
         session, titel=req.titel.strip(), text=req.text.strip(), host=req.host, projekt=req.projekt.rstrip("/"),
         projekt_name=_projekt_name(req.projekt), agent=req.agent, modus=req.modus, profil=req.profil, prioritaet=req.prioritaet,
@@ -218,6 +233,7 @@ async def starten(auftrag_id: str, _=Depends(require_auth), session: Session = D
         a = svc.aendern(session, a, status="geplant")
         raise HTTPException(status_code=409, detail=kap.get("pause_grund") or f"Kapazität erschöpft ({kap['laufend']}/{kap['parallel_max']}) – geplant, startet automatisch")
     cfg = wc.load(session)
+    _agent_host_pruefen(cfg, a.host)
     a = await asyncio.to_thread(svc.starten, session, a, bins={**cfg.agent_bins, 'codex_sandbox': cfg.codex_sandbox})
     crud_audit.write(session, action="auftrag.start", target=a.id, after={"status": a.status, "fehler": a.fehler})
     return svc.as_dict(a)

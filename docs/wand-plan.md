@@ -508,3 +508,13 @@ LLM-Aufträge, LLM-Host); Projektname „KI-Pilotprogramm“ bleibt. Bezeichner,
 (Dedup nach id, keine Leave-Animation über Spalten hinweg).
 Halbkreis-Anzeigen der LLM-Nutzung: der Wertbogen (`bogen()`) nutzte ab 50 % das
 Large-Arc-Flag – der Bogen überspannt aber nie mehr als 180°, Flag daher immer 0 (v0.4.13).
+
+**v0.4.15 – Agenten-Hosts:** Ein Auftrag auf dem Hetzner-Host (`ccx23`,
+`/home/deploy/Projekte/regulierung`, Gemini) scheiterte mit `agy: No such file or directory` –
+die Agenten (claude, codex, agy) sind nur auf dem NUC installiert und angemeldet. Einstellung
+`agent_hosts` (Vorgabe `["nuc"]`): Projekte auf anderen Hosts erscheinen im Kanban mit Grund
+„keine Agenten auf diesem Host“ und sind nicht wählbar; Anlegen/Start/Vorschläge liefern 422
+mit Hinweis auf die Kopie des Projekts auf dem Agenten-Host; der Runner startet solche
+geplanten Aufträge nicht, sondern setzt sie mit klarem Fehlertext auf „Fehler“; wöchentliche
+Vorschlagsläufe nur für Agenten-Hosts. Wer Agenten auf einem weiteren Host anmeldet, trägt ihn
+in `agent_hosts` ein (und passt ggf. `agent_bins` an).

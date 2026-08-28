@@ -372,6 +372,7 @@ export interface WallConfig {
   auftrag_vorlagen: Record<string, unknown>[]
   auftrag_parallel: number
   codex_sandbox: 'danger-full-access' | 'workspace-write'
+  agent_hosts: string[]
   flow_agent: Record<string, unknown>
   prod_hosts?: string[]
   push?: Record<string, unknown>
@@ -454,6 +455,7 @@ export interface Projekt {
   name: string
   quelle: 'flow-agent' | 'werkstatt' | 'work_dirs'
   ausfuehrbar: boolean
+  grund: string | null
   branch?: string | null
   dirty?: boolean
   technologien?: string[]

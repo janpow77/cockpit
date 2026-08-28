@@ -92,7 +92,7 @@ def vorschlagslaeufe_planen(session: Session, cfg: wc.WallConfig, stand: dict | 
     n = 0
     for w in (stand or {}).get("werkstatt") or []:
         basis = cfg.work_dirs.get(w.get("host") or "")
-        if not basis:
+        if not basis or w.get("host") not in cfg.agent_hosts:
             continue
         for repo in w.get("repos") or []:
             if not repo.get("aktiv"):
@@ -153,6 +153,9 @@ async def runde() -> None:
         for a in geplant:
             if frei <= 0:
                 break
+            if a.host not in cfg.agent_hosts:
+                svc.aendern(session, a, status="fehler", fehler=f"Auf Host »{a.host}« sind keine Agenten installiert – Kopie des Projekts auf {', '.join(cfg.agent_hosts)} wählen", letzte_zeile="nicht gestartet")
+                continue
             if not svc.zeitfenster_offen(a.zeitfenster, jetzt, reset):
                 continue
             if a.agent == "gemini" and any(x.status == "laeuft" and x.agent == "gemini" for x in svc.liste(session)):
