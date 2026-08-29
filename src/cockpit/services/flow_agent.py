@@ -233,3 +233,107 @@ def alarme(z: dict) -> list[dict]:
     if m.get("pending_actions"):
         out.append({"level": "info", "text": f"flow-agent: {m['pending_actions']} Aktion(en) warten auf Freigabe", "host": None, "hint": None, "url": url})
     return out
+
+
+# ---------------------------------------------------------------------------
+# Host-Kennzahlen aus flow-agent (Ersatz bzw. Rückfall für die eigene SSH-Sonde)
+# ---------------------------------------------------------------------------
+
+
+def _mb(bytes_wert: object) -> int | None:
+    try:
+        n = int(bytes_wert or 0)
+    except (TypeError, ValueError):
+        return None
+    return round(n / 1048576) if n > 0 else None
+
+
+def hosts_aus(topologie: object, operations: object, zuordnung: dict[str, str]) -> dict[str, dict]:
+    """Kennzahlen je Cockpit-Host aus /topology und /operations/status (rein, testbar).
+
+    Liefert dieselbe Form wie ``host_stats._parse``: load* bleibt leer (flow-agent misst CPU in Prozent),
+    dafür kommen Speicher, Laufzeit, Container, GPUs und tmux-Sitzungen ohne eigene SSH-Verbindung.
+    """
+    aus: dict[str, dict] = {}
+    knoten = (topologie or {}).get("nodes") if isinstance(topologie, dict) else None
+    if not knoten:
+        return aus
+    host_je_id: dict[str, str] = {}
+    for n in knoten:
+        if n.get("kind") != "host":
+            continue
+        name = _host_id(str(n.get("label") or ""), zuordnung)
+        host_je_id[str(n.get("id"))] = name
+        m = n.get("metrics") or {}
+        md = n.get("metadata") or {}
+        aus[name] = {
+            "ok": str(n.get("status")) not in ("offline", "unknown"),
+            "quelle": "flow-agent", "error": None, "ms": None,
+            "load1": None, "load5": None, "load15": None, "cpus": None,
+            "cpu_pct": m.get("cpu_percent"),
+            "mem_total_mb": _mb(m.get("memory_total_bytes")), "mem_used_mb": _mb(m.get("memory_used_bytes")),
+            "mem_pct": (round(100 * m["memory_used_bytes"] / m["memory_total_bytes"], 1)
+                        if m.get("memory_total_bytes") else None),
+            "disk_total_kb": None, "disk_used_kb": None, "disk_pct": None,
+            "uptime_s": int(m.get("uptime_seconds") or 0) or None,
+            "temp_c": m.get("cpu_temperature_celsius"),
+            "rolle": md.get("role"), "agent_version": md.get("agent_version"), "stand": md.get("last_seen_at"),
+            "containers": 0, "gpus": [], "tmux": [],
+        }
+    for n in knoten:
+        name = host_je_id.get(str(n.get("host_id")))
+        if name is None or name not in aus:
+            continue
+        if n.get("kind") == "container" and str(n.get("status")) == "healthy":
+            aus[name]["containers"] += 1
+        elif n.get("kind") == "gpu":
+            m = n.get("metrics") or {}
+            aus[name]["gpus"].append({
+                "name": n.get("label"), "mem_total_mb": _mb(m.get("memory_total_bytes")),
+                "mem_used_mb": _mb(m.get("memory_used_bytes")),
+                "util_pct": m.get("utilization_percent"), "temp_c": m.get("temperature_celsius"),
+            })
+    for a in operations if isinstance(operations, list) else []:
+        if not isinstance(a, dict):
+            continue
+        name = _host_id(str(a.get("hostname") or ""), zuordnung)
+        if name not in aus:
+            continue
+        tm = a.get("tmux") or {}
+        aus[name]["tmux"] = [
+            {"name": s.get("name"), "attached": bool(s.get("attached")), "created": s.get("created_at"),
+             "windows": [{"name": "", "index": str(i + 1), "active": i == 0, "cmd": ""} for i in range(int(s.get("windows") or 0))]}
+            for s in (tm.get("sessions") or []) if isinstance(s, dict)
+        ]
+        aus[name]["werkzeuge_fehlen"] = [str(t.get("name")) for t in (a.get("tools") or []) if isinstance(t, dict) and t.get("installed") is False]
+    return aus
+
+
+def backups_aus(topologie: object, zuordnung: dict[str, str]) -> list[dict]:
+    """Sicherungen aus der Topologie (rein, testbar): [{host, ziel, status, letzte, groesse_b}]."""
+    out: list[dict] = []
+    knoten = (topologie or {}).get("nodes") if isinstance(topologie, dict) else None
+    if not knoten:
+        return out
+    host_je_id = {str(n.get("id")): _host_id(str(n.get("label") or ""), zuordnung) for n in knoten if n.get("kind") == "host"}
+    for n in knoten:
+        if n.get("kind") != "backup":
+            continue
+        md = n.get("metadata") or {}
+        out.append({
+            "host": host_je_id.get(str(n.get("host_id")), "?"), "ziel": n.get("label"),
+            "status": n.get("status"), "letzte": md.get("last_success_at"),
+            "groesse_b": (n.get("metrics") or {}).get("size_bytes"), "art": md.get("type"),
+        })
+    return out
+
+
+def infrastruktur(url: str, token: str | None, zuordnung: dict[str, str] | None = None) -> dict:
+    """Hosts, Sicherungen und tmux in einem Zug von der Control Plane (Fehler → leere Ergebnisse)."""
+    zuordnung = zuordnung or {}
+    if not token:
+        return {"hosts": {}, "backups": [], "ok": False}
+    topo = _get(url, token, "/api/v1/topology", ttl=60)
+    ops = _get(url, token, "/api/v1/operations/status", ttl=60)
+    hosts = hosts_aus(topo, ops, zuordnung)
+    return {"hosts": hosts, "backups": backups_aus(topo, zuordnung), "ok": bool(hosts)}

@@ -335,7 +335,18 @@ async def build_overview(session: Session) -> dict:
         )
         return h, stats, projects
 
-    host_results = await asyncio.gather(*(per_host(h) for h in hosts), return_exceptions=True)
+    fa_cfg_vorab = cfg.flow_agent or {}
+    fa_infra_task = asyncio.to_thread(
+        fa.infrastruktur, str(fa_cfg_vorab.get("url") or "https://agent.flowaudit.de"),
+        _secret_value(session, str(fa_cfg_vorab.get("secret_key") or "flow_agent_read_key")),
+        fa_cfg_vorab.get("hosts") if isinstance(fa_cfg_vorab.get("hosts"), dict) else {},
+    )
+    host_results, fa_infra = await asyncio.gather(
+        asyncio.gather(*(per_host(h) for h in hosts), return_exceptions=True), fa_infra_task, return_exceptions=False
+    )
+    if not isinstance(fa_infra, dict):
+        fa_infra = {"hosts": {}, "backups": [], "ok": False}
+    quelle_hosts = str(fa_cfg_vorab.get("quelle_hosts") or "auto")
 
     hosts_out: list[dict] = []
     projects_out: list[dict] = []
@@ -345,6 +356,11 @@ async def build_overview(session: Session) -> dict:
             log.warning("Wand: Host-Abfrage %s fehlgeschlagen: %s", h_cfg.name, res)
             res = (h_cfg, {**host_stats._parse(""), "ok": False, "error": str(res)[:160], "ms": None}, [])
         h, stats, projects = res
+        # Kennzahlen aus flow-agent nehmen, wenn gewünscht oder die eigene Sonde nichts geliefert hat
+        fa_stats = (fa_infra.get("hosts") or {}).get(h.name)
+        if fa_stats and (quelle_hosts == "flow-agent" or (quelle_hosts == "auto" and not (stats or {}).get("ok"))):
+            behalten = {k: v for k, v in (stats or {}).items() if k in ("ms",) and v is not None}
+            stats = {**fa_stats, **behalten}
         projekte = build_projects(h, projects, apps, cfg, deploy_for_app)
         projects_out.extend(projekte)
         hosts_out.append({
@@ -447,6 +463,7 @@ async def build_overview(session: Session) -> dict:
     )
 
     backups_out = _newest_backups(cfg.backup_dir)
+    fa_backups = fa_infra.get("backups") or []
     ai_router_out = await asyncio.to_thread(ai_router_client.status)
     geladen = set(ai_router_out.get("models") or [])
     ai_router_out["freigegeben"] = [m.get("label") or m.get("tag") for m in cfg.chat_models if m.get("tag") in geladen]
@@ -475,6 +492,7 @@ async def build_overview(session: Session) -> dict:
         },
         "probes": probes_out,
         "backups": backups_out,
+        "backups_agent": fa_backups,
         "ai_router": ai_router_out,
         "github": github_out,
         "events": _events(session, commits),

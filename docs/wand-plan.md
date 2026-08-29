@@ -688,3 +688,18 @@ Offen (dokumentiert, Entscheidung nötig): Codex/agy laufen im Leseprofil techni
 schreibgeschützt, solange die bwrap-Sandbox auf dem NUC fehlt (Arbeitspaket E); `node_modules`/`.venv`
 sind aus dem Hauptrepo verlinkt (parallele Läufe teilen sich diese Verzeichnisse); `stoppen()` meldet
 Erfolg auch ohne bestätigten Prozesstod; Basisbranch ist in `diff_url` weiterhin `master`.
+
+## 24. Infrastruktur aus flow-agent (B3, v0.5.2, 29.08.2026)
+
+`flow_agent.hosts_aus()` und `backups_aus()` lesen Host-Kennzahlen (CPU-Prozent, Speicher,
+Laufzeit, Temperatur, Rolle, Agent-Version), laufende Container, GPUs, tmux-Sitzungen und
+fehlende Werkzeuge aus `/api/v1/topology` und `/operations/status`; `infrastruktur()` holt beides
+mit 60 s Cache. Einstellung `flow_agent.quelle_hosts`: `auto` (Vorgabe – flow-agent springt ein,
+wenn die eigene SSH-Sonde nichts liefert), `flow-agent` (immer von dort, keine eigene SSH-Last)
+oder `ssh` (wie bisher). Der Stand enthält zusätzlich `backups_agent` (Sicherungen laut Agent).
+Lastvergleich: `load1/5/15` liefert flow-agent nicht – dafür `cpu_pct`; die Kacheln zeigen weiter
+die Sonde, solange sie antwortet.
+
+**Befund zur Statusfarbe:** „degraded" kommt aus `effective_host_status()` und zählt jeden
+`exited`-Container als `unhealthy` (NUC 27, janpow-ai 4). PR janpow77/flow-agent#20 wertet
+sauber beendete Container, die älter als zwei Tage sind, als bewusst abgeschaltet.

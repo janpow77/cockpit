@@ -61,3 +61,41 @@ def test_zustand_und_alarme():
     assert any("fehlgeschlagen" in tx for _, tx in levels) and any("Freigabe" in tx for _, tx in levels)
     weg = fa.zustand_aus("u", None, None, None, None, None, {})
     assert not weg["ok"] and fa.alarme(weg)[0]["level"] == "warn"
+
+
+TOPO = {"nodes": [
+    {"id": "host:nuc", "kind": "host", "label": "janpow-NUC15JNLU7X4", "status": "healthy",
+     "metrics": {"cpu_percent": 3.0, "memory_used_bytes": 28942438400, "memory_total_bytes": 66687823872,
+                 "uptime_seconds": 1121072, "cpu_temperature_celsius": 62.0},
+     "metadata": {"role": "gpu-server", "agent_version": "0.2.0", "last_seen_at": "2026-08-29T05:22:05Z"}},
+    {"id": "host:evo", "kind": "host", "label": "evo2", "status": "offline", "metrics": {}, "metadata": {}},
+    {"id": "c1", "kind": "container", "host_id": "host:nuc", "status": "healthy", "label": "cockpit"},
+    {"id": "c2", "kind": "container", "host_id": "host:nuc", "status": "unknown", "label": "bewusst aus"},
+    {"id": "g1", "kind": "gpu", "host_id": "host:nuc", "label": "RTX 5060",
+     "metrics": {"memory_total_bytes": 8589934592, "memory_used_bytes": 1073741824, "utilization_percent": 12.0, "temperature_celsius": 55.0}},
+    {"id": "b1", "kind": "backup", "host_id": "host:nuc", "label": "local", "status": "healthy",
+     "metrics": {"size_bytes": 123}, "metadata": {"type": "local", "last_success_at": "2026-08-29T01:00:00Z"}},
+]}
+OPS = [{"hostname": "janpow-NUC15JNLU7X4",
+        "tmux": {"sessions": [{"name": "claude", "windows": 2, "attached": True, "created_at": "2026-08-16T06:33:08Z"}]},
+        "tools": [{"name": "restic", "installed": False}, {"name": "git", "installed": True}]}]
+
+
+def test_hosts_aus_topologie_und_operations():
+    h = fa.hosts_aus(TOPO, OPS, {"janpow-NUC15JNLU7X4": "nuc", "evo2": "evo"})
+    nuc = h["nuc"]
+    assert nuc["ok"] and nuc["quelle"] == "flow-agent" and nuc["cpu_pct"] == 3.0
+    assert nuc["mem_total_mb"] == 63598 and nuc["mem_pct"] == 43.4 and nuc["uptime_s"] == 1121072
+    assert nuc["containers"] == 1  # nur laufende zählen, bewusst gestoppte nicht
+    assert nuc["gpus"][0]["mem_total_mb"] == 8192 and nuc["gpus"][0]["util_pct"] == 12.0
+    assert nuc["tmux"][0]["name"] == "claude" and len(nuc["tmux"][0]["windows"]) == 2
+    assert nuc["werkzeuge_fehlen"] == ["restic"] and nuc["rolle"] == "gpu-server"
+    assert h["evo"]["ok"] is False  # offline
+    assert fa.hosts_aus(None, None, {}) == {}
+
+
+def test_backups_aus_topologie():
+    b = fa.backups_aus(TOPO, {"janpow-NUC15JNLU7X4": "nuc"})
+    assert b == [{"host": "nuc", "ziel": "local", "status": "healthy", "letzte": "2026-08-29T01:00:00Z",
+                  "groesse_b": 123, "art": "local"}]
+    assert fa.backups_aus({}, {}) == []

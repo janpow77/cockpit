@@ -1,3 +1,3 @@
 """cockpit — Multi-App-Multi-Host-Verwaltungs-Hub."""
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"

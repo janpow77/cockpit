@@ -148,6 +148,9 @@ DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": True, "wochentag": 6, "stunde": 
 DEFAULT_FLOW_AGENT: dict[str, Any] = {
     "url": "https://agent.flowaudit.de", "secret_key": "flow_agent_read_key",
     "hosts": {"janpow-NUC15JNLU7X4": "nuc", "cockpit-nbg1-1": "ccx23", "evo2": "evo", "MacBook-Air.local": "macbook", "janpow-ai": "janpow-ai"},
+    # Woher die Host-Kennzahlen kommen: "auto" = flow-agent, wenn die eigene SSH-Sonde nichts liefert;
+    # "flow-agent" = immer von dort (keine eigene SSH-Last); "ssh" = wie bisher nur eigene Sonde.
+    "quelle_hosts": "auto",
 }
 
 # Leitinstanz: url leer = diese Instanz führt Aufträge selbst; sonst werden /admin/api/auftraege dorthin durchgereicht
