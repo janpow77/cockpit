@@ -359,8 +359,13 @@ async def build_overview(session: Session) -> dict:
         # Kennzahlen aus flow-agent nehmen, wenn gewünscht oder die eigene Sonde nichts geliefert hat
         fa_stats = (fa_infra.get("hosts") or {}).get(h.name)
         if fa_stats and (quelle_hosts == "flow-agent" or (quelle_hosts == "auto" and not (stats or {}).get("ok"))):
+            # Eigene Werte behalten, die flow-agent nicht kennt: Antwortzeit und – wichtig – tmux-Sitzungen.
+            # Läuft der Agent als Systembenutzer (janpow-ai), sieht er den tmux-Server des Nutzers nicht.
             behalten = {k: v for k, v in (stats or {}).items() if k in ("ms",) and v is not None}
+            eigene_tmux = (stats or {}).get("tmux") or []
             stats = {**fa_stats, **behalten}
+            if eigene_tmux and not stats.get("tmux"):
+                stats["tmux"] = eigene_tmux
         projekte = build_projects(h, projects, apps, cfg, deploy_for_app)
         projects_out.extend(projekte)
         hosts_out.append({
