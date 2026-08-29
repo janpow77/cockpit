@@ -353,7 +353,7 @@ async def build_overview(session: Session) -> dict:
     for h_cfg, res in zip(hosts, host_results, strict=False):
         if isinstance(res, BaseException):
             # Host bleibt sichtbar - mit Fehler statt stillschweigend verschwunden
-            log.warning("Wand: Host-Abfrage %s fehlgeschlagen: %s", h_cfg.name, res)
+            log.warning("Board: Host-Abfrage %s fehlgeschlagen: %s", h_cfg.name, res)
             res = (h_cfg, {**host_stats._parse(""), "ok": False, "error": str(res)[:160], "ms": None}, [])
         h, stats, projects = res
         # Kennzahlen aus flow-agent nehmen, wenn gewünscht oder die eigene Sonde nichts geliefert hat
@@ -412,19 +412,19 @@ async def build_overview(session: Session) -> dict:
         wx.dienste_pruefen([u for u in urls if u]), kira_task, ki_task, fa_task, *werkstatt_tasks, return_exceptions=True
     )
     if not isinstance(fa_out, dict):
-        log.warning("Wand: flow-agent fehlgeschlagen: %s", fa_out)
+        log.warning("Board: flow-agent fehlgeschlagen: %s", fa_out)
         fa_out = {"ok": False, "note": str(fa_out)[:120], "url": fa_cfg.get("url"), "hosts": [], "frische": {"status": "unknown", "healthy": 0, "degraded": 0, "unhealthy": 0, "befunde": []}, "meldungen": {"hosts_offline": [], "hosts_degraded": [], "pending_actions": 0, "failed_actions_recent": 0}, "version": None, "stand": None}
     if not isinstance(ki_out, dict):
-        log.warning("Wand: KI-Nutzung fehlgeschlagen: %s", ki_out)
+        log.warning("Board: KI-Nutzung fehlgeschlagen: %s", ki_out)
         ki_out = {"ok": False, "hinweis": str(ki_out)[:120], "claude": {"verfuegbar": False}, "codex": {"verfuegbar": False}, "gemini": {"verfuegbar": False}}
     dienste_out = dienste_res if isinstance(dienste_res, list) else []
     if not isinstance(kira_out, dict):
-        log.warning("Wand: Kira-Abfrage fehlgeschlagen: %s", kira_out)
+        log.warning("Board: Kira-Abfrage fehlgeschlagen: %s", kira_out)
         kira_out = {"ok": False, "total": None, "entries": [], "note": str(kira_out)[:120], "host": cfg.kira.get("host")}
     werkstatt_out = [w for w in werkstatt_res if isinstance(w, dict)]
     for w in werkstatt_res:
         if isinstance(w, BaseException):
-            log.warning("Wand: Werkstatt fehlgeschlagen: %s", w)
+            log.warning("Board: Werkstatt fehlgeschlagen: %s", w)
     for d in dienste_out:
         d.update(_zugriffe_24h(session, d["host"]))
 

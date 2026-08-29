@@ -114,7 +114,7 @@ async def karte_senden(session, token: str, chat_id: str, instanz: str, hinzu: l
 
 
 async def wall_loop(stop_event: asyncio.Event, *, interval_s: int = 90) -> None:
-    log.info("Wand-Lauf startet (interval=%ds).", interval_s)
+    log.info("Board-Lauf startet (interval=%ds).", interval_s)
     letzte_bereinigung = 0.0
     while not stop_event.is_set():
         try:
@@ -130,11 +130,11 @@ async def wall_loop(stop_event: asyncio.Event, *, interval_s: int = 90) -> None:
             finally:
                 session.close()
             await _alarme_pushen(stand, cfg)
-            log.info("Wand-Lauf: %d Kennzahlen, %d Alarme", n, len(stand.get("alerts") or []))
+            log.info("Board-Lauf: %d Kennzahlen, %d Alarme", n, len(stand.get("alerts") or []))
         except Exception as exc:  # noqa: BLE001 - der Lauf darf nie sterben
-            log.warning("Wand-Lauf: %s", exc)
+            log.warning("Board-Lauf: %s", exc)
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
         except TimeoutError:
             continue
-    log.info("Wand-Lauf stoppt.")
+    log.info("Board-Lauf stoppt.")

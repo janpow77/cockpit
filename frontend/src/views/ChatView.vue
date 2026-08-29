@@ -618,7 +618,7 @@ onBeforeUnmount(() => abortController?.abort())
           <RotateCcw :size="15" aria-hidden="true" />
           Neues Gespräch
         </button>
-        <RouterLink class="button ghost" to="/wall">
+        <RouterLink class="button ghost" to="/board">
           <ArrowLeft :size="15" aria-hidden="true" />
           Zum Cockpit
         </RouterLink>

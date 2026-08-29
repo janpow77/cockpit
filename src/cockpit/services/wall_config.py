@@ -122,7 +122,7 @@ DEFAULT_PUSH: dict[str, Any] = {
     "ruhe_bis": "07:00",
     "zeitzone": "Europe/Berlin",
     "instanz": "",
-    "wand_url": "http://100.99.159.80:7843/admin/wall",
+    "wand_url": "http://100.99.159.80:7843/admin/board",
 }
 
 # KI-Nutzung: Auslastung/Limits von Claude Code und Codex vom Arbeitsplatz-Host (NUC)

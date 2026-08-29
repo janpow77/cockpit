@@ -234,7 +234,7 @@ def _key(session: Session) -> str:
 
 def _kanban_url(cfg: wc.WallConfig) -> str | None:
     wand = str((cfg.push or {}).get("wand_url") or "")
-    return wand.replace("/admin/wall", "/admin/kanban") if wand else None
+    return wand.replace("/admin/board", "/admin/kanban").replace("/admin/wall", "/admin/kanban") if wand else None
 
 
 def _modell(cfg: wc.WallConfig) -> str | None:

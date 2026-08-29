@@ -27,7 +27,9 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   // Cockpit, Kanban, Kompaktansicht und LLM-Konsole laufen ohne Sidebar (Vollbild), aber mit Anmeldung.
-  { path: '/wall', name: 'wall', component: () => import('../views/WallView.vue') },
+  { path: '/board', name: 'board', component: () => import('../views/WallView.vue') },
+  // Alter Pfad: Lesezeichen, Desktop-Verknüpfungen und das SwiftBar-Menü zeigen noch auf /wall.
+  { path: '/wall', redirect: '/board' },
   { path: '/kanban', name: 'kanban', component: () => import('../views/KanbanView.vue') },
   { path: '/kompakt', name: 'kompakt', component: () => import('../views/KompaktView.vue') },
   { path: '/chat', name: 'chat', component: () => import('../views/ChatView.vue') },

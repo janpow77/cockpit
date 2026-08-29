@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
 
     <footer class="footer mono">
       <span>Stand {{ updatedAt ? time(updatedAt) : '–' }}</span>
-      <RouterLink to="/wall">Zum Cockpit</RouterLink>
+      <RouterLink to="/board">Zum Cockpit</RouterLink>
     </footer>
   </main>
 </template>

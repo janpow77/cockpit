@@ -1,25 +1,25 @@
-# Wand, KI-Konsole und MCP-Einstellungen – Umsetzungsplan
+# Board, LLM-Konsole und MCP-Einstellungen – Umsetzungsplan
 
 > Stand: 27.08.2026 · Status: **in Umsetzung** · Anlass: HPP-Vorführung (Woche ab 31.08.2026)
 > Aufbauend auf `m18-overview-widget-plan.md` (Read-only-Aggregat, Handeln in den Admin-UIs).
 
 ## 1. Ziele
 
-1. **Wand** (`/admin/wall`): Vollbild-Ansicht, die während der Vorführung „zufällig" im
+1. **Board** (`/admin/wall`): Vollbild-Ansicht, die während der Vorführung „zufällig" im
    Hintergrund läuft – oben die **Landschaft** (Hosts als Knoten, Tailscale-Mesh,
    Cloudflare-Rand mit den öffentlichen Diensten, fließender Verkehr), direkt darunter der
    **Leitstand** (Hosts mit Load/RAM/Disk, alle Compose-Projekte je Host, Sonden, Sicherungen,
    lokale Modelle, GitHub), unten das **Laufband** (Commits, Deploys, Audit).
 2. **HPP-Demo direkt starten**: Der Hero-Knopf meldet sich mit Vault-Zugang am HPP an, baut
    die Demo-Fälle neu auf und öffnet die Demo-Seite.
-3. **KI-Konsole** (`/admin/chat`): Chat mit lokalen Modellen über den ai-router
+3. **LLM-Konsole** (`/admin/chat`): Chat mit lokalen Modellen über den ai-router
    (Standard `qwen3.8-heretic:27b`, Whitelist mit Anzeigenamen), Streaming, kein Verlauf
    auf dem Server.
 4. **MCP-Einstellungen** (`/admin/mcp`): die MCP-Server der Landschaft mit Erreichbarkeit,
    Werkzeugliste, Skills und der fertigen Verbindungskonfiguration für Claude Code;
    Zugangsdaten bleiben im Vault.
 5. **Zugriff**: cockpit bleibt Tailscale-only (`100.99.159.80:7843`). Der MacBook Air ist
-   Tailscale-Host – die Wand ist damit am Vortragsort erreichbar, ohne das cockpit öffentlich
+   Tailscale-Host – die Board ist damit am Vortragsort erreichbar, ohne das cockpit öffentlich
    zu machen. Fallback: Handy-Hotspot.
 
 ## 2. Architektur (Backend)
@@ -30,13 +30,13 @@
 | Projekt-Entdeckung | `services/docker_inspect.py` → `projects_on_host()` | `docker ps` je Host, Gruppierung nach Compose-Projekt (Label), Status je Projekt |
 | ai-router | `services/ai_router_client.py` | `/api/tags` (Modelle), `/api/chat` (Streaming) |
 | GitHub | `services/github_client.py` → `list_user_repos`, `list_repo_commits` | alle Repos des Kontos, jüngste Commits (nur mit `GITHUB_TOKEN`) |
-| Wand-Konfiguration | `services/wall_config.py` | JSON in `cockpit_settings` (Schlüssel `wall`): Ausblendliste, Links, Labels, Hero, Sonden, Demo, Sicherungspfad, Modell-Whitelist, Systemprompt |
+| Board-Konfiguration | `services/wall_config.py` | JSON in `cockpit_settings` (Schlüssel `wall`): Ausblendliste, Links, Labels, Hero, Sonden, Demo, Sicherungspfad, Modell-Whitelist, Systemprompt |
 | Aggregat | `routes/overview.py` | `GET /admin/api/overview`, `GET/PATCH …/config`, `POST …/demo` |
 | Chat | `routes/chat.py` | `GET /admin/api/chat/models`, `POST /admin/api/chat` (SSE) |
 | MCP | `services/mcp_client.py`, `routes/mcp.py` | `GET /admin/api/mcp/servers` (Health, tools/list, Skills), Konfigurationsvorlage |
 
 Grundsätze: alles lesend außer `POST /demo` (Audit-Eintrag), keine Secrets an den Client,
-jede Fremdquelle mit Timeout und ohne Ausnahme nach außen (die Wand fällt nie aus, sie
+jede Fremdquelle mit Timeout und ohne Ausnahme nach außen (die Board fällt nie aus, sie
 zeigt „nicht erreichbar").
 
 ### Sonden
@@ -63,9 +63,9 @@ Vault-Secrets `hpp_demo_user` / `hpp_demo_password` (HPP-Benutzer mit Admin-Roll
 | `/wall` | `views/WallView.vue` | Vollbild ohne Sidebar, dunkle Tokens, Tasten `F` (Vollbild) und `R` (Aktualisieren), Poll 30 s |
 | `/chat` | `views/ChatView.vue` | Modellwahl, Systemprompt, Streaming, Stopp, Markdown-light |
 | `/mcp` | `views/mcp/McpView.vue` | Serverliste, Werkzeuge, Skills, Konfigurationsvorlage zum Kopieren |
-| `/settings` | Karte „Wand & KI-Konsole" | Ausblendliste, Links, Hero, Sonden, Demo, Modelle, Systemprompt (JSON-Felder mit Prüfung) |
+| `/settings` | Karte „Board & LLM-Konsole" | Ausblendliste, Links, Hero, Sonden, Demo, Modelle, Systemprompt (JSON-Felder mit Prüfung) |
 
-Design der Wand: Grund `#0B1020`, Flächen `#131A2E`/`#1A2340`, Linien `#263054`, Text
+Design der Board: Grund `#0B1020`, Flächen `#131A2E`/`#1A2340`, Linien `#263054`, Text
 `#E7ECF7`, Akzent Bernstein `#F2B84B` (nur Blickfang), Status getrennt (Grün `#4CC38A`,
 Bernstein, Rot `#F26D6D`). Schrift Barlow Condensed (Titel), IBM Plex Sans (Text), IBM Plex
 Mono (Zahlen). Animation: pulsierende Statusringe, fließende Kanten, hochzählende Kennzahlen,
@@ -73,7 +73,7 @@ gestaffelte Einblendung, Laufband – alles aus unter „Bewegung reduzieren".
 
 ## 4. Sichtbarkeit (Whitelist/Ausblendung)
 
-Auf die Wand kommt nur, was nicht in `wall.hide` steht (Teilstring, Groß/Klein egal).
+Auf die Board kommt nur, was nicht in `wall.hide` steht (Teilstring, Groß/Klein egal).
 Vorgabe: `love-ai, x_chat, sarah, kino, mediaarchiv, portainer, buildx_buildkit, watchtower`.
 Vault, Secrets, Audit-Details und Traffic-Rohdaten erscheinen nie. Hosts optional per
 `wall.hosts` einschränken.
@@ -82,14 +82,14 @@ Vault, Secrets, Audit-Details und Traffic-Rohdaten erscheinen nie. Hosts optiona
 
 1. Image `cockpit:v0.3` bauen (Multi-Stage), `docker save | ssh … docker load`.
 2. `/opt/cockpit/compose.yaml`: Image-Tag, zusätzliches Mount
-   `/home/deploy/backups:/backups:ro` (Sicherungsstand auf der Wand).
+   `/home/deploy/backups:/backups:ro` (Sicherungsstand auf der Board).
 3. Env `/etc/cockpit/env`: optional `GITHUB_TOKEN` (alle Repos + Commits), optional
    `AI_ROUTER_URL` (Standard `http://100.99.159.80:7842`).
 4. Registrierung kuratieren: HPP auf ccx23 (`name=hpp-`, Health `https://hpp.flowaudit.de/api/health`),
    flowinvoice/checklist/auditworkshop/ai-router auf ccx23 prüfen.
 5. Vault: `hpp_demo_user`, `hpp_demo_password`, `hpp_token`, `memory_api_key`,
    `mcp_flowaudit_token` anlegen (nur der Nutzer).
-6. Prüfung: Wand im Browser (Playwright), Chat-Antwort vom Router, Demo-Start gegen HPP.
+6. Prüfung: Board im Browser (Playwright), Chat-Antwort vom Router, Demo-Start gegen HPP.
 
 ## 6. Sicherheit
 
@@ -108,14 +108,14 @@ verhindert, dass Privates auf einer Vorführwand landet.
 
 ## 8. Arbeitsfolge
 
-1. Backend (host_stats, Discovery, ai-router, Overview, Chat, Wand-Konfiguration) ✔
-2. Wand-View ✔ · KI-Konsole (Codex) · MCP-Client und -Seite · Einstellungen-Karte
+1. Backend (host_stats, Discovery, ai-router, Overview, Chat, Board-Konfiguration) ✔
+2. Board-View ✔ · LLM-Konsole (Codex) · MCP-Client und -Seite · Einstellungen-Karte
 3. Lokaler Testlauf (Backend auf der NUC gegen echte Hosts, Frontend-Build, Browser)
 4. Deploy ccx23, Registrierung kuratieren, Prüfung vom MacBook (Tailscale)
 
 ## 9. Mehrwert-Bausteine (Stand 27.08.2026)
 
-Die Wand ist nicht nur Schaufenster, sondern Arbeitsmittel. Vier Bausteine kommen
+Die Board ist nicht nur Schaufenster, sondern Arbeitsmittel. Vier Bausteine kommen
 serverseitig dazu (`services/wall_extras.py`, im selben `GET /admin/api/overview`,
 alle 30 s vom Frontend geholt, jeder Sammler fehlertolerant):
 
@@ -144,7 +144,7 @@ letzten Stand; `R` lädt sofort, `F` schaltet Vollbild.
 
 | Zweck | Wo | Wert |
 | --- | --- | --- |
-| Demo-Start von der Wand | Vault `hpp_demo_user` / `hpp_demo_password` | HPP-Prod-Benutzer `cockpit-demo` (Rolle admin), Passwort nur auf dem Hetzner in `/home/deploy/.hpp_cockpit_demo_pw` |
+| Demo-Start von der Board | Vault `hpp_demo_user` / `hpp_demo_password` | HPP-Prod-Benutzer `cockpit-demo` (Rolle admin), Passwort nur auf dem Hetzner in `/home/deploy/.hpp_cockpit_demo_pw` |
 | HPP-Kennzahlen (Sonde) | Vault `hpp_smoke_user` / `hpp_smoke_password` | lesender Account `claude-smoke`; die Sonde meldet sich über `login_url` an (Token 30 min), kein Dauer-Token |
 | MCP flowaudit (Werkzeuge/Skills) | Vault `mcp_flowaudit_token` | Bearer-Token von mcp.flowaudit.de (aus der Claude-Code-Konfiguration) |
 | GitHub-Kachel | `/etc/cockpit/env` → `GITHUB_TOKEN` | Token des gh-CLI (breite Scopes – besser durch ein fein granuliertes Read-only-Token ersetzen) |
@@ -154,7 +154,7 @@ Sonden mit Anmeldung: `{"login_url": "…/api/auth/login", "user_secret": "…",
 statt `secret_key`; bei HTTP 401 wird einmal neu angemeldet.
 
 `kira_cloudflared` (Compose-Projekt `deploy` in kiraclaw, bewusst gestoppt) steht in der
-Ausblendliste, damit die Wand keinen Dauer-Alarm zeigt.
+Ausblendliste, damit die Board keinen Dauer-Alarm zeigt.
 
 ## 11. Anmeldung, Erreichbarkeit, Stand v0.3.4 (27.08.2026)
 
@@ -175,7 +175,7 @@ Ausblendliste, damit die Wand keinen Dauer-Alarm zeigt.
   zusätzlich in `/etc/checklist/env` auf dem Hetzner); der Token selbst liegt im Vault
   (`mcp_flowaudit_token`).
 
-## 12. Kira-RAG in der KI-Konsole (v0.3.5)
+## 12. Kira-RAG in der LLM-Konsole (v0.3.5)
 
 Die Konsole kann vor jeder Antwort Kira befragen. Umschalter „Kira“ im Kopf: **Aus ·
 Gedächtnis · Wissen · Beides** (Vorgabe Beides), dazu ein optionales Projektfilter-Feld.
@@ -209,8 +209,8 @@ NUC, `/etc/checklist/env` auf dem Hetzner), sonst antwortet jede zweite Anfrage 
 
 ## 13. Weitere Instanzen: NUC und janpow-ai (v0.3.7)
 
-Dieselbe Wand kann auf jedem Linux-Host der Landschaft laufen – als Zweitzugang, wenn der
-Hetzner nicht erreichbar ist, oder als lokale Wand mit dem jeweiligen Host in der Mitte.
+Dieselbe Board kann auf jedem Linux-Host der Landschaft laufen – als Zweitzugang, wenn der
+Hetzner nicht erreichbar ist, oder als lokale Board mit dem jeweiligen Host in der Mitte.
 
 ```bash
 # 1. Image auf den Host bringen (vom NUC aus; auf dem NUC selbst entfaellt das)
@@ -238,7 +238,7 @@ vorbereitet, Ausführung sobald der Rechner läuft.
 Hintergrundauftrag“ asynchron: `POST /demo/aufbauen` antwortet 202, `GET /demo` liefert
 `aufbau {laeuft, beendet, fehler, ergebnis}`, ein zweiter Start bekommt 409. Grund: Der
 Aufbau dauert 1–3 Minuten, der Cloudflare-Tunnel kappt Antworten nach 100 s (HTTP 524),
-und zwei parallele Aufbauten liefen in einen DB-Deadlock. Die Wand startet, zeigt die
+und zwei parallele Aufbauten liefen in einen DB-Deadlock. Die Board startet, zeigt die
 Sekunden auf der Hero-Karte, fragt alle 5 s nach und öffnet danach das reguläre Portal
 (`/kraftstoff/vollzug`) **im selben Fenster** – kein Pop-up, keine eigene Demo-Seite.
 
@@ -249,7 +249,7 @@ Sekunden auf der Hero-Karte, fragt alle 5 s nach und öffnet danach das regulär
 - **Cockpit** `scripts/cockpit_smoke.sh <url> <pw-datei>` (von Codex geschrieben, nur lesend):
   Login, Health, Overview-Pflichtfelder, Dienste, Modelle, MCP-Werkzeuge, SSE-Chat, Demo-Start
   (`neu=false` → übersprungen), Konfiguration. Gegen NUC- und Hetzner-Instanz grün.
-- **Browser** (Playwright): Login-Formular, Wand (Hero-Kennzahlen, Knöpfe, Alarme, Laufband),
+- **Browser** (Playwright): Login-Formular, Board (Hero-Kennzahlen, Knöpfe, Alarme, Laufband),
   Konsole (Modelle, Kira-Umschalter), MCP-Seite; HPP-Prod als `claude-smoke`: Demo-Seite
   (fünf Fälle), Vorgänge mit DEMO-Kennzeichen, Akte.
 - **Codex-Review** (Dateien overview/chat/rag/wall_extras/ai_router_client/auth) – umgesetzt:
@@ -305,7 +305,7 @@ per Migration `003_wall_samples.sql` (Tabellen entstehen nur aus `src/cockpit/mi
 **Statuskarte (v0.3.17):** Push-Nachrichten kommen als Bild (`services/statuskarte.py`, Pillow,
 DejaVu im Image): Kopf mit Instanz und Zeit, je Punkt eine Zeile mit Farbbalken, „entwarnt“
 grün, Verlauf 24 h der betroffenen Kennzahlen (Platte/RAM/Last je Host, Antwortzeit je
-Dienst, sonst Alarmzahlen), Fußzeile mit Zusammenfassung und Wand-Adresse; Kurztext als
+Dienst, sonst Alarmzahlen), Fußzeile mit Zusammenfassung und Board-Adresse; Kurztext als
 HTML-Caption. Ohne Bild (Pillow/Schrift fehlt, Telegram lehnt ab) geht reiner Text raus.
 
 **Sonden-Fallstricke (v0.3.18/19):** Ein fehlender tmux-Server liefert Exit 1 – daher `|| true`;
@@ -313,9 +313,9 @@ auf macOS läuft die Sonde in zsh, das bei leeren Globs (`/sys/class/drm/card*`)
 abbricht – daher `setopt nonomatch` am Anfang und die GPU-Schleife nur bei vorhandenem
 `/sys/class/drm`. Beides erzeugte sonst den Fehlalarm „Kennzahlen nicht abrufbar“.
 
-## 16. KI-Nutzung (v0.3.20)
+## 16. LLM-Nutzung (v0.3.20)
 
-Kachel „KI-Nutzung“ mit drei Spalten – **Claude** (Claude Code, Max): Auslastung des
+Kachel „LLM-Nutzung“ mit drei Spalten – **Claude** (Claude Code, Max): Auslastung des
 5-Stunden- und des 7-Tage-Fensters mit Reset-Zeit aus `api.anthropic.com/api/oauth/usage`
 (Anmeldung aus `~/.claude/.credentials.json` des NUC, Token verlässt den Host nicht) und
 Tokens je Tag/Modell aus `~/.claude/projects/*/*.jsonl`; **Codex** (ChatGPT): zuletzt
@@ -327,9 +327,9 @@ Limit-Prozente und Tages-Tokens landen im Verlauf (`ki.claude.seven_day`, …). 
 Abo-Konten gibt es keine offiziellen Nutzungs-APIs – die Werte kommen genau aus den
 Quellen, die auch die Apps selbst anzeigen.
 
-**v0.3.21:** KI-Nutzung als eigene Seite `/ki` (Halbkreis-Anzeigen je Limit mit Reset-Zeit,
+**v0.3.21:** LLM-Nutzung als eigene Seite `/ki` (Halbkreis-Anzeigen je Limit mit Reset-Zeit,
 Tokens je Tag, Modelle heute, Auslastung 7 Tage); Kopfzeile ohne Zählerzeile, dafür Link
-„KI-Nutzung · Claude n %“. **Sitzungen:** Fenster aufklappen zeigt die letzten 40
+„LLM-Nutzung · Claude n %“. **Sitzungen:** Fenster aufklappen zeigt die letzten 40
 Terminalzeilen (`tmux capture-pane`), darunter „Arbeitspaket“ – Text wird per
 `tmux send-keys -l` in das Fenster getippt und mit Enter abgeschickt (Bestätigung durch
 zweiten Klick, Audit-Eintrag `wall.tmux_senden`). Ziel-Form `sitzung:fenster`, Text ≤ 2000
@@ -338,7 +338,7 @@ liegen beim Nutzer, nicht im Container).
 
 ## 17. Aufträge – Kanban für Agentenläufe (v0.4.0, 28.08.2026)
 
-Seite `/kanban` („Aufträge“ in der Seitenleiste, Link in der Wand-Kopfzeile). Jede Karte ist
+Seite `/kanban` („Aufträge“ in der Seitenleiste, Link in der Board-Kopfzeile). Jede Karte ist
 ein Auftrag: Titel, Auftragstext, Projektverzeichnis auf einem Host (aus der Werkstatt),
 **Agent** (Claude Code · Codex · Gemini), Profil, Priorität 1–5, Zeitfenster
 (sofort · nachts 22–7 · nach Wochen-Reset). Spalten Eingang → Geplant → Läuft → Rückfrage
@@ -361,7 +361,7 @@ graphify-MCP), `bearbeiten` (acceptEdits), `bearbeiten_tests` (+ npm/pytest/ruff
 Ergebnis/Kosten/Session aus dem letzten `result`-Ereignis, Rückfrage-Erkennung (Frage am
 Schluss), Push per Telegram (fertig/Rückfrage/Fehler).
 
-**Kontingent:** `parallel_max` aus der KI-Nutzung – Basis `auftrag_parallel` (3); ≥ 60 %
+**Kontingent:** `parallel_max` aus der LLM-Nutzung – Basis `auftrag_parallel` (3); ≥ 60 %
 5-Stunden-Fenster → Basis−1, ≥ 85 % → 1, ≥ 95 % oder Woche ≥ 98 % → 0 (Pause mit Grund);
 Gemini nur ein Lauf gleichzeitig. Geplante Aufträge starten nach Priorität/Reihenfolge, sobald
 Kapazität und Zeitfenster passen.
@@ -482,7 +482,7 @@ Tailscale), `agent_bins.gemini` → agy. Ablauf: Image `docker save | ssh janpow
 `instanz_deploy.sh` per scp auf den Host und **dort** ausführen (das Skript arbeitet immer lokal –
 ein Aufruf auf dem NUC mit `janpow-ai` als Argument rollt auf den NUC aus). SSH von janpow-ai zu
 NUC (`janpow@`) und Hetzner (`deploy@`) funktioniert. Desktop-Verknüpfung
-`~/Schreibtisch/Cockpit.desktop` (xdg-open auf die Wand).
+`~/Schreibtisch/Cockpit.desktop` (xdg-open auf die Board).
 
 **Prüfstand 28.08. (echte Aufgabe, v0.4.11–0.4.13):** Auftrag „README: Abschnitt Aufträge
 (Kanban) ergänzen“ auf dem Cockpit-Repo (Claude, Plan mit Freigabe): Plan in 75 s, Umsetzung
@@ -497,7 +497,7 @@ Vorgänger-Commits). Frontend-Test per Playwright (Token in `localStorage`
 (Codex, „Nur berichten“, vier Umlaut-Fundstellen in der README). Beobachtet: beim Spaltenwechsel
 erscheint die Karte für einen Poll-Zyklus in zwei Spalten (Anzeige, kein Datenfehler).
 
-**v0.4.12:** „KI-Nutzung“ ist kein eigener Tab mehr – Kopfzeilen-Link der Wand und Sidebar-
+**v0.4.12:** „LLM-Nutzung“ ist kein eigener Tab mehr – Kopfzeilen-Link der Board und Sidebar-
 Eintrag entfernt (`/ki` leitet auf `/kanban`), die Anzeige lebt als einklappbarer Bereich
 (`components/kanban/KiNutzungPanel.vue`) unter der Kapazitätsleiste des Kanbans; Zustand in
 `localStorage`.
@@ -522,7 +522,7 @@ in `agent_hosts` ein (und passt ggf. `agent_bins` an).
 **v0.4.16 – Push ohne Flattern:** Der Nutzer bekam per Telegram ständig „… antwortet nicht
 (ConnectTimeout)“ mit Entwarnung kurz darauf. Zwei Ursachen: (1) alle drei Instanzen pushten in
 denselben Chat – die janpow-ai-Instanz sieht `pilot/pdf/zvg/mcp.flowaudit.de` mit Timeouts
-(5–6 s Antwortzeiten aus ihrem Netz); (2) jeder Wand-Lauf meldete sofort. Abhilfe: Push nur noch
+(5–6 s Antwortzeiten aus ihrem Netz); (2) jeder Board-Lauf meldete sofort. Abhilfe: Push nur noch
 auf dem Hetzner-Cockpit (`push.aktiv=false` auf NUC und janpow-ai, `push.instanz` benannt) und
 `push.bestaetigen()`: ein Alarm wird erst nach `bestaetigung_laeufe` (Vorgabe 2 ≈ 3 min)
 aufeinanderfolgenden Läufen gemeldet, die Entwarnung erst nach ebenso vielen Läufen ohne den
@@ -628,7 +628,7 @@ unter `/admin/api/auftraege` an die Leitinstanz durch: zuerst lokale Anmeldung p
 (`leitinstanz_benutzer`, `leitinstanz_passwort`; Token 50 min gecacht, bei 401 einmal erneuert),
 Antwort unverändert zurück. Runner und Telegram-Dialog ruhen auf Satelliten
 (`runde()`/`dialog_loop` prüfen `leitinstanz.url`). Damit gibt es Aufträge, Kanban-Board, PRs
-und den Telegram-Dialog genau einmal; die Wand, Werkstatt, LLM-Konsole und Hosts bleiben je
+und den Telegram-Dialog genau einmal; die Board, Werkstatt, LLM-Konsole und Hosts bleiben je
 Instanz lokal. Die Leitinstanz selbst hat `url` leer.
 
 ## 22. Frontend-Review durch drei Agenten und Fixes (v0.5.0, 28.08.2026)
