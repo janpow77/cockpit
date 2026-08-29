@@ -27,7 +27,7 @@ function mockOverview(): Overview {
       { host: 'ccx23', name: 'flowinvoice', title: 'flowinvoice', sub: 'Belegprüfung mit Erkennung', containers: 8, running: 8, status: 'healthy', images: [], url: null, intern: [{ url: 'http://100.99.159.80:8020', service: 'frontend', port: 8020 }], tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
       { host: 'ccx23', name: 'auditworkshop', title: 'Workshop', sub: 'Seminar-Plattform', containers: 3, running: 3, status: 'healthy', images: [], url: 'https://workshop.flowaudit.de', tunnel: false, registered: true, app_id: 'a3', app_status: 'degraded', last_check_at: NOW, deploy: null },
       { host: 'ccx23', name: 'ai-router', title: 'ai-router', sub: 'LLM-Gateway · Spokes EVO/NUC', containers: 1, running: 1, status: 'healthy', images: [], url: null, tunnel: false, registered: true, app_id: 'a4', app_status: 'healthy', last_check_at: NOW, deploy: null },
-      { host: 'ccx23', name: 'cockpit', title: 'cockpit', sub: 'Diese Wand', containers: 1, running: 1, status: 'healthy', images: [], url: null, tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
+      { host: 'ccx23', name: 'cockpit', title: 'cockpit', sub: 'Dieses Cockpit', containers: 1, running: 1, status: 'healthy', images: [], url: null, tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
       { host: 'nuc', name: 'regulierung', title: 'HPP · Preismonitoring-Portal', sub: 'Entwicklung', containers: 5, running: 5, status: 'healthy', images: [], url: null, tunnel: false, registered: true, app_id: 'a5', app_status: 'healthy', last_check_at: NOW, deploy: null },
       { host: 'nuc', name: 'audit_designer', title: 'audit_designer', sub: '', containers: 6, running: 5, status: 'degraded', images: [], url: null, tunnel: false, registered: true, app_id: 'a6', app_status: 'degraded', last_check_at: NOW, deploy: null },
       { host: 'evo', name: 'ai-router', title: 'ai-router', sub: 'Spoke EVO', containers: 2, running: 2, status: 'healthy', images: [], url: null, tunnel: false, registered: false, app_id: null, app_status: null, last_check_at: null, deploy: null },
@@ -47,7 +47,7 @@ function mockOverview(): Overview {
       repos: [
         { full_name: 'janpow77/regulierung', name: 'regulierung', owner: 'janpow77', description: 'HPP', private: true, language: 'Python', pushed_at: NOW, default_branch: 'main', open_issues: 0, stars: 0, html_url: '#' },
         { full_name: 'janpow77/flow-agent', name: 'flow-agent', owner: 'janpow77', description: 'Agent', private: true, language: 'TypeScript', pushed_at: NOW, default_branch: 'main', open_issues: 2, stars: 0, html_url: '#' },
-        { full_name: 'janpow77/cockpit', name: 'cockpit', owner: 'janpow77', description: 'Diese Wand', private: true, language: 'Python', pushed_at: NOW, default_branch: 'main', open_issues: 0, stars: 0, html_url: '#' },
+        { full_name: 'janpow77/cockpit', name: 'cockpit', owner: 'janpow77', description: 'Dieses Cockpit', private: true, language: 'Python', pushed_at: NOW, default_branch: 'main', open_issues: 0, stars: 0, html_url: '#' },
       ],
       commits: [
         { repo: 'janpow77/regulierung', sha: '19ed003', message: 'docs(vorfuehrung): Folien zu IT-Bedarf, Datenschutz/AI Act und BSI-Grundschutz ergänzt', author: 'Jan', date: NOW, html_url: '#' },
@@ -81,11 +81,23 @@ function mockOverview(): Overview {
     ki_nutzung: { ok: true, host: 'nuc',
       claude: { verfuegbar: true, plan: 'max', limits: { five_hour: { label: '5 Stunden', prozent: 16, reset: NOW }, seven_day: { label: '7 Tage', prozent: 62, reset: NOW } }, heute: { out: 301339, kontext: 194995828 }, tage: [{ tag: '2026-08-22', out: 204492, kontext: 1 }, { tag: '2026-08-23', out: 51388, kontext: 1 }, { tag: '2026-08-24', out: 147617, kontext: 1 }, { tag: '2026-08-25', out: 1471180, kontext: 1 }, { tag: '2026-08-26', out: 610550, kontext: 1 }, { tag: '2026-08-27', out: 1776199, kontext: 1 }, { tag: '2026-08-28', out: 301339, kontext: 1 }] },
       codex: { verfuegbar: true, plan: 'prolite', limits: { primary: { label: '7 Tage', prozent: 1, reset: NOW } }, heute: { out: 9930, kontext: 852286, sitzungen: 1 }, tage: [] },
-      gemini: { verfuegbar: false, hinweis: 'Gemini CLI legt keine Nutzungsdaten ab' } },
+      gemini: { verfuegbar: false, hinweis: 'Antigravity (agy) über das Google-Abo – Kontingent nur in agy (/usage) einsehbar' } },
     kira: { ok: true, total: 1284, note: null, host: 'nuc', entries: [
       { id: '1', category: 'architecture', project: 'regulierung', text: 'Demo-Modus: in-process httpx.ASGITransport fährt die eigene API, Vorgang.ist_demo markiert Demo-Daten', tags: ['demo', 'kpang'], created_at: NOW },
       { id: '2', category: 'solution', project: 'regulierung', text: 'Append-only-Trigger beim Demo-Löschen in der Transaktion pausieren (ADR-004)', tags: ['trigger'], created_at: NOW },
     ] },
+    flow_agent: {
+      ok: true, note: null, url: 'https://agent.flowaudit.de', version: '0.2.0', stand: NOW,
+      hosts: [
+        { host: 'nuc', hostname: 'nuc', status: 'healthy', alter_s: 8, projekte: 70, container: 53, gpu: 1, tmux: 'healthy', werkzeuge_fehlen: [] },
+        { host: 'ccx23', hostname: 'ccx23', status: 'degraded', alter_s: 420, projekte: 18, container: 31, gpu: 0, tmux: 'degraded', werkzeuge_fehlen: ['graphify', 'gemini'] },
+        { host: 'evo', hostname: 'evo-workstation', status: 'healthy', alter_s: 52, projekte: 12, container: 3, gpu: 2, tmux: 'healthy', werkzeuge_fehlen: ['gh'] },
+      ],
+      frische: { status: 'degraded', healthy: 20, degraded: 1, unhealthy: 1, befunde: [
+        { host: 'ccx23', label: 'Projektinventar', status: 'degraded', detail: 'Letzte vollständige Erfassung vor 7 Minuten' },
+      ] },
+      meldungen: { hosts_offline: [], hosts_degraded: ['ccx23'], pending_actions: 2, failed_actions_recent: 1 },
+    },
   }
 }
 

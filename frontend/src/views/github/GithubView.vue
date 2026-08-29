@@ -5,6 +5,7 @@ import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import Modal from '../../components/shared/Modal.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import { listRepos, addRepo, deleteRepo, repoBranches, repoPRs, repoRuns } from '../../api/github'
 import { useToastStore } from '../../stores/toast'
@@ -18,6 +19,7 @@ const confirm = useConfirmStore()
 
 const repos = ref<Repo[]>([])
 const loading = ref(true)
+const fehler = ref<string | null>(null)
 const showModal = ref(false)
 const form = ref({ owner: '', name: '', default_branch: 'main' })
 
@@ -26,7 +28,8 @@ const detailLoading = ref(false)
 
 async function load() {
   loading.value = true
-  try { repos.value = await listRepos() } catch (err) { toast.error(extractError(err)) }
+  fehler.value = null
+  try { repos.value = await listRepos() } catch (err) { fehler.value = extractError(err); toast.error(fehler.value) }
   finally { loading.value = false }
 }
 onMounted(load)
@@ -80,6 +83,7 @@ function runStatusVariant(r: any): string {
       </template>
 
       <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Repos...</div>
+      <ErrorState v-else-if="fehler" title="Repositories konnten nicht geladen werden" :message="fehler" @retry="load()" />
       <div v-else-if="!repos.length"><EmptyState title="Keine Repos" message="Lege Bookmarks fuer GitHub-Repos an." /></div>
       <div v-else class="overflow-x-auto">
         <table class="w-full text-sm">

@@ -5,6 +5,7 @@ import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import Modal from '../../components/shared/Modal.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import { listBackups, createBackup, updateBackup, deleteBackup, runBackup, type BackupCreate } from '../../api/backups'
 import { listHosts } from '../../api/hosts'
@@ -20,6 +21,8 @@ const confirm = useConfirmStore()
 const backups = ref<Backup[]>([])
 const hosts = ref<Host[]>([])
 const loading = ref(true)
+const fehler = ref<string | null>(null)
+const speichern = ref(false)
 const showModal = ref(false)
 const editing = ref<Backup | null>(null)
 const lastRunResult = ref<{ name: string; ok: boolean; log: string; error?: string | null } | null>(null)
@@ -31,11 +34,12 @@ const form = ref<BackupCreate>({
 
 async function load() {
   loading.value = true
+  fehler.value = null
   try {
     const [b, h] = await Promise.all([listBackups(), listHosts()])
     backups.value = b
     hosts.value = h
-  } catch (err) { toast.error(extractError(err)) }
+  } catch (err) { fehler.value = extractError(err); toast.error(fehler.value) }
   finally { loading.value = false }
 }
 onMounted(load)
@@ -60,6 +64,8 @@ function openEdit(b: Backup) {
 }
 
 async function save() {
+  if (speichern.value) return
+  speichern.value = true
   try {
     if (editing.value) {
       await updateBackup(editing.value.id, form.value)
@@ -71,6 +77,7 @@ async function save() {
     showModal.value = false
     await load()
   } catch (err) { toast.error(extractError(err)) }
+  finally { speichern.value = false }
 }
 
 async function remove(b: Backup) {
@@ -107,6 +114,7 @@ async function doRun(b: Backup) {
       </template>
 
       <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Backups...</div>
+      <ErrorState v-else-if="fehler" title="Backups konnten nicht geladen werden" :message="fehler" @retry="load()" />
       <div v-else-if="!backups.length"><EmptyState title="Keine Backup-Jobs" message="Lege deinen ersten Postgres- oder rsync-Job an." /></div>
       <table v-else class="w-full text-sm">
         <thead>
@@ -160,8 +168,8 @@ async function doRun(b: Backup) {
       <p v-if="lastRunResult.error" class="mt-2 text-xs text-red-500">{{ lastRunResult.error }}</p>
     </Card>
 
-    <Modal :open="showModal" :title="editing ? 'Backup bearbeiten' : 'Backup-Job anlegen'" width="40rem" @close="showModal = false">
-      <form class="space-y-3" @submit.prevent="save">
+    <Modal :open="showModal" :title="editing ? 'Backup bearbeiten' : 'Backup-Job anlegen'" width="40rem" form-id="backup-form" @close="showModal = false">
+      <form id="backup-form" class="space-y-3" @submit.prevent="save">
         <div class="grid grid-cols-2 gap-3">
           <label class="block">
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Name</span>
@@ -201,9 +209,9 @@ async function doRun(b: Backup) {
           <input v-model="form.enabled" type="checkbox" /> Enabled
         </label>
       </form>
-      <template #footer>
-        <button class="rounded-md px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="showModal = false">Abbrechen</button>
-        <button class="rounded-md px-3 py-1.5 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white" @click="save">Speichern</button>
+      <template #footer="{ formId }">
+        <button type="button" class="rounded-md px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="showModal = false">Abbrechen</button>
+        <button type="submit" :form="formId" :disabled="speichern" class="rounded-md px-3 py-1.5 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-50">Speichern</button>
       </template>
     </Modal>
   </div>

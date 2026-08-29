@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as authApi from '../api/auth'
-import { setToken, getToken, extractError } from '../api/client'
+import { setToken, getToken, getTokenExpiration, extractError } from '../api/client'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(getToken())
-  const expiresAt = ref<string | null>(null)
+  const expiresAt = ref<string | null>(getTokenExpiration())
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function hydrate() {
     token.value = getToken()
+    expiresAt.value = token.value ? getTokenExpiration() : null
   }
 
   async function login(username: string, password: string): Promise<boolean> {
@@ -21,8 +22,8 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const result = await authApi.login(username, password)
       token.value = result.token
-      expiresAt.value = result.expires_at
-      setToken(result.token)
+      setToken(result.token, result.expires_at)
+      expiresAt.value = getTokenExpiration()
       return true
     } catch (err) {
       error.value = extractError(err)

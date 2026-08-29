@@ -34,6 +34,44 @@ def vergleich(alt: list[str], neu: list[dict], *, min_level: str = "warn") -> tu
     return hinzu, weg
 
 
+def bestaetigen(
+    gemeldet: list[str], zaehler: dict[str, int], neu: list[dict], *, min_level: str = "warn", laeufe: int = 2,
+) -> tuple[list[dict], list[str], list[str], dict[str, int]]:
+    """Alarme erst nach ``laeufe`` aufeinanderfolgenden Wand-Läufen melden und erst nach ebenso vielen
+    Läufen ohne den Alarm entwarnen – kurze Aussetzer (ConnectTimeout, Neustart) lösen nichts aus (rein, testbar).
+
+    Liefert (hinzu, weg, gemeldet_neu, zaehler_neu). ``zaehler`` zählt je Schlüssel, wie oft ein noch nicht
+    gemeldeter Alarm in Folge auftrat (positiv) bzw. wie oft ein gemeldeter Alarm in Folge fehlte (negativ).
+    """
+    laeufe = max(1, int(laeufe))
+    grenze = _RANG.get(min_level, 1)
+    relevant = {schluessel(a): a for a in neu if _RANG.get(a.get("level"), 9) <= grenze}
+    gemeldet_set = set(gemeldet)
+    z: dict[str, int] = {}
+    hinzu: list[dict] = []
+    weg: list[str] = []
+    # noch nicht gemeldete Alarme: hochzählen, ab `laeufe` melden
+    for key, a in relevant.items():
+        if key in gemeldet_set:
+            continue
+        n = max(0, int(zaehler.get(key, 0))) + 1
+        if n >= laeufe:
+            hinzu.append(a)
+        else:
+            z[key] = n
+    # gemeldete Alarme, die fehlen: runterzählen, ab `laeufe` entwarnen
+    for key in gemeldet:
+        if key in relevant:
+            continue
+        n = min(0, int(zaehler.get(key, 0))) - 1
+        if -n >= laeufe:
+            weg.append(key)
+        else:
+            z[key] = n
+    gemeldet_neu = [k for k in gemeldet if k not in weg] + [schluessel(a) for a in hinzu]
+    return hinzu, weg, gemeldet_neu, z
+
+
 def in_ruhezeit(jetzt: datetime, von: str | None, bis: str | None) -> bool:
     """Ruhezeit 'HH:MM'–'HH:MM', auch ueber Mitternacht (rein, testbar)."""
     if not von or not bis:

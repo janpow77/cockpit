@@ -104,3 +104,17 @@ def test_login_prueft_benutzername_und_passwort(monkeypatch):
         assert c.post("/admin/api/auth/login", json={"username": "admin", "password": "geheim-123"}).status_code == 200
         assert c.post("/admin/api/auth/login", json={"username": "fremd", "password": "geheim-123"}).status_code == 401
         assert c.post("/admin/api/auth/login", json={"username": "admin", "password": "falsch"}).status_code == 401
+
+
+def test_tmux_sonde_versteht_beide_trennzeichen():
+    """tmux 3.6 ersetzt Tabulatoren in Format-Ausgaben durch Unterstriche – daher |~| als Trenner."""
+    from cockpit.services import host_stats
+
+    neu = "tmuxw|~|arbeit|~|shell|~|1|~|bash|~|0|~|1787939894|~|0"
+    alt = "tmuxw\tclaude\t\t1\tbash\t1\t1786861988\t1"
+    assert [s["name"] for s in host_stats._parse(neu)["tmux"]] == ["arbeit"]
+    assert [s["name"] for s in host_stats._parse(alt)["tmux"]] == ["claude"]
+    beide = host_stats._parse(neu + "\n" + alt)["tmux"]
+    assert sorted(s["name"] for s in beide) == ["arbeit", "claude"]
+    assert host_stats._parse(neu)["tmux"][0]["windows"][0]["cmd"] == "bash"
+    assert "|~|" in host_stats._CMD and "tmuxw\\t" not in host_stats._CMD

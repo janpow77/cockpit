@@ -35,7 +35,7 @@ def werte_aus_stand(stand: dict) -> dict[str, float]:
     for h in stand.get("hosts") or []:
         st = h.get("stats") or {}
         name = h.get("name")
-        for feld in ("load1", "mem_pct", "disk_pct"):
+        for feld in ("load1", "cpu_pct", "mem_pct", "disk_pct"):
             if st.get(feld) is not None:
                 out[f"host.{name}.{feld}"] = float(st[feld])
         gpus = st.get("gpus") or []

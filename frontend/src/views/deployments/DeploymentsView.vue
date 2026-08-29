@@ -5,6 +5,7 @@ import { History, GitCommit, Package, Clock } from 'lucide-vue-next'
 import Card from '../../components/shared/Card.vue'
 import Badge from '../../components/shared/Badge.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
+import ErrorState from '../../components/shared/ErrorState.vue'
 import Spinner from '../../components/shared/Spinner.vue'
 import { listRecent } from '../../api/deployments'
 import { useToastStore } from '../../stores/toast'
@@ -15,14 +16,17 @@ import type { Deployment } from '../../api/types'
 const toast = useToastStore()
 const router = useRouter()
 const loading = ref(true)
+const fehler = ref<string | null>(null)
 const items = ref<Deployment[]>([])
 
 async function load() {
   loading.value = true
+  fehler.value = null
   try {
     items.value = await listRecent(100)
   } catch (err) {
-    toast.error(extractError(err))
+    fehler.value = extractError(err)
+    toast.error(fehler.value)
   } finally {
     loading.value = false
   }
@@ -35,10 +39,10 @@ function shortDigest(d: string | null): string {
   return d.length > 19 ? d.slice(0, 19) + '…' : d
 }
 
-function statusVariant(s: string): 'success' | 'warning' | 'error' | 'slate' {
-  if (s === 'ok') return 'success'
-  if (s === 'started') return 'warning'
-  if (s === 'failed') return 'error'
+function statusVariant(s: string): 'green' | 'amber' | 'red' | 'slate' {
+  if (s === 'ok') return 'green'
+  if (s === 'started' || s === 'laufend') return 'amber'
+  if (s === 'failed') return 'red'
   return 'slate'
 }
 
@@ -53,6 +57,7 @@ function sourceVariant(s: string): 'slate' | 'sky' | 'amber' {
   <div class="space-y-6 animate-fade-in">
     <Card title="Deployments" subtitle="Letzte Image-Aktivierungen pro App, host-uebergreifend">
       <div v-if="loading" class="flex items-center gap-2 text-slate-500"><Spinner /> Lade Historie…</div>
+      <ErrorState v-else-if="fehler" title="Deployments konnten nicht geladen werden" :message="fehler" @retry="load()" />
       <EmptyState
         v-else-if="!items.length"
         title="Noch keine Deployments protokolliert"
@@ -97,10 +102,10 @@ function sourceVariant(s: string): 'slate' | 'sky' | 'amber' {
                 <span v-else class="text-slate-400">—</span>
               </td>
               <td class="py-2 pr-4">
-                <Badge :variant="sourceVariant(d.source) as any">{{ d.source }}</Badge>
+                <Badge :variant="sourceVariant(d.source)">{{ d.source }}</Badge>
               </td>
               <td class="py-2 pr-4">
-                <Badge :variant="statusVariant(d.status) as any" dot>{{ d.status }}</Badge>
+                <Badge :variant="statusVariant(d.status)" dot>{{ d.status }}</Badge>
                 <p v-if="d.notes" class="text-xs text-slate-500 mt-1 max-w-xs">{{ d.notes }}</p>
               </td>
               <td class="py-2 pr-4 text-xs text-slate-500 tabular-nums">

@@ -222,13 +222,18 @@ export interface Deployment {
 }
 
 // ---------------------------------------------------------------------------
-// Wand (Overview) und KI-Konsole
+// Cockpit (Overview) und LLM-Konsole
 // ---------------------------------------------------------------------------
 
 export interface HostStats {
   load1: number | null
   load5: number | null
   load15: number | null
+  cpu_pct?: number | null
+  temp_c?: number | null
+  quelle?: string
+  rolle?: string | null
+  werkzeuge_fehlen?: string[]
   cpus: number | null
   mem_total_mb: number | null
   mem_used_mb: number | null
@@ -243,6 +248,9 @@ export interface HostStats {
   ok: boolean
   error: string | null
   ms: number | null
+  /** Tailscale-Latenz zur Leitinstanz, vom flow-agent auf dem Host gemessen (alle zwei Minuten). */
+  latenz_ms?: number | null
+  verlust_pct?: number | null
 }
 
 export interface WallHost {
@@ -293,6 +301,18 @@ export interface GithubCommit { repo: string; sha: string; message: string; auth
 
 export interface WallEvent { ts: string; kind: 'audit' | 'deploy' | 'commit'; text: string }
 
+export interface FlowAgentHost {
+  host: string; hostname: string; status: 'healthy' | 'degraded' | 'offline' | 'unhealthy' | 'unknown' | string
+  alter_s: number | null; projekte: number; container: number; gpu: number; tmux: string | null; werkzeuge_fehlen: string[]
+}
+export interface FlowAgentBefund { host: string; label: string; status: string; detail: string }
+export interface FlowAgentStand {
+  ok: boolean; note: string | null; url: string | null; version: string | null; stand: string | null
+  hosts: FlowAgentHost[]
+  frische: { status: string; healthy: number; degraded: number; unhealthy: number; befunde: FlowAgentBefund[] }
+  meldungen: { hosts_offline: string[]; hosts_degraded: string[]; pending_actions: number; failed_actions_recent: number }
+}
+
 export interface Overview {
   generated_at: string
   hosts: WallHost[]
@@ -311,6 +331,7 @@ export interface Overview {
   dienste: WallDienst[]
   werkstatt: WerkstattHost[]
   kira: KiraStand
+  flow_agent: FlowAgentStand
   ki_nutzung?: KiNutzung
 }
 
@@ -354,6 +375,14 @@ export interface WallConfig {
   mcp_servers: Record<string, unknown>[]
   work_dirs: Record<string, string>
   kira: Record<string, string>
+  agent_bins: Record<string, string>
+  vorschlaege: Record<string, unknown>
+  auftrag_vorlagen: Record<string, unknown>[]
+  auftrag_parallel: number
+  codex_sandbox: 'danger-full-access' | 'workspace-write'
+  agent_hosts: string[]
+  flow_agent: Record<string, unknown>
+  leitinstanz: Record<string, unknown>
   prod_hosts?: string[]
   push?: Record<string, unknown>
   ki_nutzung?: Record<string, unknown>
@@ -407,3 +436,41 @@ export interface McpServerState {
     tools: { name: string; description: string }[]; skills: unknown } | null
   error?: string
 }
+
+export type AuftragStatus = 'eingang' | 'geplant' | 'laeuft' | 'rueckfrage' | 'freigabe' | 'unterbrochen' | 'fertig' | 'fehler' | 'abgebrochen'
+export type AuftragProfil = 'lesen' | 'bearbeiten' | 'bearbeiten_tests' | 'voll'
+export type AuftragAgent = 'claude' | 'codex' | 'gemini' | 'auto'
+export type AuftragModus = 'bericht' | 'plan_freigabe' | 'umsetzen'
+export type Zeitfenster = 'sofort' | 'nachts' | 'nach_reset'
+export interface AuftragPruefung { befehl: string; ok: boolean; dauer_s: number | null; auszug: string }
+
+export interface Auftrag {
+  id: string; titel: string; text: string; host: string; projekt: string; projekt_name: string
+  agent: AuftragAgent; agent_auto: boolean; agent_grund: string | null; modus: AuftragModus; profil: AuftragProfil; prioritaet: number; zeitfenster: Zeitfenster; status: AuftragStatus; reihenfolge: number
+  branch: string | null; worktree: string | null; session_id: string | null; freigegeben: string | null
+  gestartet: string | null; beendet: string | null; dauer_s: number | null
+  ergebnis: string | null; fehler: string | null; kosten_usd: number | null; tokens_in: number | null; tokens_out: number | null; turns: number | null
+  letzte_zeile: string | null; diff_url: string | null
+  pruefung: AuftragPruefung[] | null; pruefung_ok: boolean | null; pr_url: string | null; pr_checks: string | null
+  erstellt: string; aktualisiert: string
+}
+
+export interface Kapazitaet {
+  parallel_max: number; laufend: number; angehalten: boolean; pause_grund: string | null; fuenf_stunden_pct: number | null; woche_pct: number | null; codex_woche_pct: number | null
+}
+
+export interface AuftraegeAntwort { auftraege: Auftrag[]; kapazitaet: Kapazitaet }
+export interface LogZeile { ts: string | null; art: 'text' | 'tool' | 'result' | 'system' | 'fehler'; text: string }
+export interface Projekt {
+  host: string
+  pfad: string
+  name: string
+  quelle: 'flow-agent' | 'werkstatt' | 'work_dirs'
+  ausfuehrbar: boolean
+  grund: string | null
+  branch?: string | null
+  dirty?: boolean
+  technologien?: string[]
+  graphify_stand?: string | null
+}
+export interface Vorlage { id: string; titel: string; modus: AuftragModus; profil: AuftragProfil; prioritaet: number; text: string }
