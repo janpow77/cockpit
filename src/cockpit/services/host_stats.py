@@ -53,7 +53,9 @@ _CMD = (
     "echo gpu $(cat \"$d/gpu_busy_percent\") $((u/1048576)) $((t/1048576)); done 2>/dev/null; fi; "
     # tmux-Sitzungen des SSH-Nutzers: je Fenster eine Tab-getrennte Zeile
     # Kein tmux-Server ist kein Fehler: Exit-Code der Sonde bleibt 0
-    "tmux list-windows -a -F 'tmuxw\t#{session_name}\t#{window_name}\t#{window_active}\t#{pane_current_command}\t#{session_attached}\t#{session_created}\t#{window_index}' 2>/dev/null || true; true"
+    # Trennzeichen bewusst druckbar: tmux 3.6 ersetzt Steuerzeichen (auch Tabulatoren) in Format-Ausgaben
+    # durch Unterstriche – mit \t kamen von solchen Hosts nie Sitzungen an.
+    "tmux list-windows -a -F 'tmuxw|~|#{session_name}|~|#{window_name}|~|#{window_active}|~|#{pane_current_command}|~|#{session_attached}|~|#{session_created}|~|#{window_index}' 2>/dev/null || true; true"
 )
 
 
@@ -66,8 +68,9 @@ def _parse(stdout: str) -> dict:
     }
     sitzungen: dict[str, dict] = {}
     for line in stdout.splitlines():
-        if line.startswith("tmuxw\t"):
-            teile = line.split("\t")
+        if line.startswith("tmuxw|~|") or line.startswith("tmuxw\t"):
+            # neues Trennzeichen |~| (tmux ≥ 3.6), alter Tabulator weiterhin verstanden
+            teile = line.split("|~|") if "|~|" in line else line.split("\t")
             if len(teile) >= 7:
                 _, sitzung, fenster, aktiv, cmd, attached, created = teile[:7]
                 index = teile[7] if len(teile) > 7 else ""

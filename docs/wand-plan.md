@@ -708,3 +708,11 @@ sauber beendete Container, die älter als zwei Tage sind, als bewusst abgeschalt
 Instanzen; die Kacheln zeigen CPU-Prozent statt Load je Kern (Beschriftung wechselt automatisch,
 Verlauf nutzt `host.<name>.cpu_pct`, das der Verlauf jetzt mitschreibt). Die eigene SSH-Sonde
 läuft weiter für Projekte und Werkstatt, ihre Kennzahlen werden aber nicht mehr angezeigt.
+
+**v0.5.5 – tmux-Sonde auf druckbares Trennzeichen:** tmux 3.6 (janpow-ai) ersetzt Steuerzeichen
+in Format-Ausgaben durch Unterstriche – mit `\t` als Trenner kamen von solchen Hosts nie
+Sitzungen an (tmux 3.4 auf dem NUC lieferte echte Tabs, deshalb fiel es lange nicht auf). Die
+Sonde nutzt jetzt `|~|`; alte Ausgaben mit Tabulator werden weiterhin verstanden. Zusätzlich
+behält das Cockpit bei `quelle_hosts=flow-agent` die tmux-Sitzungen der eigenen Sonde, wenn der
+Agent keine sieht (auf janpow-ai läuft er als Systembenutzer und kennt den tmux-Server des
+Nutzers nicht).
