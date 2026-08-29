@@ -55,6 +55,7 @@ function bounded(value: number | null | undefined): number {
 }
 
 function loadPercent(host: WallHost): number {
+  if (host.stats.load1 == null && host.stats.cpu_pct != null) return bounded(host.stats.cpu_pct)
   return bounded(((host.stats.load1 ?? 0) / (host.stats.cpus || 1)) * 100)
 }
 
@@ -149,7 +150,7 @@ onBeforeUnmount(() => {
               <span class="mono">{{ host.stats.containers == null ? '–' : numberFormat.format(host.stats.containers) }} Container</span>
             </div>
             <div class="meters">
-              <span>Load</span><div class="meter"><i :style="{ width: `${loadPercent(host)}%` }"></i></div><b>{{ decimalFormat.format(host.stats.load1 ?? 0) }}</b>
+              <span>{{ host.stats.load1 != null ? 'Load' : 'CPU' }}</span><div class="meter"><i :style="{ width: `${loadPercent(host)}%` }"></i></div><b>{{ decimalFormat.format(host.stats.load1 ?? 0) }}</b>
               <span>RAM</span><div class="meter"><i :style="{ width: `${bounded(host.stats.mem_pct)}%` }"></i></div><b>{{ decimalFormat.format(host.stats.mem_pct ?? 0) }} %</b>
               <span>Disk</span><div class="meter"><i :class="{ warning: (host.stats.disk_pct ?? 0) > 80 }" :style="{ width: `${bounded(host.stats.disk_pct)}%` }"></i></div><b>{{ decimalFormat.format(host.stats.disk_pct ?? 0) }} %</b>
             </div>

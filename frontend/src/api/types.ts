@@ -229,6 +229,11 @@ export interface HostStats {
   load1: number | null
   load5: number | null
   load15: number | null
+  cpu_pct?: number | null
+  temp_c?: number | null
+  quelle?: string
+  rolle?: string | null
+  werkzeuge_fehlen?: string[]
   cpus: number | null
   mem_total_mb: number | null
   mem_used_mb: number | null

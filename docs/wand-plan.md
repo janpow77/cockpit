@@ -703,3 +703,8 @@ die Sonde, solange sie antwortet.
 **Befund zur Statusfarbe:** „degraded" kommt aus `effective_host_status()` und zählt jeden
 `exited`-Container als `unhealthy` (NUC 27, janpow-ai 4). PR janpow77/flow-agent#20 wertet
 sauber beendete Container, die älter als zwei Tage sind, als bewusst abgeschaltet.
+
+**v0.5.3 – Umstellung auf flow-agent als Quelle:** `quelle_hosts = "flow-agent"` auf allen drei
+Instanzen; die Kacheln zeigen CPU-Prozent statt Load je Kern (Beschriftung wechselt automatisch,
+Verlauf nutzt `host.<name>.cpu_pct`, das der Verlauf jetzt mitschreibt). Die eigene SSH-Sonde
+läuft weiter für Projekte und Werkstatt, ihre Kennzahlen werden aber nicht mehr angezeigt.
