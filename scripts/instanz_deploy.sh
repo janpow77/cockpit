@@ -137,7 +137,7 @@ EOF
 (cd "$DIR" && docker compose up -d)
 for _ in $(seq 1 30); do
   if curl -fsS -m 3 "http://$TS_IP:$PORT/health" >/dev/null 2>&1; then
-    echo "Cockpit laeuft: http://$TS_IP:$PORT/admin/wall  (Benutzer admin, Passwort: $DIR/.admin_pw)"
+    echo "Cockpit laeuft: http://$TS_IP:$PORT/admin/board  (Benutzer admin, Passwort: $DIR/.admin_pw)"
     exit 0
   fi
   sleep 2
