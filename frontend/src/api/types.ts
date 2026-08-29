@@ -248,6 +248,9 @@ export interface HostStats {
   ok: boolean
   error: string | null
   ms: number | null
+  /** Tailscale-Latenz zur Leitinstanz, vom flow-agent auf dem Host gemessen (alle zwei Minuten). */
+  latenz_ms?: number | null
+  verlust_pct?: number | null
 }
 
 export interface WallHost {

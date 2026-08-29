@@ -15,6 +15,9 @@
 .host-zeile:last-child { border-bottom: 0; }
 .hz-kopf { display: flex; justify-content: space-between; gap: 8px; }
 .hz-sub { font-size: 11px; margin: 2px 0 6px; }
+/* Netzweg zur Leitinstanz: unauffällig, solange er unauffällig ist. */
+.latenz.traege { color: var(--warn); }
+.latenz.schlecht { color: var(--krit); }
 .balken-reihe { display: grid; grid-template-columns: 34px 1fr 34px 1fr 34px 1fr; gap: 6px; align-items: center; font-size: 10px; }
 .balken { height: 6px; background: #1E2A4A; border-radius: 3px; overflow: hidden; }
 .balken i { display: block; height: 100%; background: var(--info); border-radius: 3px; transition: width 1.2s cubic-bezier(.2,.7,.2,1); }

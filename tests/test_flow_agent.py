@@ -99,3 +99,43 @@ def test_backups_aus_topologie():
     assert b == [{"host": "nuc", "ziel": "local", "status": "healthy", "letzte": "2026-08-29T01:00:00Z",
                   "groesse_b": 123, "art": "local"}]
     assert fa.backups_aus({}, {}) == []
+
+
+TOPO_LATENZ = {"nodes": [
+    {"id": "host:hetzner", "kind": "host", "label": "cockpit-nbg1-1", "status": "healthy",
+     "metrics": {}, "metadata": {"role": "gateway"}},
+    {"id": "host:nuc", "kind": "host", "label": "janpow-NUC15JNLU7X4", "status": "healthy",
+     "metrics": {}, "metadata": {"role": "gpu-server"}},
+    {"id": "host:janpow-ai", "kind": "host", "label": "janpow-ai", "status": "healthy",
+     "metrics": {}, "metadata": {"role": "gpu-server"}},
+    # Weg zur Zentrale – das ist der Wert, den die Kachel zeigt
+    {"id": "vpn-peer:nuc:nodekey:aa", "kind": "vpn-peer", "label": "cockpit-nbg1-1",
+     "metrics": {"latency_ms": 31.0, "packet_loss_percent": 0.0}},
+    {"id": "vpn-peer:janpow-ai:nodekey:bb", "kind": "vpn-peer", "label": "cockpit-nbg1-1",
+     "metrics": {"latency_ms": None, "packet_loss_percent": 100.0}},
+    # Weg zu einem anderen Knoten – darf die Kachel nicht überschreiben
+    {"id": "vpn-peer:nuc:nodekey:cc", "kind": "vpn-peer", "label": "evo2",
+     "metrics": {"latency_ms": 8.0, "packet_loss_percent": 0.0}},
+]}
+
+
+def test_latenz_zur_leitinstanz_je_host():
+    """Aus den Peer-Messungen wird je Host genau der Weg zur Zentrale übernommen."""
+    h = fa.hosts_aus(TOPO_LATENZ, None, {"janpow-NUC15JNLU7X4": "nuc", "janpow-ai": "janpow-ai",
+                                         "cockpit-nbg1-1": "hetzner"})
+    assert h["nuc"]["latenz_ms"] == 31.0
+    assert h["nuc"]["verlust_pct"] == 0.0
+    # online gemeldet, antwortet aber nicht
+    assert h["janpow-ai"]["latenz_ms"] is None
+    assert h["janpow-ai"]["verlust_pct"] == 100.0
+    # die Zentrale misst sich nicht selbst
+    assert h["hetzner"]["latenz_ms"] is None
+    assert h["hetzner"]["verlust_pct"] is None
+
+
+def test_ohne_gateway_bleibt_die_latenz_leer():
+    """Ohne erkennbare Zentrale wird nichts geraten."""
+    ohne = {"nodes": [n for n in TOPO_LATENZ["nodes"]
+                      if n.get("id") != "host:hetzner"]}
+    h = fa.hosts_aus(ohne, None, {"janpow-NUC15JNLU7X4": "nuc"})
+    assert h["nuc"]["latenz_ms"] is None

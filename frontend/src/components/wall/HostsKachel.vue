@@ -16,6 +16,18 @@ function verlaufReihe(name: string): number[] {
   const l = props.reihe(`host.${name}.load1`)
   return l.length > 1 ? l : props.reihe(`host.${name}.cpu_pct`)
 }
+
+// Netzweg zur Leitinstanz, vom flow-agent auf dem Host gemessen. Die Zentrale selbst hat
+// keinen Wert – sie misst sich nicht. Ohne Messung bleibt die Zeile leer statt „0 ms".
+function latenzText(st: { latenz_ms?: number | null; verlust_pct?: number | null }): string {
+  if (st.verlust_pct === 100) return 'keine Antwort'
+  return st.latenz_ms == null ? '' : `${Math.round(st.latenz_ms)} ms`
+}
+
+function latenzKlasse(st: { latenz_ms?: number | null; verlust_pct?: number | null }): string {
+  if (st.verlust_pct === 100) return 'schlecht'
+  return st.latenz_ms != null && st.latenz_ms > 150 ? 'traege' : ''
+}
 </script>
 
 <template>
@@ -23,7 +35,7 @@ function verlaufReihe(name: string): number[] {
     <h4>Hosts</h4>
     <div v-for="h in hosts" :key="h.name" class="host-zeile">
       <div class="hz-kopf"><span><i :class="['punkt', statusKlasse(h.status)]" /><b>{{ h.name }}</b> <span class="mono dim">{{ h.ip }}</span></span><span class="mono">{{ h.stats.containers != null ? `${h.stats.containers} Container` : statusText(h.status) }}</span></div>
-      <div class="hz-sub mono dim">{{ h.description || '—' }}{{ h.stats.uptime_s ? ` · Uptime ${tage(h.stats.uptime_s)}` : '' }}</div>
+      <div class="hz-sub mono dim">{{ h.description || '—' }}{{ h.stats.uptime_s ? ` · Uptime ${tage(h.stats.uptime_s)}` : '' }}<span v-if="latenzText(h.stats)" :class="['latenz', latenzKlasse(h.stats)]" title="Netzweg zur Leitinstanz"> · {{ latenzText(h.stats) }}</span></div>
       <div v-if="h.stats.ok" class="balken-reihe">
         <span class="mono dim">{{ h.stats.load1 != null ? 'Load' : 'CPU' }}</span><div class="balken"><i :style="{ width: `${auslastung(h.stats)}%` }" /></div>
         <span class="mono dim">RAM</span><div class="balken"><i :style="{ width: `${h.stats.mem_pct ?? 0}%` }" /></div>

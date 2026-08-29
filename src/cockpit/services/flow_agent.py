@@ -279,7 +279,26 @@ def hosts_aus(topologie: object, operations: object, zuordnung: dict[str, str]) 
             "temp_c": m.get("cpu_temperature_celsius"),
             "rolle": md.get("role"), "agent_version": md.get("agent_version"), "stand": md.get("last_seen_at"),
             "containers": 0, "gpus": [], "tmux": [],
+            "latenz_ms": None, "verlust_pct": None,
         }
+    # Latenz zur Leitinstanz: Jeder Agent misst die Tailscale-Latenz zu seinen Peers. Für die
+    # Kachel zaehlt der Weg zur Zentrale (Rolle gateway) — ein Wert je Host, gleich definiert.
+    # Die Quelle steckt nur in der Knoten-Kennung "vpn-peer:<agent>:<nodekey>", host_id ist leer.
+    zentrale = next(
+        (str(n.get("label") or "") for n in knoten
+         if n.get("kind") == "host" and (n.get("metadata") or {}).get("role") == "gateway"),
+        "",
+    )
+    for n in knoten if zentrale else []:
+        if n.get("kind") != "vpn-peer" or str(n.get("label") or "") != zentrale:
+            continue
+        teile = str(n.get("id") or "").split(":")
+        name = host_je_id.get(f"host:{teile[1]}") if len(teile) > 2 else None
+        if name is None or name not in aus:
+            continue
+        m = n.get("metrics") or {}
+        aus[name]["latenz_ms"] = m.get("latency_ms")
+        aus[name]["verlust_pct"] = m.get("packet_loss_percent")
     for n in knoten:
         name = host_je_id.get(str(n.get("host_id")))
         if name is None or name not in aus:
