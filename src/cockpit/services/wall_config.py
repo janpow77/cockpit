@@ -66,8 +66,12 @@ DEFAULT_HERO: dict[str, Any] = {
     "title": "HPP · Preismonitoring-Portal",
     "sub": "Landeskartellbehörde Hessen · KPAnG-Vollzug",
     "url": "https://hpp.flowaudit.de",
-    # Nach dem Aufbau oeffnet die Wand das regulaere Portal (Vorgaenge) - keine eigene Demo-Seite
-    "demo_path": "/kraftstoff/vollzug",
+    # Nach dem Aufbau oeffnet das Board die Demo-Uebersicht des HPP: sie zeigt
+    # die aufgebauten Faelle mit Stand und Direktlinks in die Akten und
+    # daneben die gefuehrte Tour. Vorher stand hier "/kraftstoff/vollzug" -
+    # damit landete der Klick auf "Demo starten" auf "Moegliche Verstoesse",
+    # also gerade nicht bei dem, was soeben aufgebaut wurde.
+    "demo_path": "/kraftstoff/vollzug/demo",
     "probe": "hpp",
 }
 
