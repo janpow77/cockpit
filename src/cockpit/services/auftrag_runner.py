@@ -92,46 +92,6 @@ async def _pushen(session: Session, a, cfg: wc.WallConfig) -> None:
     await push.telegram_senden(token, chat_id, "\n".join(zeilen)[:3900])
 
 
-def vorschlagslaeufe_planen(session: Session, cfg: wc.WallConfig, stand: dict | None) -> int:
-    """Einmal je Woche (Wochentag/Stunde aus cfg.vorschlaege) einen Vorschlags-Lauf je aktivem Projekt anlegen (Status geplant, Zeitfenster nachts)."""
-    from . import auftrag_vorlagen
-
-    v = cfg.vorschlaege or {}
-    if not v.get("aktiv"):
-        return 0
-    tz = ZoneInfo(str((cfg.push or {}).get("zeitzone") or "Europe/Berlin"))
-    jetzt = datetime.now(tz)
-    if jetzt.weekday() != int(v.get("wochentag", 6)) or jetzt.hour != int(v.get("stunde", 1)):
-        return 0
-    woche = jetzt.strftime("%G-KW%V")
-    vorlage = next((x for x in auftrag_vorlagen.vorlagen(cfg.auftrag_vorlagen) if x["id"] == "vorschlaege"), None)
-    if vorlage is None:
-        return 0
-    vorhanden = {(a.projekt, a.titel) for a in svc.liste(session) if a.erstellt[:10] >= (jetzt.replace(hour=0, minute=0).isoformat()[:10])}
-    obergrenze = int(v.get("max_je_woche") or 8)
-    n = 0
-    for w in (stand or {}).get("werkstatt") or []:
-        basis = cfg.work_dirs.get(w.get("host") or "")
-        if not basis or w.get("host") not in cfg.agent_hosts:
-            continue
-        for repo in w.get("repos") or []:
-            if not repo.get("aktiv"):
-                continue
-            pfad = f"{basis.rstrip('/')}/{repo.get('name')}"
-            titel = vorlage["titel"].replace("{projekt}", str(repo.get("name"))) + f" ({woche})"
-            if (pfad, titel) in vorhanden:
-                continue
-            if n >= obergrenze:
-                log.info("Vorschlagsläufe: Obergrenze %d je Woche erreicht – %s übersprungen", obergrenze, repo.get("name"))
-                continue
-            svc.anlegen(session, titel=titel, text=vorlage["text"], host=w["host"], projekt=pfad, projekt_name=str(repo.get("name")),
-                        agent=str(v.get("agent") or "codex"), modus="bericht", profil="lesen", prioritaet=4, zeitfenster="nachts", status="geplant")
-            n += 1
-    if n:
-        log.info("%d Vorschlagsläufe für %s eingeplant", n, woche)
-    return n
-
-
 _runden = 0
 
 
@@ -168,10 +128,11 @@ async def runde() -> None:
             a = await asyncio.to_thread(svc.stand_pruefen, session, a, repo_url or github_url, int(cfg.auftrag_max_dauer_min) * 60)
             if a.status != vorher:
                 log.info("Auftrag %s: %s → %s", a.id, vorher, a.status)
-                if a.status == "fertig" and svc.ist_vorschlagslauf(a):
-                    n = svc.vorschlaege_eintragen(session, a)
-                    if n:
-                        a = svc.aendern(session, a, ergebnis=f"{n} Vorschläge in den Eingang gelegt.\n\n{a.ergebnis or ''}")
+                # Aus dem Bericht eines Vorschlagslaufs werden bewusst KEINE Auftragskarten
+                # mehr angelegt: ein einziger Lauf lieferte bis zu 75 Vorschläge, und am
+                # 29.08.2026 sind daraus zusammen mit dem duplizierten Planer 1739 Karten
+                # geworden. Der Bericht bleibt im fertigen Auftrag lesbar; welche Vorschläge
+                # ein Auftrag werden, entscheidet der Mensch im Kanban.
                 await _pushen(session, a, cfg)
         # 1a. alte Worktrees aufräumen (fertig/fehler/abgebrochen älter als N Tage)
         try:
@@ -187,11 +148,6 @@ async def runde() -> None:
                         log.info("Auftrag %s: Worktree nach %d Tagen aufgeräumt", a.id, int(cfg.auftrag_aufraeumen_tage))
         except Exception as exc:  # noqa: BLE001
             log.warning("Aufräumen: %s", exc)
-        # 1b. wöchentliche Vorschlagsläufe für aktive Projekte einplanen
-        try:
-            vorschlagslaeufe_planen(session, cfg, stand)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Vorschlagsläufe planen: %s", exc)
         # 2. freie Kapazität füllen
         kap = kapazitaet(session, stand)
         frei = kap["parallel_max"] - kap["laufend"]

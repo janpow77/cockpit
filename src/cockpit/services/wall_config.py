@@ -145,8 +145,11 @@ DEFAULT_AGENT_BINS: dict[str, str] = {
     "gemini": "/home/janpow/.npm-global/bin/gemini",
 }
 
-# Wöchentliche Vorschlagsläufe (Kanban): Sonntag 01:00 je aktivem Projekt, Ergebnis → Karten im Eingang
-DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": True, "wochentag": 6, "stunde": 1, "agent": "codex", "max_je_woche": 8}
+# Vorschlagsläufe gibt es nur noch auf Anstoß von Hand: über die Kanban-Vorlage oder das
+# Telegram-Kommando /vorschlaege. Der Runner plant nichts mehr selbst und legt aus den
+# Ergebnissen auch keine Karten mehr an (siehe auftrag_runner.runde()). wochentag, stunde und
+# max_je_woche bleiben nur als Felder des Vertrags erhalten; sie steuern nichts mehr.
+DEFAULT_VORSCHLAEGE: dict[str, Any] = {"aktiv": False, "wochentag": 6, "stunde": 1, "agent": "codex", "max_je_woche": 8}
 
 # flow-agent (agent.flowaudit.de): Projektinventar/graphify je Host, Lese-Schlüssel im Vault; hosts = flow-agent-Hostname → Cockpit-Host
 DEFAULT_FLOW_AGENT: dict[str, Any] = {
