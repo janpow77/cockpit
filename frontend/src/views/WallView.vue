@@ -535,7 +535,8 @@ async function demo(neu = false) {
       <div class="kachel einblenden" style="--i: 7">
         <h4>Lokale Modelle <span class="dim">· ai-router</span></h4>
         <div class="zeile"><span><i :class="['punkt', overview.ai_router.ok ? 'ok' : 'krit']" /><b>{{ overview.ai_router.freigegeben.length }} für die Konsole freigegeben</b></span><span class="mono dim">{{ overview.ai_router.model_count }} geladen · {{ overview.ai_router.url.replace(/^https?:\/\//, '') }}</span></div>
-        <div class="modelle mono">{{ overview.ai_router.freigegeben.join(' · ') || 'Whitelist leer – in den Einstellungen freigeben' }}</div>
+        <div v-if="!overview.ai_router.ok" class="dim">{{ overview.ai_router.message || 'Modellabruf fehlgeschlagen' }}<span v-if="overview.ai_router.stale"> · Letzter bekannter Stand</span></div>
+        <div class="modelle mono">{{ overview.ai_router.freigegeben.join(' · ') || (overview.ai_router.ok ? 'Keine verfügbaren Modelle freigegeben – Einstellungen prüfen' : 'Keine Modellliste verfügbar') }}</div>
         <RouterLink to="/chat" class="knopf klein" style="margin-top: 8px; display: inline-block">LLM-Konsole öffnen</RouterLink>
       </div>
 

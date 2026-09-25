@@ -113,14 +113,27 @@ def build_projects(
                 registered = a
                 break
         lab = wc.label_for(p["name"], names, cfg.labels)
+        inactive = cfg.inactive_services.get(f"{host.name}/{p['name']}", [])
+        rows = p.get("container_rows") or []
+        ignored = [c for c in rows if c.get("state") == "exited" and c.get("exit_code") == 0 and (
+            c.get("monitor_role") == "job" or (c.get("service") or "").endswith("-init")
+            or c.get("service") in inactive
+        )]
+        monitored = [c for c in rows if c not in ignored]
+        count = len(monitored) if rows else p["containers"]
+        running = sum(c.get("state") == "running" for c in monitored) if rows else p["running"]
+        state = p["status"]
+        if rows:
+            state = "healthy" if running == count else ("down" if running == 0 else "degraded")
         out.append({
             "host": host.name,
             "name": p["name"],
             "title": lab.get("title") or p["name"],
             "sub": lab.get("sub") or "",
-            "containers": p["containers"],
-            "running": p["running"],
-            "status": p["status"],
+            "containers": count,
+            "running": running,
+            "status": state,
+            "ignored_stopped": [c.get("name") for c in ignored],
             "images": p.get("images", []),
             "names": names[:8],
             "url": wc.link_for(p["name"], names, cfg.links),
@@ -476,7 +489,7 @@ async def build_overview(session: Session) -> dict:
         hosts_out, projects_out, backups_out, dienste_out, ai_router_out, github_out, werkstatt_out,
         prod_hosts=cfg.prod_hosts,
     )
-    alerts = sorted(alerts + kn.alarme(ki_out, float(cfg.ki_nutzung.get("warn_pct") or 85)) + fa.alarme(fa_out), key=lambda a: {"krit": 0, "warn": 1, "info": 2}.get(a["level"], 9))
+    alerts = sorted(alerts + kn.alarme(ki_out, float(cfg.ki_nutzung.get("warn_pct") or 85)) + fa.alarme(fa_out, hosts_out), key=lambda a: {"krit": 0, "warn": 1, "info": 2}.get(a["level"], 9))
 
     return {
         "generated_at": _iso_now(),

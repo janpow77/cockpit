@@ -81,6 +81,7 @@ const rag = ref<RagMode>('both')
 const ragProject = ref('')
 const routerAddress = ref('–')
 const routerOk = ref(false)
+const routerMessage = ref('Modelle werden geladen …')
 const modelsLoading = ref(true)
 const modelsError = ref<string | null>(null)
 const systemOpen = ref(false)
@@ -192,6 +193,7 @@ async function loadModels(): Promise<void> {
     models.value = response.models
     routerAddress.value = response.router
     routerOk.value = response.router_ok
+    routerMessage.value = response.router_message || (response.router_ok ? 'Router bereit' : 'Modellabruf fehlgeschlagen')
     if (!hasStoredSystem) systemPrompt.value = response.system
 
     const storedExists = response.models.some((model) => model.tag === selectedModel.value)
@@ -200,10 +202,15 @@ async function loadModels(): Promise<void> {
         ?? response.models[0]?.tag
         ?? ''
     }
-    modelsError.value = response.models.length ? null : 'Keine Modelle verfügbar.'
+    modelsError.value = response.models_stale
+      ? `${routerMessage.value}. Letzte bekannte Modellliste wird angezeigt.`
+      : response.router_ok
+        ? (response.models.length ? null : 'Keine freigegebenen Modelle verfügbar.')
+        : routerMessage.value
   } catch (error) {
     modelsError.value = extractError(error)
     routerOk.value = false
+    routerMessage.value = 'Modellabruf fehlgeschlagen'
     toast.error(`Modelle konnten nicht geladen werden: ${modelsError.value}`)
   } finally {
     modelsLoading.value = false
@@ -568,7 +575,7 @@ onBeforeUnmount(() => abortController?.abort())
         <div class="router-state mono">
           <span class="status-dot" :class="routerOk ? 'ok' : 'error'" aria-hidden="true"></span>
           <span>{{ routerAddress }}</span>
-          <span class="state-text">{{ routerOk ? 'Router bereit' : 'Router nicht erreichbar' }}</span>
+          <span class="state-text">{{ routerMessage }}</span>
         </div>
       </div>
 
