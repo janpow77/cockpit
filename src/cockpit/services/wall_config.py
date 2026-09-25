@@ -224,6 +224,7 @@ DEFAULT_CHAT_THINK = False
 @dataclass
 class WallConfig:
     hosts: list[str] = field(default_factory=list)
+    inactive_services: dict[str, list[str]] = field(default_factory=dict)
     hide: list[str] = field(default_factory=lambda: list(DEFAULT_HIDE))
     links: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_LINKS))
     labels: dict[str, dict[str, str]] = field(default_factory=lambda: dict(DEFAULT_LABELS))
@@ -258,6 +259,7 @@ class WallConfig:
     def as_dict(self) -> dict[str, Any]:
         return {
             "hosts": self.hosts, "hide": self.hide, "links": self.links, "labels": self.labels,
+            "inactive_services": self.inactive_services,
             "hero": self.hero, "probes": self.probes, "demo": self.demo,
             "backup_dir": self.backup_dir, "chat_models": self.chat_models,
             "chat_system": self.chat_system,
@@ -301,7 +303,7 @@ def load(session: Session) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(raw.get(name), list):
             setattr(cfg, name, raw[name])
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent", "leitinstanz"):
+    for name in ("inactive_services", "links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent", "leitinstanz"):
         if isinstance(raw.get(name), dict):
             setattr(cfg, name, raw[name])
     if isinstance(raw.get("auftrag_vorlagen"), list):
@@ -330,7 +332,7 @@ def save(session: Session, patch: dict[str, Any]) -> WallConfig:
     for name in ("hosts", "hide", "probes", "chat_models", "mcp_servers", "prod_hosts"):
         if isinstance(patch.get(name), list):
             raw[name] = patch[name]
-    for name in ("links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent", "leitinstanz"):
+    for name in ("inactive_services", "links", "labels", "hero", "demo", "work_dirs", "kira", "push", "ki_nutzung", "agent_bins", "vorschlaege", "flow_agent", "leitinstanz"):
         if isinstance(patch.get(name), dict):
             raw[name] = patch[name]
     if isinstance(patch.get("auftrag_vorlagen"), list):

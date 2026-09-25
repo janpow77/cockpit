@@ -323,7 +323,7 @@ export interface Overview {
   }
   probes: WallProbe[]
   backups: WallBackup[]
-  ai_router: { ok: boolean; url: string; model_count: number; models: string[]; freigegeben: string[] }
+  ai_router: { ok: boolean; url: string; model_count: number; models: string[]; freigegeben: string[]; state?: string; message?: string; stale?: boolean }
   github: { enabled: boolean; repos: GithubRepo[]; commits: GithubCommit[]; error: string | null }
   events: WallEvent[]
   links: Record<string, string>
@@ -394,7 +394,7 @@ export interface WallConfig {
 export interface DemoStartResult { ok: boolean; uebersprungen?: boolean; faelle: { aktenzeichen: string; schritte: number; fehler: string | null }[]; url: string }
 
 export interface ChatModel { tag: string; label: string; parameter_size: string; size_bytes: number }
-export interface ChatModelsResponse { router: string; router_ok: boolean; models: ChatModel[]; system: string }
+export interface ChatModelsResponse { router: string; router_ok: boolean; models: ChatModel[]; system: string; router_state?: string; router_message?: string; models_stale?: boolean }
 export interface MerkenRequest {
   content: string
   category: string

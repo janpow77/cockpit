@@ -56,8 +56,8 @@ def test_zustand_und_alarme():
     assert z["meldungen"]["hosts_offline"] == ["evo"] and z["meldungen"]["pending_actions"] == 2
     al = fa.alarme(z)
     levels = [(a["level"], a["text"]) for a in al]
-    assert ("krit", "flow-agent: Host evo offline") in levels
-    assert any(lv == "warn" and "RAG-Sync EVO" in tx for lv, tx in levels)
+    assert ("warn", "flow-agent: Keine aktuellen Agentendaten von evo") in levels
+    assert not any("RAG-Sync EVO" in tx for _, tx in levels)  # alter Snapshot, kein aktueller Befund
     assert any("fehlgeschlagen" in tx for _, tx in levels) and any("Freigabe" in tx for _, tx in levels)
     weg = fa.zustand_aus("u", None, None, None, None, None, {})
     assert not weg["ok"] and fa.alarme(weg)[0]["level"] == "warn"

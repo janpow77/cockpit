@@ -214,18 +214,24 @@ def zustand_aus(url: str, health: object, agents: object, freshness: object, mel
     return out
 
 
-def alarme(z: dict) -> list[dict]:
+def alarme(z: dict, hosts: list[dict] | None = None) -> list[dict]:
     """Handlungsbedarf aus dem flow-agent-Zustand (rein, testbar): Control Plane weg, Host offline, Check unhealthy, Aktionen fehlgeschlagen."""
     out: list[dict] = []
     url = z.get("url")
     if not z.get("ok"):
         out.append({"level": "warn", "text": f"flow-agent: {z.get('note') or 'nicht erreichbar'}", "host": None, "hint": None, "url": url})
         return out
+    host_states = {h["name"]: h.get("status") for h in hosts or []}
+    stale_hosts = {h["host"] for h in z.get("hosts") or [] if h.get("status") == "offline"}
     for h in z.get("hosts") or []:
         if h.get("status") in ("offline", "unhealthy"):
-            out.append({"level": "krit", "text": f"flow-agent: Host {h['host']} {h['status']}", "host": h["host"], "hint": f"zuletzt vor {h.get('alter_s')} s" if h.get("alter_s") is not None else None, "url": url})
+            if host_states.get(h["host"]) in ("offline", "unreachable", "down"):
+                continue  # Bereits als Host-Ausfall im Cockpit gemeldet.
+            text = (f"flow-agent: Keine aktuellen Agentendaten von {h['host']}"
+                    if h.get("status") == "offline" else f"flow-agent: Agent auf {h['host']} meldet Fehler")
+            out.append({"level": "warn" if h.get("status") == "offline" else "krit", "text": text, "host": h["host"], "hint": f"zuletzt vor {h.get('alter_s')} s" if h.get("alter_s") is not None else None, "url": url})
     for b in (z.get("frische") or {}).get("befunde") or []:
-        if b.get("status") == "unhealthy":
+        if b.get("status") == "unhealthy" and b.get("host") not in stale_hosts:
             out.append({"level": "warn", "text": f"flow-agent: {b['label']} auf {b['host']}", "host": b["host"], "hint": b.get("detail"), "url": url})
     m = z.get("meldungen") or {}
     if m.get("failed_actions_recent"):

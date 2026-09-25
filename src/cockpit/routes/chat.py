@@ -107,11 +107,14 @@ def allowed_models(cfg: wc.WallConfig, available: list[dict]) -> list[dict]:
 @router.get("/models")
 async def list_models(_=Depends(require_auth), session: Session = Depends(get_session)) -> dict:
     cfg = wc.load(session)
-    available = await asyncio.to_thread(ai_router_client.list_models)
+    snapshot = await asyncio.to_thread(ai_router_client.model_snapshot)
     return {
-        "router": ai_router_client.base_url(),
-        "router_ok": bool(available),
-        "models": allowed_models(cfg, available),
+        "router": snapshot["url"],
+        "router_ok": snapshot["ok"],
+        "router_state": snapshot["state"],
+        "router_message": snapshot["message"],
+        "models_stale": snapshot["stale"],
+        "models": allowed_models(cfg, snapshot["models"]),
         "system": cfg.chat_system,
     }
 

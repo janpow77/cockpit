@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 import threading
 import time
@@ -80,6 +81,7 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
         try:
             obj = json.loads(line)
             labels = _parse_labels(obj.get("Labels", ""))
+            exit_match = re.match(r"Exited \((\d+)\)", obj.get("Status", ""))
             containers.append({
                 "name": obj.get("Names", ""),
                 "image": obj.get("Image", ""),
@@ -91,6 +93,8 @@ def list_containers(host: HostRow, *, filter_expr: str = "", refresh: bool = Fal
                 # Gruppierung auf der Wand (Projekte je Host ohne Registrierung).
                 "project": labels.get("com.docker.compose.project", ""),
                 "service": labels.get("com.docker.compose.service", ""),
+                "exit_code": int(exit_match.group(1)) if exit_match else None,
+                "monitor_role": labels.get("io.flowaudit.monitor.role", ""),
             })
         except (json.JSONDecodeError, AttributeError):
             continue
@@ -135,7 +139,7 @@ def projects_on_host(host: HostRow, *, refresh: bool = False) -> list[dict]:
             "running": running,
             "status": status,
             "names": [c.get("name", "") for c in cs],
-            "container_rows": [{"name": c.get("name", ""), "service": c.get("service", ""), "ports": c.get("ports", ""), "state": c.get("state", "")} for c in cs],
+            "container_rows": cs,
             "images": sorted({(c.get("image") or "").split("@")[0] for c in cs})[:6],
         })
     return projekte

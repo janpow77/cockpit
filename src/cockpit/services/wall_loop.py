@@ -58,6 +58,10 @@ async def _alarme_pushen(stand: dict, cfg: wc.WallConfig) -> None:
     session = factory()
     try:
         alt: list[str] = wc.read_setting(session, "alerts_state", []) or []
+        normalisiert = list(dict.fromkeys(push.normalisiere(k) for k in alt))
+        if normalisiert != alt:
+            wc.write_setting(session, "alerts_state", normalisiert)
+            alt = normalisiert
         zaehler: dict[str, int] = wc.read_setting(session, "alerts_zaehler", {}) or {}
         min_level = str(pcfg.get("min_level") or "warn")
         laeufe = int(pcfg.get("bestaetigung_laeufe") or 2)
@@ -78,7 +82,10 @@ async def _alarme_pushen(stand: dict, cfg: wc.WallConfig) -> None:
             chat_id = _secret_value(session, str(pcfg.get("chat_secret") or "telegram_chat_id")) or str(pcfg.get("chat_id") or "")
             if token and chat_id:
                 instanz = str(pcfg.get("instanz") or next((h.get("name") for h in stand.get("hosts") or [] if h.get("is_self")), "Wand"))
-                ok = await karte_senden(session, token, chat_id, instanz, hinzu, weg, stand, cfg)
+                # Ein Schweregradwechsel ist keine Entwarnung des zugrunde liegenden Problems.
+                entwarnungen = push.echte_entwarnungen(weg, stand.get("alerts") or [])
+                ok = (await karte_senden(session, token, chat_id, instanz, hinzu, entwarnungen, stand, cfg)
+                      if hinzu or entwarnungen else True)
                 log.info("Push: %d neu, %d entwarnt, gesendet=%s", len(hinzu), len(weg), ok)
                 if not ok:
                     return

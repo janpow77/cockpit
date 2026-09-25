@@ -34,7 +34,7 @@ def test_push_vergleich_und_nachricht():
     ]
     hinzu, weg = push.vergleich(alt, neu, min_level="warn")
     assert [a["text"] for a in hinzu] == ["Zertifikat hpp.flowaudit.de läuft in 10 Tagen ab"]
-    assert weg == ["warn|Sicherung hpp ist 40 h alt"]
+    assert weg == ["warn|Sicherung hpp ist veraltet"]
     text = push.nachricht(hinzu, weg, "ccx23")
     assert text.startswith("Cockpit ccx23") and "🟠 Zertifikat" in text and "✅ entwarnt: Sicherung hpp" in text
 

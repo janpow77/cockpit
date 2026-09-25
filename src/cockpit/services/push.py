@@ -8,6 +8,7 @@ Kritisches geht immer raus. Der Bot-Token liegt im Vault (``telegram_bot_token``
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 
 import httpx
@@ -19,12 +20,40 @@ TELEGRAM_FOTO = "https://api.telegram.org/bot{token}/sendPhoto"
 _RANG = {"krit": 0, "warn": 1, "info": 2}
 
 
+def normalisiere(key: str) -> str:
+    """Stabile, lesbare Kennung; migriert auch bereits gespeicherte Warnungen."""
+    level, sep, text = key.partition("|")
+    patterns = (
+        (r"^flow-agent: Host (.+) offline$", r"Host \1 ist offline"),
+        (r"^((?:Claude|Codex/ChatGPT): Limit .+) zu \d+ % ausgeschöpft$", r"\1 fast ausgeschöpft"),
+        (r"^(Platte auf .+) zu \d+ % voll$", r"\1 fast voll"),
+        (r"^(RAM auf .+) zu \d+ % belegt$", r"\1 fast voll"),
+        (r"^(Last auf .+ hoch) \(.+\)$", r"\1"),
+        (r"^(Sicherung .+) ist \d+ h alt$", r"\1 ist veraltet"),
+        (r"^(Zertifikat .+) läuft in \d+ Tagen ab$", r"\1 läuft bald ab"),
+        (r"^(.+ antwortet langsam) \(\d+ ms\)$", r"\1"),
+        (r"^(.+ auf .+): \d+/\d+ Container laufen$", r"\1: Container fehlen"),
+        (r"^(Kennzahlen von .+ nicht abrufbar) \(.+\)$", r"\1"),
+        (r"^(.+ antwortet nicht) \(.+\)$", r"\1"),
+    )
+    for pattern, replacement in patterns:
+        text = re.sub(pattern, replacement, text)
+    return level + sep + text
+
+
 def schluessel(alert: dict) -> str:
-    return f"{alert.get('level')}|{alert.get('text')}"
+    return normalisiere(f"{alert.get('level')}|{alert.get('text')}")
+
+
+def echte_entwarnungen(weg: list[str], aktuell: list[dict]) -> list[str]:
+    """Schweregradwechsel und entfernte Duplikate bedeuten keine Entwarnung."""
+    aktiv = {schluessel(a).partition("|")[2] for a in aktuell}
+    return [k for k in weg if normalisiere(k).partition("|")[2] not in aktiv]
 
 
 def vergleich(alt: list[str], neu: list[dict], *, min_level: str = "warn") -> tuple[list[dict], list[str]]:
     """Neue Alarme ab min_level und weggefallene (Entwarnung) gegenueber dem letzten Stand (rein, testbar)."""
+    alt = list(dict.fromkeys(normalisiere(k) for k in alt))
     grenze = _RANG.get(min_level, 1)
     relevant = [a for a in neu if _RANG.get(a.get("level"), 9) <= grenze]
     neu_keys = {schluessel(a) for a in relevant}
@@ -44,6 +73,8 @@ def bestaetigen(
     gemeldeter Alarm in Folge auftrat (positiv) bzw. wie oft ein gemeldeter Alarm in Folge fehlte (negativ).
     """
     laeufe = max(1, int(laeufe))
+    gemeldet = list(dict.fromkeys(normalisiere(k) for k in gemeldet))
+    zaehler = {normalisiere(k): v for k, v in zaehler.items()}
     grenze = _RANG.get(min_level, 1)
     relevant = {schluessel(a): a for a in neu if _RANG.get(a.get("level"), 9) <= grenze}
     gemeldet_set = set(gemeldet)
